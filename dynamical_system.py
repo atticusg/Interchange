@@ -7,7 +7,7 @@ class Dynamical_System(object):
     #     self.intervene(self.hidden_rep, mask, replacement_values)
     def __init__(self, vectors, vector_lengths, causal_ordering, model):
         self.vectors= vectors
-        self.vector_lengths = vectors_lengths
+        self.vector_lengths = vector_lengths
         self.causal_ordering =causal_ordering
         self.model = model
         self.vector_cache = dict()
@@ -17,7 +17,7 @@ class Dynamical_System(object):
         return self.vector_lengths[vector]
 
     def precedes(self,vector1,vector2):
-        if (vector1,vector2) in causal_ordering:
+        if (vector1,vector2) in self.causal_ordering:
             return True
         return False
 
@@ -49,4 +49,4 @@ class Dynamical_System(object):
             self.vector_cache[(input,interventions)] =vectors
             self.output_cache[(input,interventions)] =output
             return self.output_cache[(input, interventions)]
-        self.model.run()
+        # self.model.run()
