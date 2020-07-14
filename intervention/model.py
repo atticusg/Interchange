@@ -42,17 +42,4 @@ class InterventionModel(ABC):
         one internal vector designated by `name`"""
         pass
 
-class ComputationGraphNode(ABC):
-    def __init__(self, name, inputs):
-        self.name = name
-        self.inputs = inputs
-        self.cache = None
-        pass
 
-    @abstractmethod
-    def forward():
-        pass
-
-    @abstractmethod
-    def forward_with_cache():
-        pass
