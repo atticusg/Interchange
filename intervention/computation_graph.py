@@ -9,13 +9,16 @@ class Experiment:
 class GraphNode:
     def __init__(self, *args, name=None, forward=None):
         """
-        Construct a computation graph node, can be used as a decorator of a function.
+        Construct a computation graph node, can be used as a decorator of a
+        function.
 
-        This method is immediately invoked when the `@GraphNode()` decorator is attached to a function.
+        This constructor is immediately invoked when the `@GraphNode()`
+        decorator is attached to a function.
         When used as a decorator, the `*args` are the parameters of the decorator
 
-        :param args: other GraphNode objects which specify the children of this node
-        :param name: the name of the node. If not given, this will be the name of the function by default
+        :param args: other GraphNode objects that are the children of this node
+        :param name: the name of the node. If not given, this will be the name
+            of the function that it decorates by default
         :param forward:
         """
         self.children = args
@@ -24,11 +27,12 @@ class GraphNode:
         self.name = name
         if forward:
             self.forward = forward
-            self.name = forward
+            if name is None:
+                self.name = forward.__name__
 
     def __call__(self, f):
         """
-        This method is invoked after __init__ when the `@GraphNode` decorator is attached to a function
+        This method is invoked immediately after the constructor when the `@GraphNode` decorator is attached to a function
         :param f: the function to which the decorator is attached
         :return: a new GraphNode object
         """
@@ -111,7 +115,8 @@ class ComputationGraph(ABC):
         """
         for name in expt.interventions.keys():
             if name not in self.nodes:
-                raise ValueError("Node in intervention experiment not found in computation graph: %s" % name)
+                raise ValueError("Node in intervention experiment not found "
+                                 "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
     def find_affected_nodes(self, expt):
