@@ -1,6 +1,7 @@
 #include <torch/extension.h>
 // the above includes all necessary PyTorch bits to write C++ extensions
 
+#include <torch/csrc/autograd/function.h>
 #include <torch/csrc/autograd/variable.h>
 
 #include <stdio.h> // C nostalgia
@@ -16,19 +17,15 @@ using torch::autograd::Node;
 
 void traverse_graph(const Node& n, const std::string& parent_name) {
   print("---- visiting " + n.name());
-  const edge_list& next_edges = n.next_edges();
+  const auto& next_edges = n.next_edges();
   print("    My parent is " + parent_name);
   printf("    I have %lu parents/children\n", next_edges.size());
 
   if (next_edges.size() > 0) {
-    print("ckpt 1");
     for (auto& edge: next_edges) {
-      print("ckpt 2");
       auto next_node = edge.function;
-      print("ckpt 3");
       if (next_node != NULL)
         traverse_graph(*next_node, n.name());
-      print("ckpt 4");
     }
   }
 }
