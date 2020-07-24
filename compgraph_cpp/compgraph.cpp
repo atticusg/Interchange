@@ -24,9 +24,10 @@ void traverse_graph(const Node& n, const std::string& parent_name) {
     print("ckpt 1");
     for (auto& edge: next_edges) {
       print("ckpt 2");
-      auto& next_node = *(edge.function);
+      auto next_node = edge.function;
       print("ckpt 3");
-      traverse_graph(next_node, n.name());
+      if (next_node != NULL)
+        traverse_graph(*next_node, n.name());
       print("ckpt 4");
     }
   }
