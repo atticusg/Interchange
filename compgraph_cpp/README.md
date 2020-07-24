@@ -82,4 +82,5 @@ compgraph_cpp = torch.utils.cpp_extension.load(
   sources=["compgraph.cpp", "print.cpp"])
 ```
 This will successfully build the `compgraph_cpp` python module and
-we can use it in the exact same way as above.
+we can use it in the exact same way as above, except it doesn't install anything
+locally.

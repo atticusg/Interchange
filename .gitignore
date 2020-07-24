@@ -1,3 +1,5 @@
 __pycache__/
 .idea/
 *.egg-info/
+/compgraph_cpp/build
+/compgraph_cpp/dist
