@@ -121,7 +121,7 @@ class Intervention:
                 intervention.pop(name)
             intervention.update(to_add)
 
-            self._intervention = intervention
+            self._intervention = GraphInput(intervention)
 
         self._locs = locs
 
@@ -303,13 +303,13 @@ class ComputationGraph:
     def validate_graph(self):
         """
         Validates the structure of the computational graph by doing a dfs starting from the root.
-        :raise: `ValueError` if something goes wrong
+        :raise: `RuntimeError` if something goes wrong
         """
         # TODO: check for cycles
         def add_node(node):
             if node.name in self.nodes:
                 if self.nodes[node.name] is not node:
-                    raise ValueError("Two different nodes cannot have the same name!")
+                    raise RuntimeError("Two different nodes cannot have the same name!")
                 else:
                     return
             self.nodes[node.name] = node
@@ -321,6 +321,10 @@ class ComputationGraph:
         add_node(self.root)
 
     def validate_inputs(self, inputs):
+        """
+        Check if an input is provided for each leaf node
+        :raise: `RuntimeError` if something goes wrong
+        """
         for node in self.leaves:
             if node.name not in inputs:
                 raise RuntimeError("input value not provided for leaf node %s" % node.name)
@@ -329,7 +333,7 @@ class ComputationGraph:
         """
         Validates an experiment relevant to this `ComputationGraph`
         :param interv:  intervention experiment in question
-        :raise: `ValueError` if something goes wrong
+        :raise: `RuntimeError` if something goes wrong
         """
         self.validate_inputs(interv.base)
         for name in interv.intervention.values.keys():
@@ -339,6 +343,13 @@ class ComputationGraph:
             # TODO: compare compatibility between shape of value and node
 
     def compute(self, inputs, store_cache=True):
+        """
+        Run forward pass through graph with a given set of inputs
+
+        :param inputs:
+        :param store_cache:
+        :return:
+        """
         res = self.results_cache.get(inputs, None)
         if not res:
             self.validate_inputs(inputs)
@@ -348,6 +359,13 @@ class ComputationGraph:
         return res
 
     def intervene(self, interv, store_cache=True):
+        """
+        Run intervention on computation graph.
+
+        :param interv:
+        :param store_cache:
+        :return:
+        """
         base_res = self.compute(interv.base)
 
         interv_res = self.results_cache.get(interv, None)
@@ -371,6 +389,7 @@ class ComputationGraph:
         self.results_cache = {}
 
     def get_result(self, node_name, x):
+        
         return self.nodes[node_name].base_cache[x]
 
 
@@ -521,6 +540,8 @@ if __name__ == "__main__":
 
             super().__init__(root)
 
+    print("----- Example 1  -----")
+
     g = MyCompGraph()
     g.clear_caches()
 
@@ -547,6 +568,9 @@ if __name__ == "__main__":
 
             super().__init__(root)
 
+
+    print("----- Example 2  -----")
+
     g2 = Graph2()
     g.clear_caches()
 
@@ -558,7 +582,7 @@ if __name__ == "__main__":
     print("Before:", before, "after:", after)
 
     interv = {"leaf1": torch.tensor([300, 300]), "leaf2": torch.tensor([100])}
-    locs = {"leaf1": Loc[:2], "leaf2": 2}
+    locs = {"leaf1": Loc()[:2], "leaf2": 2}
     in2 = Intervention(i1, intervention=interv, locs=locs)
     before, after = g2.intervene(in2)
     print("Before:", before, "after:", after)
@@ -588,4 +612,6 @@ if __name__ == "__main__":
     module = TorchEqualityModule()
     input = torch.randn(20)
     g3, in3 = CompGraphConstructor.construct(module, input)
-
+    print("----- Example 3 -----")
+    print("Nodes of graph:", ", ".join(g3.nodes))
+    print("Name of root:", g3.root.name)
