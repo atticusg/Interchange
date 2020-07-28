@@ -4,7 +4,7 @@ import ast
 import inspect
 from textwrap import dedent
 
-from intervention.computation_graph import GraphNode
+from intervention.computation_graph import GraphNode, CompGraphConstructor, GraphInput
 
 class TorchEqualityModule(torch.nn.Module):
     def __init__(self,
@@ -61,26 +61,7 @@ def traverse_backprop_graph(res, params=None):
 
     add_nodes(res.grad_fn)
 
-
-class MyVisitor(ast.NodeVisitor):
-    def visit_FunctionDef(self, node):
-        if node.name == "forward":
-            self.traverse_body(node)
-
-    def traverse_body(self, node):
-        print("traversing the body of %s" % node.name)
-        for n in node.body:
-            print(n)
-
-def main():
-    m = TorchEqualityModule()
-    x = torch.randn(20)
-    res = m(x)
-    res.backward()
-    traverse_backprop_graph(res, params=dict(m.named_parameters()))
-
-
-    f = TorchEqualityModule
+def ast_traverse(f):
     # parse python code that defines the module to get AST tree
     filename = inspect.getsourcefile(f)
     sourcelines, file_lineno = inspect.getsourcelines(f)
@@ -93,9 +74,40 @@ def main():
     MyVisitor().visit(tree_root)
     # print(ast.dump(tree))
 
-    expr = "x = 6 + 8\nprint(x)"
-    # tree_root = ast.parse(expr)
-    # MyVisitor().visit(tree_root)
+class MyVisitor(ast.NodeVisitor):
+    def visit_FunctionDef(self, node):
+        if node.name == "forward":
+            self.traverse_body(node)
+
+    def traverse_body(self, node):
+        print("traversing the body of %s" % node.name)
+        for n in node.body:
+            print(n)
+
+
+def make_graph_from_hooks(m, x):
+    constructor = CompGraphConstructor(m)
+    g = constructor.make_graph(x)
+
+    return g
+
+
+def main():
+    m = TorchEqualityModule()
+    x = torch.randn(20)
+
+    # comp_graph = make_graph_from_hooks(m, x)
+
+    comp_graph2 = CompGraphConstructor.construct(m, x)
+
+    input = GraphInput({"linear": x})
+    # print(comp_graph.compute(input))
+    print(comp_graph2.compute(input))
+    # res = m(x)
+    # res.backward()
+    # traverse_backprop_graph(res, params=dict(m.named_parameters()))
+
+    # ast_traverse(TorchEqualityModule)
 
 
 if __name__ == "__main__":

@@ -71,13 +71,21 @@ class GraphInput:
 
 class Intervention:
     """ A hashable intervention object """
-    def __init__(self, base, inputs=None, locs=None):
-        inputs = {} if inputs is None else inputs
+    def __init__(self, base, intervention=None, locs=None):
+        """ Construct an intervention experiment.
+
+        :param base: `GraphInput` or `dict(str->Any)` containing the "base" input to a graph,
+            where we intervene on the intermediate outputs of this input instance.
+        :param intervention: `GraphInput` or `dict(str->Any)` denoting the node
+            names and corresponding values that we want to set the nodes
+        :param locs: `dict(str-><index>)` optional, indices of nodes to intervene
+        """
+        intervention = {} if intervention is None else intervention
         locs = {} if locs is None else locs
-        self._setup(base, inputs, locs)
+        self._setup(base, intervention, locs)
         self.affected_nodes = None
 
-    def _setup(self, base=None, inputs=None, locs=None):
+    def _setup(self, base=None, intervention=None, locs=None):
         if base is not None:
             if isinstance(base, dict):
                 base = GraphInput(base)
@@ -89,15 +97,15 @@ class Intervention:
         else:
             locs = self._locs
 
-        if inputs is not None:
-            if isinstance(inputs, GraphInput):
-                inputs = inputs.values
+        if intervention is not None:
+            if isinstance(intervention, GraphInput):
+                intervention = intervention.values
 
             # extract indexing in names
             loc_pattern = re.compile("\[.*\]")
             to_delete = []
             to_add = {}
-            for name, value in inputs.items():
+            for name, value in intervention.items():
                 # find if there is a index-like expression in name
                 loc_search = loc_pattern.search(name)
                 if loc_search:
@@ -110,10 +118,10 @@ class Intervention:
 
             # remove indexing part in names
             for name in to_delete:
-                inputs.pop(name)
-            inputs.update(to_add)
+                intervention.pop(name)
+            intervention.update(to_add)
 
-            self._inputs = GraphInput(inputs)
+            self._intervention = intervention
 
         self._locs = locs
 
@@ -122,12 +130,12 @@ class Intervention:
         return self._base
 
     @property
-    def inputs(self):
-        return self._inputs
-    
-    @inputs.setter
-    def inputs(self, values):
-        self._setup(inputs=values, locs={})
+    def intervention(self):
+        return self._intervention
+
+    @intervention.setter
+    def intervention(self, values):
+        self._setup(intervention=values, locs={})
 
     @property
     def locs(self):
@@ -137,10 +145,10 @@ class Intervention:
     def locs(self, values):
         self._setup(locs=values)
 
-    def set_input(self, name, value):
-        d = self._inputs.values if self._inputs is not None else {}
+    def set_intervention(self, name, value):
+        d = self._intervention.values if self._intervention is not None else {}
         d[name] = value
-        self._setup(inputs=d, locs=None) # do not overwrite existing locs
+        self._setup(intervention=d, locs=None) # do not overwrite existing locs
 
     def set_loc(self, name, value):
         d = self._locs if self._locs is not None else {}
@@ -148,10 +156,10 @@ class Intervention:
         self._setup(locs=d)
 
     def __getitem__(self, name):
-        return self._inputs.values[name]
+        return self._intervention.values[name]
 
     def __setitem__(self, name, value):
-        self.set_input(name, value)
+        self.set_intervention(name, value)
 
     def find_affected_nodes(self, graph):
         """
@@ -163,7 +171,7 @@ class Intervention:
         :param interv: intervention experiment in question
         :return: python `set` of nodes affected by this experiment
         """
-        if self.inputs is None or len(self.inputs) == 0:
+        if self.intervention is None or len(self.intervention) == 0:
             return set()
 
         affected_nodes = set()
@@ -174,7 +182,7 @@ class Intervention:
                 if affected(c): # we do not want short-circuiting here
                     affected_nodes.add(node.name)
                     is_affected = True
-            if node.name in self.inputs:
+            if node.name in self.intervention:
                 affected_nodes.add(node.name)
                 is_affected = True
             return is_affected
@@ -249,18 +257,18 @@ class GraphNode:
         # check cache first if calculation results exist in cache
         res = cache.get(interv if is_affected else inputs, None)
         if res is None:
-            if interv and self.name in interv.inputs:
+            if interv and self.name in interv.intervention:
                 if self.name in interv.locs:
                     # intervene a specific location in a vector/tensor
                     res = self.base_cache.get(inputs, None)
                     if res is None:
                         raise RuntimeError("Must compute result without intervention once before intervening "
-                            "(base: %s, intervention: %s)" % (interv.base, interv.inputs))
+                            "(base: %s, intervention: %s)" % (interv.base, interv.intervention))
                     idx = interv.locs[self.name]
-                    res[idx] = interv.inputs[self.name]
+                    res[idx] = interv.intervention[self.name]
                 else:
                     # replace the whole tensor
-                    res = interv.inputs[self.name]
+                    res = interv.intervention[self.name]
             else:
                 if len(self.children) == 0:
                     # leaf
@@ -284,7 +292,7 @@ class GraphNode:
 
         return res
 
-class ComputationGraph(ABC):
+class ComputationGraph:
     def __init__(self, root):
         self.root = root
         self.nodes = {}
@@ -324,7 +332,7 @@ class ComputationGraph(ABC):
         :raise: `ValueError` if something goes wrong
         """
         self.validate_inputs(interv.base)
-        for name in interv.inputs.values.keys():
+        for name in interv.intervention.values.keys():
             if name not in self.nodes:
                 raise RuntimeError("Node in intervention experiment not found "
                                  "in computation graph: %s" % name)
@@ -365,7 +373,125 @@ class ComputationGraph(ABC):
     def get_result(self, node_name, x):
         return self.nodes[node_name].base_cache[x]
 
+
+class CompGraphConstructor:
+    """
+    A class for automatically constructing a `ComputationGraph` given a
+    `torch.nn.Module`.
+
+    Currently, the constructor will automatically treat the submodules of
+    type `torch.nn.Module` of the provided module as nodes in the computation
+    graph. It only considers one level of submoduling, and ignores nested
+    submodules. It only works if the outputs of every submodule directly feeds
+    into another one as is, without any intermediate steps outside the scope of a
+    submodule's forward() function.
+    """
+    def __init__(self, module):
+        assert isinstance(module, torch.nn.Module), "Must provide an instance of a nn.Module"
+
+        self.module = module
+
+        self.name_to_node = {}
+        self.module_to_name = {}
+        self.current_input = None
+        for name, submodule in module.named_children():
+            # construct nodes based on children modules of module
+            # no edges link these nodes yet, edges are created during construct()
+            node = GraphNode(name=name, forward=submodule.forward)
+            self.name_to_node[name] = node
+            self.module_to_name[submodule] = name
+
+            # register hook
+            submodule.register_forward_pre_hook(self.pre_hook)
+            submodule.register_forward_hook(self.post_hook)
+
+    @classmethod
+    def construct(cls, module, *args):
+        """ Construct a computation graph given a torch.nn.Module, using its submodules as nodes
+
+        We must provide an instance of an input to the torch.nn.Module to construct
+        the computation graph. The intermediate output values of each node will
+        be automatically stored in the nodes of the graph that is constructed.
+
+        :param module: torch.nn.Module
+        :param args: inputs to module.forward()
+        :return: (ComputationGraph, GraphInput) where `g` is the constructed
+            computation graph, `input_obj` is a GraphInput object based on args,
+            which is required for further intervention experiments on the
+            ComputationGraph.
+        """
+        constructor = cls(module)
+        g, input_obj = constructor.make_graph(*args)
+        return g, input_obj
+
+    def pre_hook(self, module, input):
+        """ Executed before the module's forward() and unpacks inputs
+
+        We track how modules are connected by augmenting the outputs of a
+        module with the its own name, which can be read when the outputs become
+        the inputs of another module.
+
+        :param module: torch.nn.Module, submodule of self.module
+        :param input: tuple of (Tensor, str) tuples, Tensors are actual inputs
+             to module.forward(), str denotes name of module that outputted Tensor
+        :return: modified input that is actually passed to module.forward()
+        """
+
+        name = self.module_to_name[module]
+        current_node = self.name_to_node[name]
+        print("I am in module", self.module_to_name[module], "I have %d inputs" % len(input))
+
+        if not all(isinstance(x, tuple) and len(x) == 2 for x in input):
+            raise RuntimeError("At least one input to \"%s\" is not an output of a named module!" % name)
+
+        actual_inputs = tuple(t[0] for t in input)
+
+        # get information about which modules do the inputs come from
+        if any(x[1] is None for x in input):
+            if not all(x[1] is None for x in input):
+                raise NotImplementedError("Nodes currently don't support mixed leaf and non-leaf inputs")
+            current_node.children = []
+            if self.current_input is not None:
+                raise NotImplementedError("Currently only supports one input leaf!")
+            else:
+                self.current_input = GraphInput({name: actual_inputs})
+        else:
+            current_node.children = [self.name_to_node[t[1]] for t in input]
+
+        return actual_inputs
+
+    def post_hook(self, module, input, output):
+        """ Executed after module.forward(), repackages outputs with name of current module
+
+        We track how modules are connected by augmenting the outputs of a
+        module with the its own name, which can be read when the outputs become
+        the inputs of another module.
+
+        :param module: torch.nn.Module, submodule of self.Module
+        :param input: the inputs to module.forward()
+        :param output: outputs from module.forward()
+        :return: modified output of module, and may be passed on to next module
+        """
+        name = self.module_to_name[module]
+        current_node = self.name_to_node[name]
+
+        # store output info in cache
+        current_node.base_cache[self.current_input] = output
+
+        # package node name together with output
+        return (output, name)
+
+    def make_graph(self, *args):
+        """ construct a computation graph given a nn.Module """
+        input = tuple((x, None) for x in args)
+        res, root_name = self.module(*input)
+        graph_input_obj = self.current_input
+        self.current_input = None
+        root = self.name_to_node[root_name]
+        return ComputationGraph(root), graph_input_obj
+
 if __name__ == "__main__":
+    ##### Example 1 #####
     class MyCompGraph(ComputationGraph):
         def __init__(self):
             @GraphNode()
@@ -398,12 +524,13 @@ if __name__ == "__main__":
     g = MyCompGraph()
     g.clear_caches()
 
-    inputs = GraphInput({"leaf1": (10, 20, 30), "leaf2": (2,3)})
-    in1 = Intervention(inputs, {"child1": 100})
+    interv = GraphInput({"leaf1": (10, 20, 30), "leaf2": (2, 3)})
+    in1 = Intervention(interv, {"child1": 100})
 
     res = g.intervene(in1)
     print(res)
 
+    ##### Example 2 ######
     class Graph2(ComputationGraph):
         def __init__(self):
             @GraphNode()
@@ -430,10 +557,35 @@ if __name__ == "__main__":
     before, after = g2.intervene(in1)
     print("Before:", before, "after:", after)
 
-    inputs = {"leaf1": torch.tensor([300, 300]), "leaf2": torch.tensor([100])}
-    locs = {"leaf1": ":2", "leaf2": 2}
-    in2 = Intervention(i1, inputs=inputs, locs=locs)
+    interv = {"leaf1": torch.tensor([300, 300]), "leaf2": torch.tensor([100])}
+    locs = {"leaf1": Loc[:2], "leaf2": 2}
+    in2 = Intervention(i1, intervention=interv, locs=locs)
     before, after = g2.intervene(in2)
     print("Before:", before, "after:", after)
 
+    ##### Example 3 #####
+
+    class TorchEqualityModule(torch.nn.Module):
+        def __init__(self,
+                     input_size=20,
+                     hidden_layer_size=100,
+                     activation="relu"):
+            super(TorchEqualityModule, self).__init__()
+            self.linear = torch.nn.Linear(input_size, hidden_layer_size)
+            if activation == "relu":
+                self.activation = torch.nn.ReLU()
+            else:
+                raise NotImplementedError("Activation method not implemented")
+            self.output = torch.nn.Linear(hidden_layer_size, 1)
+            self.sigmoid = torch.nn.Sigmoid()
+
+        def forward(self, x):
+            linear_out = self.linear(x)
+            self.hidden_vec = self.activation(linear_out)
+            logits = self.output(self.hidden_vec)
+            return self.sigmoid(logits)
+
+    module = TorchEqualityModule()
+    input = torch.randn(20)
+    g3, in3 = CompGraphConstructor.construct(module, input)
 
