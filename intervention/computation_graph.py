@@ -1,12 +1,5 @@
-from abc import ABC
 import re
 import torch
-
-class Experiment:
-    def __init__(self, id, inputs, interventions=None):
-        self.inputs = inputs
-        self.interventions = interventions
-        self.input_key = id
 
 class Loc:
     def __init__(self, loc=None):
@@ -45,8 +38,13 @@ class GraphInput:
 
     `GraphInput` objects are intended to be immutable, so that its hash value
     can have a one-to-one correspondence to the dict stored in it. """
-    def __init__(self, values):
-        self._values = values
+    def __init__(self, values, device=None):
+        if device:
+            assert all(
+                isinstance(t, torch.Tensor) for _, t in values.items())
+            self._values = {k: v.to(device) for k, v in values.items()}
+        else:
+            self._values = values
 
     @property
     def values(self):
@@ -69,9 +67,15 @@ class GraphInput:
             s = ", ".join(("'%s': %s" % (k, type(v))) for k, v in self._values.items())
             return "GraphInput{%s}" % s
 
+    def to(self, device):
+        assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
+
+        new_values = {k: v.to(device) for k, v in self._values.items()}
+        return GraphInput(new_values)
+
 class Intervention:
     """ A hashable intervention object """
-    def __init__(self, base, intervention=None, locs=None):
+    def __init__(self, base, intervention=None, locs=None, device=None):
         """ Construct an intervention experiment.
 
         :param base: `GraphInput` or `dict(str->Any)` containing the "base" input to a graph,
@@ -79,16 +83,18 @@ class Intervention:
         :param intervention: `GraphInput` or `dict(str->Any)` denoting the node
             names and corresponding values that we want to set the nodes
         :param locs: `dict(str-><index>)` optional, indices of nodes to intervene
+        :param device: cuda/cpu if intervention values are pytorch tensors
         """
         intervention = {} if intervention is None else intervention
         locs = {} if locs is None else locs
+        self.device = device
         self._setup(base, intervention, locs)
         self.affected_nodes = None
 
     def _setup(self, base=None, intervention=None, locs=None):
         if base is not None:
             if isinstance(base, dict):
-                base = GraphInput(base)
+                base = GraphInput(base, self.device)
             self._base = base
 
         if locs is not None:
@@ -121,6 +127,9 @@ class Intervention:
                 intervention.pop(name)
             intervention.update(to_add)
 
+            if self.device:
+                intervention = {k: v.to(self.device) for k, v in intervention.items()}
+
             self._intervention = GraphInput(intervention)
 
         self._locs = locs
@@ -147,7 +156,7 @@ class Intervention:
 
     def set_intervention(self, name, value):
         d = self._intervention.values if self._intervention is not None else {}
-        d[name] = value
+        d[name] = value if not self.device else value.to(self.device)
         self._setup(intervention=d, locs=None) # do not overwrite existing locs
 
     def set_loc(self, name, value):
@@ -256,6 +265,7 @@ class GraphNode:
 
         # check cache first if calculation results exist in cache
         res = cache.get(interv if is_affected else inputs, None)
+
         if res is None:
             if interv and self.name in interv.intervention:
                 if self.name in interv.locs:
@@ -294,6 +304,10 @@ class GraphNode:
 
 class ComputationGraph:
     def __init__(self, root):
+        """
+        Constructs a computation graph by traversing from a root
+        :param root:
+        """
         self.root = root
         self.nodes = {}
         self.results_cache = {} # stores results of simple computations and interventions
@@ -353,6 +367,7 @@ class ComputationGraph:
         res = self.results_cache.get(inputs, None)
         if not res:
             self.validate_inputs(inputs)
+            print("check type of inputs in compute", type(inputs))
             res = self.root.compute(inputs)
         if store_cache:
             self.results_cache[inputs] = res
@@ -389,7 +404,7 @@ class ComputationGraph:
         self.results_cache = {}
 
     def get_result(self, node_name, x):
-        
+
         return self.nodes[node_name].base_cache[x]
 
 
@@ -405,7 +420,7 @@ class CompGraphConstructor:
     into another one as is, without any intermediate steps outside the scope of a
     submodule's forward() function.
     """
-    def __init__(self, module):
+    def __init__(self, module, node_modules=None):
         assert isinstance(module, torch.nn.Module), "Must provide an instance of a nn.Module"
 
         self.module = module
@@ -413,19 +428,21 @@ class CompGraphConstructor:
         self.name_to_node = {}
         self.module_to_name = {}
         self.current_input = None
-        for name, submodule in module.named_children():
+
+        node_modules = module.named_children() if not node_modules else node_modules
+
+        for name, submodule in node_modules:
             # construct nodes based on children modules of module
             # no edges link these nodes yet, edges are created during construct()
             node = GraphNode(name=name, forward=submodule.forward)
             self.name_to_node[name] = node
             self.module_to_name[submodule] = name
 
-            # register hook
             submodule.register_forward_pre_hook(self.pre_hook)
             submodule.register_forward_hook(self.post_hook)
 
     @classmethod
-    def construct(cls, module, *args):
+    def construct(cls, module, *args, device=None):
         """ Construct a computation graph given a torch.nn.Module, using its submodules as nodes
 
         We must provide an instance of an input to the torch.nn.Module to construct
@@ -440,7 +457,7 @@ class CompGraphConstructor:
             ComputationGraph.
         """
         constructor = cls(module)
-        g, input_obj = constructor.make_graph(*args)
+        g, input_obj = constructor.make_graph(*args, device=device)
         return g, input_obj
 
     def pre_hook(self, module, input):
@@ -482,10 +499,6 @@ class CompGraphConstructor:
     def post_hook(self, module, input, output):
         """ Executed after module.forward(), repackages outputs with name of current module
 
-        We track how modules are connected by augmenting the outputs of a
-        module with the its own name, which can be read when the outputs become
-        the inputs of another module.
-
         :param module: torch.nn.Module, submodule of self.Module
         :param input: the inputs to module.forward()
         :param output: outputs from module.forward()
@@ -500,9 +513,13 @@ class CompGraphConstructor:
         # package node name together with output
         return (output, name)
 
-    def make_graph(self, *args):
+    def make_graph(self, *args, device=None):
         """ construct a computation graph given a nn.Module """
-        input = tuple((x, None) for x in args)
+        if device:
+            input = tuple((x.to(device), None) for x in args)
+        else:
+            input = tuple((x, None) for x in args)
+        print("current_input in make_graph", self.current_input)
         res, root_name = self.module(*input)
         graph_input_obj = self.current_input
         self.current_input = None
