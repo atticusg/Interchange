@@ -12,9 +12,16 @@ class Loc:
         return item
 
     @classmethod
-    def str_to_slice(cls, s):
-        return slice(
-            *map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
+    def process(cls, x):
+        if isinstance(x, int) or isinstance(x, list) or isinstance(x, tuple) \
+                or isinstance(x, slice) or x is Ellipsis:
+            return x
+        elif isinstance(x, str):
+            return Loc.parse_str(x)
+
+    @classmethod
+    def parse_str(cls, s):
+        return tuple(Loc.parse_dim(x.strip()) for x in s.split(","))
 
     @classmethod
     def parse_dim(cls, s):
@@ -25,16 +32,9 @@ class Loc:
             else int(s)
 
     @classmethod
-    def parse_str(cls, s):
-        return tuple(Loc.parse_dim(x.strip()) for x in s.split(","))
-
-    @classmethod
-    def process(cls, x):
-        if isinstance(x, int) or isinstance(x, list) or isinstance(x, tuple) \
-                or isinstance(x, slice) or x is Ellipsis:
-            return x
-        elif isinstance(x, str):
-            return Loc.parse_str(x)
+    def str_to_slice(cls, s):
+        return slice(
+            *map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
 
 
 class GraphInput:
