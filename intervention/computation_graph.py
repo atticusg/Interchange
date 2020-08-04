@@ -1,7 +1,10 @@
 import re
 import torch
 
+
 class Loc:
+    """A helper class to manage parsing of indices and slices"""
+
     def __init__(self, loc=None):
         self._loc = Loc.process(loc) if loc else None
 
@@ -10,7 +13,8 @@ class Loc:
 
     @classmethod
     def str_to_slice(cls, s):
-        return slice(*map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
+        return slice(
+            *map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
 
     @classmethod
     def parse_dim(cls, s):
@@ -27,10 +31,11 @@ class Loc:
     @classmethod
     def process(cls, x):
         if isinstance(x, int) or isinstance(x, list) or isinstance(x, tuple) \
-                or x is Ellipsis or isinstance(x, slice):
+                or isinstance(x, slice) or x is Ellipsis:
             return x
         elif isinstance(x, str):
             return Loc.parse_str(x)
+
 
 class GraphInput:
     """ A hashable input object that stores a dict mapping names of nodes to
@@ -38,6 +43,7 @@ class GraphInput:
 
     `GraphInput` objects are intended to be immutable, so that its hash value
     can have a one-to-one correspondence to the dict stored in it. """
+
     def __init__(self, values, device=None):
         if device:
             assert all(
@@ -64,7 +70,8 @@ class GraphInput:
         if self.values is None:
             return "GraphInput{}"
         else:
-            s = ", ".join(("'%s': %s" % (k, type(v))) for k, v in self._values.items())
+            s = ", ".join(
+                ("'%s': %s" % (k, type(v))) for k, v in self._values.items())
             return "GraphInput{%s}" % s
 
     def to(self, device):
@@ -73,8 +80,10 @@ class GraphInput:
         new_values = {k: v.to(device) for k, v in self._values.items()}
         return GraphInput(new_values)
 
+
 class Intervention:
     """ A hashable intervention object """
+
     def __init__(self, base, intervention=None, locs=None, device=None):
         """ Construct an intervention experiment.
 
@@ -128,7 +137,8 @@ class Intervention:
             intervention.update(to_add)
 
             if self.device:
-                intervention = {k: v.to(self.device) for k, v in intervention.items()}
+                intervention = {k: v.to(self.device) for k, v in
+                                intervention.items()}
 
             self._intervention = GraphInput(intervention)
 
@@ -157,7 +167,7 @@ class Intervention:
     def set_intervention(self, name, value):
         d = self._intervention.values if self._intervention is not None else {}
         d[name] = value if not self.device else value.to(self.device)
-        self._setup(intervention=d, locs=None) # do not overwrite existing locs
+        self._setup(intervention=d, locs=None)  # do not overwrite existing locs
 
     def set_loc(self, name, value):
         d = self._locs if self._locs is not None else {}
@@ -184,11 +194,12 @@ class Intervention:
             return set()
 
         affected_nodes = set()
+
         def affected(node):
             # check if children are affected, use simple DFS
             is_affected = False
             for c in node.children:
-                if affected(c): # we do not want short-circuiting here
+                if affected(c):  # we do not want short-circuiting here
                     affected_nodes.add(node.name)
                     is_affected = True
             if node.name in self.intervention:
@@ -203,10 +214,9 @@ class Intervention:
 
 class GraphNode:
     def __init__(self, *args, name=None, forward=None):
-        """
-        Construct a computation graph node, can be used as a decorator of a function.
+        """Construct a computation graph node, can be used as function decorator
 
-        This constructor is invoked first when `@GraphNode()` decorates a function.
+        This constructor is invoked when `@GraphNode()` decorates a function.
         When used as a decorator, the `*args` are the parameters of the decorator
 
         :param args: other GraphNode objects that are the children of this node
@@ -215,8 +225,8 @@ class GraphNode:
         :param forward:
         """
         self.children = args
-        self.base_cache = {} # stores results of non-intervened runs
-        self.interv_cache = {} # stores results of intervened experiments
+        self.base_cache = {}  # stores results of non-intervened runs
+        self.interv_cache = {}  # stores results of intervened experiments
         self.name = name
         if forward:
             self.forward = forward
@@ -224,8 +234,7 @@ class GraphNode:
                 self.name = forward.__name__
 
     def __call__(self, f):
-        """
-        Invoked immediately after `__init__` when `@GraphNode()` decorates a function
+        """Invoked immediately after `__init__` when `@GraphNode()` decorates a function
 
         :param f: the function to which the decorator is attached
         :return: a new GraphNode object
@@ -233,7 +242,8 @@ class GraphNode:
         self.forward = f
         if self.name is None:
             self.name = f.__name__
-        return self # adding the decorator GraphNode on a function returns a GraphNode object
+        # adding the decorator GraphNode on a function returns a GraphNode object
+        return self
 
     def __repr__(self):
         return "XGraphNode(\"%s\")" % self.name
@@ -257,7 +267,8 @@ class GraphNode:
             interv = inputs
             inputs = interv.base
             if interv.affected_nodes is None:
-                raise RuntimeError("Must find affected nodes with respect to a graph before intervening")
+                raise RuntimeError(
+                    "Must find affected nodes with respect to a graph before intervening")
             is_affected = self.name in interv.affected_nodes
 
         # read/store values to intervened cache if this node is effected
@@ -272,8 +283,10 @@ class GraphNode:
                     # intervene a specific location in a vector/tensor
                     res = self.base_cache.get(inputs, None)
                     if res is None:
-                        raise RuntimeError("Must compute result without intervention once before intervening "
-                            "(base: %s, intervention: %s)" % (interv.base, interv.intervention))
+                        raise RuntimeError(
+                            "Must compute result without intervention once "
+                            "before intervening (base: %s, intervention: %s)"
+                            % (interv.base, interv.intervention))
                     idx = interv.locs[self.name]
                     res[idx] = interv.intervention[self.name]
                 else:
@@ -291,7 +304,8 @@ class GraphNode:
                     # non-leaf node
                     children_res = []
                     for child in self.children:
-                        child_res = child.compute(inputs if interv is None else interv)
+                        child_res = child.compute(
+                            inputs if interv is None else interv)
                         children_res.append(child_res)
                     res = self.forward(*children_res)
 
@@ -302,6 +316,7 @@ class GraphNode:
 
         return res
 
+
 class ComputationGraph:
     def __init__(self, root):
         """
@@ -310,7 +325,7 @@ class ComputationGraph:
         """
         self.root = root
         self.nodes = {}
-        self.results_cache = {} # stores results of simple computations and interventions
+        self.results_cache = {}  # stores results of simple computations and interventions
         self.leaves = set()
         self.validate_graph()
 
@@ -319,11 +334,13 @@ class ComputationGraph:
         Validates the structure of the computational graph by doing a dfs starting from the root.
         :raise: `RuntimeError` if something goes wrong
         """
+
         # TODO: check for cycles
         def add_node(node):
             if node.name in self.nodes:
                 if self.nodes[node.name] is not node:
-                    raise RuntimeError("Two different nodes cannot have the same name!")
+                    raise RuntimeError(
+                        "Two different nodes cannot have the same name!")
                 else:
                     return
             self.nodes[node.name] = node
@@ -341,7 +358,8 @@ class ComputationGraph:
         """
         for node in self.leaves:
             if node.name not in inputs:
-                raise RuntimeError("input value not provided for leaf node %s" % node.name)
+                raise RuntimeError(
+                    "input value not provided for leaf node %s" % node.name)
 
     def validate_interv(self, interv):
         """
@@ -353,7 +371,7 @@ class ComputationGraph:
         for name in interv.intervention.values.keys():
             if name not in self.nodes:
                 raise RuntimeError("Node in intervention experiment not found "
-                                 "in computation graph: %s" % name)
+                                   "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
     def compute(self, inputs, store_cache=True):
@@ -384,9 +402,9 @@ class ComputationGraph:
         base_res = self.compute(interv.base)
 
         interv_res = self.results_cache.get(interv, None)
+        self.validate_interv(interv)
+        interv.find_affected_nodes(self)
         if not interv_res:
-            self.validate_interv(interv)
-            interv.find_affected_nodes(self)
             interv_res = self.root.compute(interv)
             if store_cache:
                 self.results_cache[interv] = interv_res
@@ -404,14 +422,24 @@ class ComputationGraph:
         self.results_cache = {}
 
     def get_result(self, node_name, x):
-
-        return self.nodes[node_name].base_cache[x]
-
+        node = self.nodes[node_name]
+        if isinstance(x, GraphInput):
+            if x not in node.base_cache:
+                self.compute(x)
+            return node.base_cache[x]
+        elif isinstance(x, Intervention):
+            if x.base not in node.base_cache:
+                self.intervene(x)
+            if node.name not in x.affected_nodes:
+                return node.base_cache[x]
+            else:
+                return node.interv_cache[x]
+        else:
+            raise RuntimeError("get_result requires a GraphInput or Intervention "
+                               "object!")
 
 class CompGraphConstructor:
-    """
-    A class for automatically constructing a `ComputationGraph` given a
-    `torch.nn.Module`.
+    """Automatically construct a `ComputationGraph` from a `torch.nn.Module`.
 
     Currently, the constructor will automatically treat the submodules of
     type `torch.nn.Module` of the provided module as nodes in the computation
@@ -420,8 +448,10 @@ class CompGraphConstructor:
     into another one as is, without any intermediate steps outside the scope of a
     submodule's forward() function.
     """
+
     def __init__(self, module, node_modules=None):
-        assert isinstance(module, torch.nn.Module), "Must provide an instance of a nn.Module"
+        assert isinstance(module,
+                          torch.nn.Module), "Must provide an instance of a nn.Module"
 
         self.module = module
 
@@ -443,7 +473,7 @@ class CompGraphConstructor:
 
     @classmethod
     def construct(cls, module, *args, device=None):
-        """ Construct a computation graph given a torch.nn.Module, using its submodules as nodes
+        """ Construct a computation graph given a torch.nn.Module
 
         We must provide an instance of an input to the torch.nn.Module to construct
         the computation graph. The intermediate output values of each node will
@@ -475,20 +505,24 @@ class CompGraphConstructor:
 
         name = self.module_to_name[module]
         current_node = self.name_to_node[name]
-        print("I am in module", self.module_to_name[module], "I have %d inputs" % len(input))
+        print("I am in module", self.module_to_name[module],
+              "I have %d inputs" % len(input))
 
         if not all(isinstance(x, tuple) and len(x) == 2 for x in input):
-            raise RuntimeError("At least one input to \"%s\" is not an output of a named module!" % name)
+            raise RuntimeError(
+                "At least one input to \"%s\" is not an output of a named module!" % name)
 
         actual_inputs = tuple(t[0] for t in input)
 
         # get information about which modules do the inputs come from
         if any(x[1] is None for x in input):
             if not all(x[1] is None for x in input):
-                raise NotImplementedError("Nodes currently don't support mixed leaf and non-leaf inputs")
+                raise NotImplementedError(
+                    "Nodes currently don't support mixed leaf and non-leaf inputs")
             current_node.children = []
             if self.current_input is not None:
-                raise NotImplementedError("Currently only supports one input leaf!")
+                raise NotImplementedError(
+                    "Currently only supports one input leaf!")
             else:
                 self.current_input = GraphInput({name: actual_inputs})
         else:
@@ -497,7 +531,7 @@ class CompGraphConstructor:
         return actual_inputs
 
     def post_hook(self, module, input, output):
-        """ Executed after module.forward(), repackages outputs with name of current module
+        """Executed after module.forward(), repackages outputs with name of current module
 
         :param module: torch.nn.Module, submodule of self.Module
         :param input: the inputs to module.forward()
@@ -526,6 +560,7 @@ class CompGraphConstructor:
         root = self.name_to_node[root_name]
         return ComputationGraph(root), graph_input_obj
 
+
 if __name__ == "__main__":
     ##### Example 1 #####
     class MyCompGraph(ComputationGraph):
@@ -537,7 +572,7 @@ if __name__ == "__main__":
 
             @GraphNode()
             def leaf2(d, e):
-                print("leaf2 = (d + e) / 10 = %f" % ((d + e)/10))
+                print("leaf2 = (d + e) / 10 = %f" % ((d + e) / 10))
                 return (d + e) / 10
 
             @GraphNode(leaf1)
@@ -547,15 +582,16 @@ if __name__ == "__main__":
 
             @GraphNode(leaf1, leaf2)
             def child2(x, y):
-                print("child2 = leaf1 - leaf2 = %f" % (x-y))
+                print("child2 = leaf1 - leaf2 = %f" % (x - y))
                 return x - y
 
             @GraphNode(child1, child2)
             def root(w, z):
-                print("root = child1 + child2 + 1 = %f" % (w + z+1))
+                print("root = child1 + child2 + 1 = %f" % (w + z + 1))
                 return w + z + 1
 
             super().__init__(root)
+
 
     print("----- Example 1  -----")
 
@@ -567,6 +603,7 @@ if __name__ == "__main__":
 
     res = g.intervene(in1)
     print(res)
+
 
     ##### Example 2 ######
     class Graph2(ComputationGraph):
@@ -591,7 +628,8 @@ if __name__ == "__main__":
     g2 = Graph2()
     g.clear_caches()
 
-    i1 = GraphInput({"leaf1": (torch.tensor([10,20,30]), torch.tensor([1, 1, 1]))})
+    i1 = GraphInput(
+        {"leaf1": (torch.tensor([10, 20, 30]), torch.tensor([1, 1, 1]))})
     in1 = Intervention(i1)
     in1["leaf2[:2]"] = torch.tensor([101, 201])
 
@@ -603,6 +641,7 @@ if __name__ == "__main__":
     in2 = Intervention(i1, intervention=interv, locs=locs)
     before, after = g2.intervene(in2)
     print("Before:", before, "after:", after)
+
 
     ##### Example 3 #####
 
@@ -625,6 +664,7 @@ if __name__ == "__main__":
             self.hidden_vec = self.activation(linear_out)
             logits = self.output(self.hidden_vec)
             return self.sigmoid(logits)
+
 
     module = TorchEqualityModule()
     input = torch.randn(20)
