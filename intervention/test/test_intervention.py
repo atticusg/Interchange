@@ -40,49 +40,49 @@ def loc2():
 
 def test_init_base_only(base_input):
     i = Intervention(base_input)
-    assert isinstance(i.locs, dict) and len(i.locs) == 0
+    assert isinstance(i.location, dict) and len(i.location) == 0
     assert isinstance(i.intervention, GraphInput) and len(i.intervention) == 0
 
 
 def test_init_base_and_interv(base_input, interv1):
     i = Intervention(base_input, intervention=interv1)
-    assert i.locs == {}
+    assert i.location == {}
 
 
 def test_init_with_loc1(base_input, interv1_loc):
     i = Intervention(base_input, intervention=interv1_loc)
     assert "node" in i.intervention
-    assert i.locs["node"] == LOC[5:10]
+    assert i.location["node"] == LOC[5:10]
 
 
 def test_init_with_loc2(base_input, interv1, loc1):
-    i = Intervention(base_input, intervention=interv1, locs=loc1)
-    assert i.locs["node"] == LOC[5:10]
+    i = Intervention(base_input, intervention=interv1, location=loc1)
+    assert i.location["node"] == LOC[5:10]
 
 
 def test_init_with_loc3(base_input, interv1_loc, loc1):
-    i = Intervention(base_input, intervention=interv1_loc, locs=loc1)
-    assert i.locs["node"] == LOC[5:10]
+    i = Intervention(base_input, intervention=interv1_loc, location=loc1)
+    assert i.location["node"] == LOC[5:10]
 
 
 def test_init_with_loc4(base_input, interv1_loc, interv2, loc2):
     interv1_loc.update(interv2)
-    i = Intervention(base_input, intervention=interv1_loc, locs=loc2)
-    assert i.locs["node2"] == LOC[0, ..., :]
+    i = Intervention(base_input, intervention=interv1_loc, location=loc2)
+    assert i.location["node2"] == LOC[0, ..., :]
 
 
 def test_setter_intervention(base_input, interv1, interv1_loc):
     i = Intervention(base_input)
     i.intervention = interv1
     assert "node" in i.intervention
-    assert len(i.locs) == 0
+    assert len(i.location) == 0
     interv_input1 = i.intervention
 
     # replace with intervention containing loc
     i.intervention = interv1_loc
     interv_input2 = i.intervention
     assert "node" in i.intervention
-    assert i.locs["node"] == LOC[5:10]
+    assert i.location["node"] == LOC[5:10]
 
     # i.intervention should be an immutable GraphInput object; setting it should
     # produce a new instance
@@ -91,8 +91,8 @@ def test_setter_intervention(base_input, interv1, interv1_loc):
 
 def test_setter_locs(base_input, interv1, loc1):
     i = Intervention(base_input, intervention=interv1)
-    i.locs = loc1
-    assert i.locs["node"] == LOC[5:10]
+    i.location = loc1
+    assert i.location["node"] == LOC[5:10]
 
 
 def test_set_intervention(base_input):
@@ -113,12 +113,17 @@ def test_set_intervention(base_input):
 
 def test_loc(base_input, interv1_loc):
     i = Intervention(base_input, intervention=interv1_loc)
-    loc = i.locs["node"]
+    loc = i.location["node"]
     x = torch.tensor([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])[loc]
     y = torch.tensor([10, 12, 14, 16, 18])
     assert torch.all(torch.eq(x, y))
 
 
-def test_device(base_input):
+def test_device(base_input, interv1_loc):
+    device = torch.device("cuda")
+    base_input = base_input.to(device)
+    i = Intervention(base_input, intervention=interv1_loc, device=device)
 
-    pass
+    assert all(t.is_cuda for t in i.base.values.values())
+    assert all(v.is_cuda for v in i.intervention.values.values())
+

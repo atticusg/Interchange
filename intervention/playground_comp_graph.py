@@ -4,7 +4,7 @@ import ast
 import inspect
 from textwrap import dedent
 
-from intervention.computation_graph import GraphNode, CompGraphConstructor, GraphInput
+from intervention import GraphNode, CompGraphConstructor, GraphInput
 
 class TorchEqualityModule(torch.nn.Module):
     def __init__(self,
