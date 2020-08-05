@@ -21,7 +21,10 @@ class Loc:
 
     @classmethod
     def parse_str(cls, s):
-        return tuple(Loc.parse_dim(x.strip()) for x in s.split(","))
+        if "," not in s:
+            return Loc.parse_dim(s.strip())
+        else:
+            return tuple(Loc.parse_dim(x.strip()) for x in s.split(","))
 
     @classmethod
     def parse_dim(cls, s):
@@ -56,25 +59,32 @@ class GraphInput:
     def values(self):
         return self._values
 
+    @values.setter
+    def values(self, value):
+        raise RuntimeError("GraphInput objects are immutable!")
+
     def __getitem__(self, item):
-        return self._values[item]
+        return self.values[item]
 
     def __contains__(self, item):
         """ Override the python `in` operator """
-        return item in self._values
+        return item in self.values
 
     def __len__(self):
-        return len(self._values)
+        return len(self.values)
 
     def __repr__(self):
         if self.values is None:
             return "GraphInput{}"
         else:
             s = ", ".join(
-                ("'%s': %s" % (k, type(v))) for k, v in self._values.items())
+                ("'%s': %s" % (k, type(v))) for k, v in self.values.items())
             return "GraphInput{%s}" % s
 
     def to(self, device):
+        """Move all data to a pytorch Device.
+
+        This does NOT modify the original GraphInput object but returns a new one"""
         assert all(isinstance(t, torch.Tensor) for _, t in self._values.items())
 
         new_values = {k: v.to(device) for k, v in self._values.items()}
@@ -143,6 +153,10 @@ class Intervention:
             self._intervention = GraphInput(intervention)
 
         self._locs = locs
+        for loc_name in self.locs:
+            if not loc_name in self.intervention:
+                raise RuntimeWarning(" %s in locs does not have an intervention value")
+
 
     @property
     def base(self):
