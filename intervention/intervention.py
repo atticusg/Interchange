@@ -3,6 +3,7 @@ import re
 from intervention.location import Location
 from intervention.graph_input import GraphInput
 
+# TODO: applying function to output?
 
 class Intervention:
     """ A hashable intervention object """

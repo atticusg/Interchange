@@ -53,6 +53,10 @@ class ComputationGraph:
         :raise: `RuntimeError` if something goes wrong
         """
         self.validate_inputs(intervention.base)
+
+        if not intervention.intervention:
+            raise RuntimeError("Must specify some kind of intervention!")
+
         for name in intervention.intervention.values.keys():
             if name not in self.nodes:
                 raise RuntimeError("Node in intervention experiment not found "
