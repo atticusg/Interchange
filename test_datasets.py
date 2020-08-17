@@ -24,6 +24,5 @@ testdata = [
 @pytest.mark.parametrize("expr, inputs, res", testdata)
 def test_logical_form_dataset1(expr, inputs, res):
     dataset = LogicalFormDataset(expr)
-    dataset.create()
     assert dataset.X == inputs
     assert dataset.y == res

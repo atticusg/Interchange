@@ -9,18 +9,19 @@ from torch.utils.data import Dataset
 def remove_duplicates(l):
     return list(dict.fromkeys(l))
 
+
 class LogicalFormDataset(Dataset):
+    def __init__(self, expr):
+        """Construct a dataset given an arbitrary boolean expression with variables
 
-    POS_LABEL = 1
-    NEG_LABEL = 0
-
-    def __init__(self, expr, embed_dim=None):
-        """
+        :param expr: str, a boolean expression in string form,
+            e.g. "~(var1 | var2) & var3" where var1 var2 and var3 stand for
+            variables. Use `~ | &` for NOT, OR, AND.
         """
         super(LogicalFormDataset, self).__init__()
-        self.embed_dim = embed_dim
         self.algebra = boolean.BooleanAlgebra()
         self.expr = self.algebra.parse(expr)
+        self.X, self.y = self.truth_table()
 
     def truth_table(self):
         symbols = remove_duplicates(self.expr.get_symbols())
@@ -34,10 +35,6 @@ class LogicalFormDataset(Dataset):
             X.append(inputs)
             y.append(res)
         return X, y
-
-    def create(self):
-        self.X, self.y = self.truth_table()
-        return self.X, self.y
 
     def __len__(self):
         return len(self.X)
