@@ -118,6 +118,7 @@ class Intervention:
         :return: python `set` of nodes affected by this experiment
         """
         if self.intervention is None or len(self.intervention) == 0:
+            self.affected_nodes = set()
             return set()
 
         affected_nodes = set()
