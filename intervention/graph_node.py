@@ -22,6 +22,23 @@ class GraphNode:
             if name is None:
                 self.name = forward.__name__
 
+    @property
+    def children(self):
+        return self._children
+
+    @children.setter
+    def children(self, values):
+        self._children = list(values)
+        self._children_dict = {c.name: c for c in self._children}
+
+    @property
+    def children_dict(self):
+        if hasattr(self, "_children_dict"):
+            return self._children_dict
+        else:
+            self._children_dict = {c.name: c for c in self._children}
+            return self._children_dict
+
     def __call__(self, f):
         """Invoked immediately after `__init__` during `@GraphNode()` decoration
 

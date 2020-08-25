@@ -1,19 +1,28 @@
 import torch
 from intervention import GraphInput, GraphNode, ComputationGraph
 
+# TODO: specify list of modules
+# TODO: `with` wrapper to define modules on the go
+
 
 class CompGraphConstructor:
     """Automatically construct a `ComputationGraph` from a `torch.nn.Module`.
 
     Currently, the constructor will automatically treat the submodules of
     type `torch.nn.Module` of the provided module as nodes in the computation
-    graph. It only considers one level of submoduling, and ignores nested
-    submodules. It only works if the outputs of every submodule directly feeds
-    into another one as is, without any intermediate steps outside the scope of
-    a submodule's forward() function.
+    graph.
+
+    The constructor only works if the outputs of every submodule directly feeds
+    into another one, without any intermediate steps outside the scope of a
+    submodule's forward() function.
     """
 
-    def __init__(self, module, node_modules=None):
+    def __init__(self, module, submodules=None):
+        """ Initialize constructor from a pytorch module
+
+        :param module: `torch.nn.Module` the module in question.
+        :param submodules: see CompGraphConstructor.construct().
+        """
         assert isinstance(module, torch.nn.Module), \
             "Must provide an instance of a nn.Module"
 
@@ -23,10 +32,12 @@ class CompGraphConstructor:
         self.module_to_name = {}
         self.current_input = None
 
-        node_modules = module.named_children() if not node_modules \
-            else node_modules
+        submodules = module.named_children() if not submodules \
+            else submodules
+        if isinstance(submodules, dict):
+            submodules = submodules.items()
 
-        for name, submodule in node_modules:
+        for name, submodule in submodules:
             # construct nodes based on children modules of module
             # no edges yet, they are created during construct()
             node = GraphNode(name=name, forward=submodule.forward)
@@ -37,7 +48,7 @@ class CompGraphConstructor:
             submodule.register_forward_hook(self.post_hook)
 
     @classmethod
-    def construct(cls, module, *args, device=None):
+    def construct(cls, module, *args, device=None, submodules=None):
         """ Construct a computation graph given a torch.nn.Module
 
         We must provide a sample input to the torch.nn.Module to construct
@@ -46,13 +57,17 @@ class CompGraphConstructor:
 
         :param module: `torch.nn.Module`
         :param args: inputs as-is to `module.forward()`
-        :param device: optional, `torch.Device`
+        :param device: optional, `torch.Device`, move inputs to this device
+        :param submodules: optional, `dict(str -> torch.nn.Module)` or
+            `list_like(tuple(str, torch.nn.Module)).
+            Specifies submodules that form the nodes in the computation graph.
+            Each submodule is associated with a unique string name.
         :return: (ComputationGraph, GraphInput) where `g` is the constructed
             computation graph, `input_obj` is a GraphInput object based on args,
             which is required for further intervention experiments on the
             ComputationGraph.
         """
-        constructor = cls(module)
+        constructor = cls(module, submodules=submodules)
         g, input_obj = constructor.make_graph(*args, device=device)
         return g, input_obj
 
@@ -120,7 +135,7 @@ class CompGraphConstructor:
             inputs = tuple((x.to(device), None) for x in args)
         else:
             inputs = tuple((x, None) for x in args)
-        print("current_input in make_graph", self.current_input)
+        print("inputs", inputs)
         res, root_name = self.module(*inputs)
         graph_input_obj = self.current_input
         self.current_input = None

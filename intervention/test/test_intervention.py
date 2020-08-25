@@ -126,4 +126,3 @@ def test_device(base_input, interv1_loc):
 
     assert all(t.is_cuda for t in i.base.values.values())
     assert all(v.is_cuda for v in i.intervention.values.values())
-

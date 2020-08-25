@@ -2,14 +2,17 @@ import pytest
 
 from intervention import ComputationGraph, GraphNode, GraphInput, Intervention
 
+
 @pytest.fixture
 def input_leaf1():
     return GraphInput({"leaf1": (1, 10, 100)})
+
 
 @pytest.fixture
 def input_arith1():
     return GraphInput({"leaf2": (1000, 1000),
                        "leaf1": (1, 10, 100)})
+
 
 @pytest.fixture
 def arithmetic_graph1():
@@ -43,6 +46,7 @@ def arithmetic_graph1():
             super().__init__(root)
 
     return ArithmeticGraph1()
+
 
 @pytest.fixture
 def arithmetic_graph2():
@@ -80,6 +84,7 @@ def arithmetic_graph2():
 
     return ArithmeticGraph2()
 
+
 @pytest.fixture
 def singleton_graph():
     class SingletonGraph(ComputationGraph):
@@ -91,6 +96,7 @@ def singleton_graph():
             super(SingletonGraph, self).__init__(leaf1)
 
     return SingletonGraph()
+
 
 @pytest.fixture
 def intervened_graph(input_leaf1, singleton_graph):
@@ -118,6 +124,7 @@ def test_singleton_interv(singleton_graph, input_leaf1):
 
     assert "leaf1" in interv.affected_nodes and len(interv.affected_nodes) == 1
 
+
 def test_singleton_clear_cache(intervened_graph):
     intervened_graph.clear_caches()
 
@@ -125,12 +132,14 @@ def test_singleton_clear_cache(intervened_graph):
     leaf1_node = intervened_graph.nodes["leaf1"]
     assert len(leaf1_node.base_cache) == 0
 
+
 def test_arithmetic_graph1(arithmetic_graph1, input_arith1):
     assert arithmetic_graph1.compute(input_arith1) == 134
     assert arithmetic_graph1.get_result("child1", input_arith1) == 222
     assert arithmetic_graph1.get_result("child2", input_arith1) == -89
     assert arithmetic_graph1.get_result("leaf1", input_arith1) == 111
     assert arithmetic_graph1.get_result("leaf2", input_arith1) == 200
+
 
 def test_arithmetic_graph1_interv(arithmetic_graph1, input_arith1):
     i = Intervention(input_arith1)
@@ -151,6 +160,7 @@ def test_arithmetic_graph1_interv(arithmetic_graph1, input_arith1):
     assert arithmetic_graph1.get_result("leaf1", i) == 100
     assert arithmetic_graph1.get_result("leaf2", i) == 200
 
+
 def test_arithmetic_graph2(arithmetic_graph2, input_leaf1):
     assert arithmetic_graph2.compute(input_leaf1) == 458
 
@@ -158,13 +168,15 @@ def test_arithmetic_graph2(arithmetic_graph2, input_leaf1):
     assert arithmetic_graph2.get_result("child1", input_leaf1) == 222
     assert arithmetic_graph2.get_result("branch3", input_leaf1) == 225
 
+
 def test_arithmetic_graph2_interv(arithmetic_graph2, input_leaf1):
     i = Intervention(input_leaf1)
     i.set_intervention("child1", 200)
 
     before, after = arithmetic_graph2.intervene(i)
 
-    assert i.affected_nodes == {"child1", "branch1", "branch2", "branch3", "child2", "root"}
+    assert i.affected_nodes == {"child1", "branch1", "branch2", "branch3",
+                                "child2", "root"}
     assert before == 458, after == 414
 
     assert arithmetic_graph2.get_result("child2", input_leaf1) == 447
@@ -176,3 +188,12 @@ def test_arithmetic_graph2_interv(arithmetic_graph2, input_leaf1):
     assert arithmetic_graph2.get_result("child1", i) == 200
     assert arithmetic_graph2.get_result("branch3", i) == 203
     assert arithmetic_graph2.get_result("leaf1", i) == 111
+
+# TODO: Test multiple sites of intervention
+
+def test_empty_interv(arithmetic_graph2, input_leaf1):
+    i = Intervention(input_leaf1)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        _, _ = arithmetic_graph2.intervene(i)
+        assert "Must specify" in excinfo

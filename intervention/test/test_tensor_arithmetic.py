@@ -93,7 +93,6 @@ def test_tensor_arithmetic_interv2(tensor_input1, tensor_arithmetic_graph):
     assert i.affected_nodes == {"h2", "add", "relu", "root"}
     assert before == 38., after == 30.
     assert eq(g, i, "h2", torch.tensor([2., -10., 2.]))
-    print("original h2", g.get_result("h2", tensor_input1))
     assert eq(g, i.base, "h2", torch.tensor([2., -2., 2.]))
 
 
@@ -107,5 +106,22 @@ def test_tensor_arithmetic_interv3(tensor_input1, tensor_arithmetic_graph):
     before, after = g.intervene(i)
 
     assert i.affected_nodes == {"h2", "add", "relu", "root"}
-    assert before == 38., after == 18.
+    assert before == 38. and after == 18.
     assert eq(g, i, "h2", torch.tensor([2., -10., -10.]))
+
+
+def test_multiple_interv(tensor_input1, tensor_arithmetic_graph):
+    g = tensor_arithmetic_graph
+
+    i = Intervention(tensor_input1)
+    i.set_intervention("h1[0]", torch.tensor([-6.]))
+    i.set_intervention("h2[1]", torch.tensor([-10.]))
+
+    before, after = g.intervene(i)
+
+    assert i.affected_nodes == {"h1", "h2", "add", "relu", "root"}
+    assert before == 38. and after == 22.
+    assert eq(g, i, "h1", torch.tensor([-6., 18., 12.]))
+    assert eq(g, i, "h2", torch.tensor([2., -10., 2.]))
+    assert eq(g, i.base, "h1", torch.tensor([6., 18., 12.]))
+    assert eq(g, i.base, "h2", torch.tensor([2., -2., 2.]))

@@ -3,3 +3,5 @@ __pycache__/
 *.egg-info/
 /compgraph_cpp/build
 /compgraph_cpp/dist
+/sentiment_data
+/sentiment_models
