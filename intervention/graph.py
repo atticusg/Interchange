@@ -1,6 +1,7 @@
 from intervention.graph_input import GraphInput
 from intervention.intervention import Intervention
 
+from collections import deque
 
 class ComputationGraph:
     def __init__(self, root):
@@ -63,7 +64,7 @@ class ComputationGraph:
                                    "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
-    def compute(self, inputs, store_cache=True):
+    def compute(self, inputs, store_cache=True, iterative=True):
         """
         Run forward pass through graph with a given set of inputs
 
@@ -74,10 +75,23 @@ class ComputationGraph:
         result = self.results_cache.get(inputs, None)
         if not result:
             self.validate_inputs(inputs)
-            result = self.root.compute(inputs)
+            if iterative:
+                result = self._iterative_compute(inputs)
+            else:
+                result = self.root.compute(inputs)
         if store_cache:
             self.results_cache[inputs] = result
         return result
+
+    def _iterative_compute(self, inputs):
+        stack = deque()
+        stack.append(self.root)
+
+        while len(stack) > 0:
+            curr_node = stack[-1]
+            for c in curr_node.childern:
+                stack.append(c)
+
 
     def intervene(self, intervention, store_cache=True):
         """
