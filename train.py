@@ -1,22 +1,18 @@
 # train.py
 
-import os
 import time
-import math
 
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
-import torch.nn.utils.rnn as rnn
 
-import lstm_model
 import datasets
 
 
 class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, max_epochs=100,
                  run_steps=-1, evals_per_epoch=5, patient_epochs=20,
-                 model_save_path=None, verbose=True):
+                 batch_first=True, model_save_path=None, verbose=True):
         self.data = data
         self.model = model
 
@@ -28,10 +24,11 @@ class Trainer:
         self.evals_per_epoch = evals_per_epoch
         self.patient_epochs = patient_epochs
         self.model_save_path = model_save_path
+        self.batch_first = batch_first
         self.verbose = verbose
 
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        self.collate_fn = datasets.my_collate
+        self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
         self.dataloader = DataLoader(data.train, batch_size=batch_size,
                                      shuffle=True, collate_fn=self.collate_fn)
         self.loss_fxn = nn.BCELoss(reduction='mean')
@@ -40,11 +37,11 @@ class Trainer:
         self.eval_steps = (data.train.num_examples // batch_size) // evals_per_epoch
         self.patient_threshold = patient_epochs * evals_per_epoch * self.eval_steps
 
-    @property
     def config(self):
         return {
             "batch_size": self.batch_size,
             "lr": self.lr,
+            "batch_first": self.batch_first,
             "max_epochs": self.max_epochs,
             "run_steps": self.run_steps,
             "evals_per_epoch": self.evals_per_epoch,
@@ -69,6 +66,7 @@ class Trainer:
                 print("------ Beginning epoch {} ------".format(epoch))
             epoch_start_time = time.time()
             for step, input_tuple in enumerate(self.dataloader):
+                self.model.train()
                 self.model.zero_grad()
                 input_tuple = [x.to(self.device) for x in input_tuple]
                 y_batch = input_tuple[1].type(torch.float)
@@ -84,8 +82,8 @@ class Trainer:
                     break
 
                 if step % self.eval_steps == 0:
-                    corr, total, _, _ = evaluate_and_predict(self.data.dev,
-                                                             self.model)
+                    corr, total, _, _ = evaluate_and_predict(
+                        self.data.dev, self.model, batch_first=self.batch_first)
                     acc = corr / total
 
                     if acc > best_dev_acc:
@@ -99,8 +97,8 @@ class Trainer:
                             'duration': best_model_duration,
                             'model_state_dict': self.model.state_dict(),
                             'best_dev_acc': best_dev_acc,
-                            'train_config': self.config,
-                            'model_config': self.model.config,
+                            'train_config': self.config(),
+                            'model_config': self.model.config(),
                         }
                         if self.model_save_path:
                             torch.save(best_model_checkpoint,
@@ -147,14 +145,15 @@ class Trainer:
         return best_model_checkpoint
 
 
-def evaluate_and_predict(dataset, model, get_pred=False, get_summary=False):
+def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False, get_summary=False):
+    model.eval()
     with torch.no_grad():
         total_preds = 0
         correct_preds = 0
         preds_and_labels = []
         batch_size = 100
 
-        collate_fn = datasets.my_collate
+        collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
         dataloader = DataLoader(dataset, batch_size=batch_size,
                                 shuffle=False, collate_fn=collate_fn)
         bad_sentences = []
@@ -162,6 +161,7 @@ def evaluate_and_predict(dataset, model, get_pred=False, get_summary=False):
         for tuple in dataloader:
             tuple = [x.to(model.device) for x in tuple]
             y_batch = tuple[1]
+
             if not get_summary:
                 _, pred = model(tuple)
             else:
@@ -188,6 +188,7 @@ def evaluate_and_predict(dataset, model, get_pred=False, get_summary=False):
                         [(x_list[pair[0]], pair[1], pair[2]) \
                          for pair in ids_and_errors if pair[1] > 0.5])
                 preds_and_labels.append(list(zip(pred_list, y_list)))
+
             correct_in_batch = torch.sum(torch.eq(pred, y_batch)).item()
             total_preds += y_batch.size()[0]
             correct_preds += correct_in_batch

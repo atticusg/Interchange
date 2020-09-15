@@ -42,28 +42,40 @@ class LogicalFormDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 class SentimentData:
-    def __init__(self, train_file, dev_file, test_file, ngram=0):
+    def __init__(self, train_file, dev_file, test_file, ngram=0, for_transformer=False):
         self.word_to_id = {}
         self.id_to_word = {}
         self.id_to_word[0] = '<PADDING>'
+        self.word_to_id['<PADDING>'] = 0
         max_info = {
             'id': 1,
             'sentence_len': 0
         }
+        if for_transformer:
+            self.id_to_word[1] = '<CLS>'
+            self.word_to_id['<CLS>'] = 1
+            self.id_to_word[2] = '<SEP>'
+            self.word_to_id['<SEP>'] = 2
+            max_info['id'] = 3
+
         if ngram > 0:
             print("--- USING NGRAM MODEL ---")
+
         print("--- Loading Dataset ---")
-        self.train = SentimentDataset(train_file, self.word_to_id, self.id_to_word, max_info, ngram)
+        self.train = SentimentDataset(train_file, self.word_to_id, self.id_to_word,
+                                      max_info, ngram, for_transformer)
         print("--- finished loading train set")
-        self.dev = SentimentDataset(dev_file, self.word_to_id, self.id_to_word, max_info, ngram)
+        self.dev = SentimentDataset(dev_file, self.word_to_id, self.id_to_word,
+                                    max_info, ngram, for_transformer)
         print("--- finished loading dev set")
-        self.test = SentimentDataset(test_file, self.word_to_id, self.id_to_word, max_info, ngram)
+        self.test = SentimentDataset(test_file, self.word_to_id, self.id_to_word,
+                                     max_info, ngram, for_transformer)
         print("--- finished loading test set")
         self.vocab_size, self.max_sentence_len = max_info['id'], max_info['sentence_len']
         print("--- found {} unique words, max sentence len is {}".format(self.vocab_size, self.max_sentence_len))
 
 class SentimentDataset(Dataset):
-    def __init__(self, file_name, word_to_id, id_to_word, max_info, ngram):
+    def __init__(self, file_name, word_to_id, id_to_word, max_info, ngram, for_transformer=False):
         use_ngram = ngram > 0
         print("--- Loading sentences from " + file_name)
         raw_x = []
@@ -82,12 +94,16 @@ class SentimentDataset(Dataset):
                 if l > max_sentence_len:
                     max_sentence_len = l
                 ids = []
+                if for_transformer:
+                    ids.append(1)
                 for word in sentence:
                     if word not in word_to_id:
                         word_to_id[word] = curr_id
                         id_to_word[curr_id] = word
                         curr_id += 1
                     ids.append(word_to_id[word])
+                if for_transformer:
+                    ids.append(2)
                 ids = np.asarray(ids)
                 raw_x.append(ids)
                 label = int(pair[1].rstrip())
@@ -105,10 +121,10 @@ class SentimentDataset(Dataset):
         sample = (torch.LongTensor(self.raw_x[i]), self.raw_y[i])
         return sample
 
-def my_collate(batch):
+def my_collate(batch, batch_first=True):
     sorted_batch = sorted(batch, key=lambda pair: pair[0].shape[0], reverse=True)
     sequences = [x[0] for x in sorted_batch]
-    sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True)
+    sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first)
     lengths = torch.tensor([len(x) for x in sequences])
     labels = torch.tensor([x[1] for x in sorted_batch])
     return (sequences_padded, labels, lengths)
