@@ -1,6 +1,7 @@
 from intervention.graph_input import GraphInput
 from intervention.intervention import Intervention
 from intervention.location import Location
+import itertools
 
 from collections import deque
 
@@ -29,6 +30,17 @@ class ComputationGraph:
         fill_dependencies(self.root)
         return nodes, dependencies
 
+    def get_indices(self,node):
+        length = None
+        for key in self.nodes[node].base_cache:
+            length = len(self.nodes[node].base_cache[key])
+        indices = []
+        for i in range(length):
+            for subset in itertools.combinations({x for x in range(0, length)},i+1):
+                subset = list(subset)
+                subset.sort()
+                indices.append(Location()[subset])
+        return indices
 
     def get_locations(self, root_locations):
         root_nodes = []
@@ -49,7 +61,8 @@ class ComputationGraph:
                 viable_nodes = viable_nodes.intersection(current_nodes)
         result = []
         for viable_node in viable_nodes:
-            result.append({viable_node:Location()[:]})
+            for index in self.get_indices(viable_node):
+                result.append({viable_node:index})
         return result
 
     def validate_graph(self):
@@ -91,7 +104,7 @@ class ComputationGraph:
         """
         self.validate_inputs(intervention.base)
 
-        if not intervention.intervention:
+        if intervention.intervention is None:
             raise RuntimeError("Must specify some kind of intervention!")
 
         for name in intervention.intervention.values.keys():
@@ -100,7 +113,7 @@ class ComputationGraph:
                                    "in computation graph: %s" % name)
             # TODO: compare compatibility between shape of value and node
 
-    def compute(self, inputs, store_cache=True, iterative=True):
+    def compute(self, inputs, store_cache=True, iterative=False):
         """
         Run forward pass through graph with a given set of inputs
 
@@ -125,7 +138,7 @@ class ComputationGraph:
 
         while len(stack) > 0:
             curr_node = stack[-1]
-            for c in curr_node.childern:
+            for c in curr_node.children:
                 stack.append(c)
 
 
