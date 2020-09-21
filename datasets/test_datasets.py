@@ -1,7 +1,8 @@
 import itertools
 import pytest
 
-from datasets import LogicalFormDataset
+from datasets.logical_form import LogicalFormDataset
+from datasets.mqnli import MQNLIData
 
 def bool_product(n):
     return list(itertools.product(*((False, True) for _ in range(n))))
@@ -26,3 +27,16 @@ def test_logical_form_dataset1(expr, inputs, res):
     dataset = LogicalFormDataset(expr)
     assert dataset.X == inputs
     assert dataset.y == res
+
+
+def test_mqnli_dataset():
+    train_file = "mqnli_data/mini.train.txt"
+    dev_file = "mqnli_data/mini.dev.txt"
+    test_file = "mqnli_data/mini.test.txt"
+    data = MQNLIData(train_file, dev_file, test_file, for_transformer=False)
+    print("*** First piece of data: ", data.train[0])
+    print("*** length: ", data.train[0][0].shape)
+    print("Premise:", " ".join(data.id_to_word[w.item()] for w in data.train[0][0][:9]))
+    print("Hypothesis:", " ".join(data.id_to_word[w.item()] for w in data.train[0][0][9:]))
+    print("*******length of data", len(data.train))
+

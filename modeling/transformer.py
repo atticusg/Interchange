@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import math
 
-# refer to `BertPooler` class in HuggingFace BERT implementation
-
+from modeling.utils import EmbeddingModule, init_scaling
 
 class MaskingModule(nn.Module):
+    # refer to `BertPooler` class in HuggingFace BERT implementation
     def __init__(self):
         super(MaskingModule, self).__init__()
 
@@ -46,7 +46,7 @@ class PositionalEncoding(nn.Module):
 
 class TransformerModule(nn.Module):
     def __init__(self, hidden_dim=64, num_transformer_heads=4,
-                 num_transformer_layers=6, vocab_size=10000,
+                 num_transformer_layers=6, vocab_size=10000, output_classes=3,
                  embed_init_scaling=0.1, dropout=0.1, device=None):
         super(TransformerModule, self).__init__()
 
@@ -56,11 +56,13 @@ class TransformerModule(nn.Module):
         self.embed_init_scaling = embed_init_scaling
         self.dropout = dropout
         self.vocab_size = vocab_size
+        self.output_classes = output_classes
         self.device = device if device else torch.device("cpu")
 
         self.masking = MaskingModule()
-        self.embedding = nn.Embedding(num_embeddings=vocab_size,
-                                            embedding_dim=hidden_dim)
+        self.embedding = EmbeddingModule(num_embeddings=vocab_size,
+                                         embedding_dim=hidden_dim,
+                                         scale_by_dim=True)
         self.positional_encoding = PositionalEncoding(
             hidden_dim, dropout=dropout)
         self.encoder_layers = nn.TransformerEncoderLayer(
@@ -71,11 +73,11 @@ class TransformerModule(nn.Module):
             self.encoder_layers, num_transformer_layers)
 
         self.pooling = PoolingModule(hidden_dim, dropout)
-        self.logits = nn.Linear(hidden_dim, 1)
-        self.sigmoid = nn.Sigmoid()
+        self.logits = nn.Linear(hidden_dim, output_classes)
 
-        self.init_weights()
-        print(self.config())
+        init_scaling(self.embed_init_scaling, self.embedding.embedding)
+        print("Initialized model with parameters:\n", self.config())
+
 
     def config(self):
         return {
@@ -84,7 +86,8 @@ class TransformerModule(nn.Module):
             "num_transformer_heads": self.num_transformer_heads,
             "num_transformer_layers": self.num_transformer_layers,
             "embed_init_scaling": self.embed_init_scaling,
-            "dropout": self.dropout
+            "dropout": self.dropout,
+            "output_classes": self.output_classes
         }
 
 
@@ -92,16 +95,14 @@ class TransformerModule(nn.Module):
         nn.init.uniform_(self.embedding.weight, -self.embed_init_scaling,
                          self.embed_init_scaling)
 
+
     def forward(self, input_tuple):
-        x_batch, x_lengths = input_tuple[0], input_tuple[2]
         mask = self.masking(input_tuple)
-        emb_x = self.embedding(x_batch) * math.sqrt(self.hidden_dim)
+        emb_x = self.embedding(input_tuple)
         emb_x = self.positional_encoding(emb_x)
         output = self.transformer_encoder(emb_x, src_key_padding_mask=mask)
         output = self.pooling(output)
-        logits = self.logits(output)
-        scores = self.sigmoid(logits).squeeze()
-        preds = torch.round(scores).type(torch.int)
-        return scores, preds
+        output = self.logits(output)
+        return output
 
 

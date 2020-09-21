@@ -31,7 +31,7 @@ class Trainer:
         self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
         self.dataloader = DataLoader(data.train, batch_size=batch_size,
                                      shuffle=True, collate_fn=self.collate_fn)
-        self.loss_fxn = nn.BCELoss(reduction='mean')
+        self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
         # setup for early stopping
         self.eval_steps = (data.train.num_examples // batch_size) // evals_per_epoch
@@ -69,11 +69,11 @@ class Trainer:
                 self.model.train()
                 self.model.zero_grad()
                 input_tuple = [x.to(self.device) for x in input_tuple]
-                y_batch = input_tuple[1].type(torch.float)
+                labels = input_tuple[1]
 
-                res, _ = self.model(input_tuple)
+                logits = self.model(input_tuple)
 
-                loss = self.loss_fxn(res, y_batch)
+                loss = self.loss_fxn(logits, labels)
                 loss.backward()
 
                 self.optimizer.step()
@@ -82,8 +82,8 @@ class Trainer:
                     break
 
                 if step % self.eval_steps == 0:
-                    corr, total, _, _ = evaluate_and_predict(
-                        self.data.dev, self.model, batch_first=self.batch_first)
+                    corr, total = evaluate_and_predict(self.data.dev, self.model,
+                                                       batch_first=self.batch_first)
                     acc = corr / total
 
                     if acc > best_dev_acc:
@@ -145,29 +145,29 @@ class Trainer:
         return best_model_checkpoint
 
 
-def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False, get_summary=False):
+def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False):
     model.eval()
     with torch.no_grad():
         total_preds = 0
         correct_preds = 0
-        preds_and_labels = []
+        # preds_and_labels = []
         batch_size = 100
 
         collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
         dataloader = DataLoader(dataset, batch_size=batch_size,
                                 shuffle=False, collate_fn=collate_fn)
-        bad_sentences = []
+        # bad_sentences = []
 
         for tuple in dataloader:
             tuple = [x.to(model.device) for x in tuple]
             y_batch = tuple[1]
 
-            if not get_summary:
-                _, pred = model(tuple)
-            else:
-                res, pred = model(tuple)
+            logits = model(tuple)
+            pred = torch.argmax(logits, dim=1)
 
             pred = pred.to(model.device)
+
+            """
             if get_summary:
                 y = y_batch.to(model.device).type(torch.float)
                 res = res.to(model.device)
@@ -188,14 +188,15 @@ def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False, get_
                         [(x_list[pair[0]], pair[1], pair[2]) \
                          for pair in ids_and_errors if pair[1] > 0.5])
                 preds_and_labels.append(list(zip(pred_list, y_list)))
+            """
 
             correct_in_batch = torch.sum(torch.eq(pred, y_batch)).item()
-            total_preds += y_batch.size()[0]
+            total_preds += y_batch.shape[0]
             correct_preds += correct_in_batch
 
-        bad_sentences = sorted(bad_sentences, key=lambda p: p[1],
-                               reverse=True)
-        return correct_preds, total_preds, preds_and_labels, bad_sentences
+
+        # bad_sentences = sorted(bad_sentences, key=lambda p: p[1], reverse=True)
+        return correct_preds, total_preds
 
 
 def load_model(model_class, save_path):
