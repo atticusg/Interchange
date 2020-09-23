@@ -109,6 +109,9 @@ class Intervention:
     def __setitem__(self, name, value):
         self.set_intervention(name, value)
 
+    def __hash__(self):
+        return hash((hash(self.base), hash(self.intervention), hash(self.location)))
+
     def find_affected_nodes(self, graph):
         """Find nodes affected by this intervention in a computation graph.
 

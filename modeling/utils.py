@@ -3,13 +3,19 @@ import torch
 import torch.nn as nn
 
 class EmbeddingModule(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, scale_by_dim=False):
+    def __init__(self, num_embeddings, embedding_dim, fix_weights=False, scale_by_dim=False):
         super(EmbeddingModule, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
+        self.fix_weights = fix_weights
         self.scale_by_dim = scale_by_dim
+
         self.embedding = nn.Embedding(num_embeddings=num_embeddings,
                                       embedding_dim=embedding_dim)
+        if fix_weights:
+            for param in self.embedding.parameters():
+                param.requires_grad = False
+
     def forward(self, input_tuple):
         res = self.embedding(input_tuple[0])
         if self.scale_by_dim:

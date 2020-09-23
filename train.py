@@ -10,15 +10,17 @@ import datasets
 
 
 class Trainer:
-    def __init__(self, data, model, batch_size=64, lr=0.01, max_epochs=100,
-                 run_steps=-1, evals_per_epoch=5, patient_epochs=20,
-                 batch_first=True, model_save_path=None, verbose=True):
+    def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
+                 max_epochs=100, run_steps=-1, evals_per_epoch=5,
+                 patient_epochs=20, batch_first=True, model_save_path=None,
+                 verbose=True):
         self.data = data
         self.model = model
 
         self.device = model.device
         self.batch_size = batch_size
         self.lr = lr
+        self.weight_norm = weight_norm
         self.max_epochs = max_epochs
         self.run_steps = run_steps
         self.evals_per_epoch = evals_per_epoch
@@ -27,7 +29,8 @@ class Trainer:
         self.batch_first = batch_first
         self.verbose = verbose
 
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=lr,
+                                          weight_decay=weight_norm)
         self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
         self.dataloader = DataLoader(data.train, batch_size=batch_size,
                                      shuffle=True, collate_fn=self.collate_fn)
@@ -41,6 +44,7 @@ class Trainer:
         return {
             "batch_size": self.batch_size,
             "lr": self.lr,
+            "weight_norm": self.weight_norm,
             "batch_first": self.batch_first,
             "max_epochs": self.max_epochs,
             "run_steps": self.run_steps,
@@ -96,6 +100,7 @@ class Trainer:
                             'step': step,
                             'duration': best_model_duration,
                             'model_state_dict': self.model.state_dict(),
+                            'loss': loss.item(),
                             'best_dev_acc': best_dev_acc,
                             'train_config': self.config(),
                             'model_config': self.model.config(),

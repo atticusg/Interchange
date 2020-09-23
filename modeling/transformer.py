@@ -45,24 +45,30 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerModule(nn.Module):
-    def __init__(self, hidden_dim=64, num_transformer_heads=4,
+    def __init__(self, task="sentiment", hidden_dim=64, num_transformer_heads=4,
                  num_transformer_layers=6, vocab_size=10000, output_classes=3,
-                 embed_init_scaling=0.1, dropout=0.1, device=None):
+                 embed_init_scaling=0.1, fix_embeddings=False, dropout=0.1, device=None):
         super(TransformerModule, self).__init__()
+
+        self.task = task
+        self.vocab_size = vocab_size
+        self.output_classes = output_classes
 
         self.hidden_dim = hidden_dim
         self.num_transformer_heads = num_transformer_heads
         self.num_transformer_layers = num_transformer_layers
         self.embed_init_scaling = embed_init_scaling
+        self.fix_embeddings = fix_embeddings
         self.dropout = dropout
-        self.vocab_size = vocab_size
-        self.output_classes = output_classes
+
         self.device = device if device else torch.device("cpu")
 
         self.masking = MaskingModule()
         self.embedding = EmbeddingModule(num_embeddings=vocab_size,
                                          embedding_dim=hidden_dim,
+                                         fix_weights=fix_embeddings,
                                          scale_by_dim=True)
+
         self.positional_encoding = PositionalEncoding(
             hidden_dim, dropout=dropout)
         self.encoder_layers = nn.TransformerEncoderLayer(
@@ -86,6 +92,7 @@ class TransformerModule(nn.Module):
             "num_transformer_heads": self.num_transformer_heads,
             "num_transformer_layers": self.num_transformer_layers,
             "embed_init_scaling": self.embed_init_scaling,
+            "fix_embeddings": self.fix_embeddings,
             "dropout": self.dropout,
             "output_classes": self.output_classes
         }
@@ -104,5 +111,3 @@ class TransformerModule(nn.Module):
         output = self.pooling(output)
         output = self.logits(output)
         return output
-
-

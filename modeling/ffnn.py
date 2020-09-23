@@ -23,9 +23,10 @@ class HypothesisMeanModule(nn.Module):
 
 
 class CBOWModule(nn.Module):
-    def __init__(self, task="sentiment", output_classes=3, vocab_size=10000,
+    def __init__(self, task="sentiment", output_classes=2, vocab_size=10000,
                  hidden_dim=100, activation_type="relu", dropout=0.1,
-                 embed_init_scaling=0.1, batch_first=False, device=None):
+                 embed_init_scaling=0.1, fix_embeddings=False,
+                 batch_first=False, device=None):
         super(CBOWModule, self).__init__()
 
         self.task = task
@@ -36,11 +37,14 @@ class CBOWModule(nn.Module):
         self.activation_type = activation_type
         self.dropout = dropout
         self.embed_init_scaling = embed_init_scaling
+        self.fix_embeddings = fix_embeddings
         self.batch_first = batch_first
         self.device = device if device else torch.device("cpu")
 
         self.embedding = EmbeddingModule(num_embeddings=vocab_size,
-                                         embedding_dim=hidden_dim)
+                                         embedding_dim=hidden_dim,
+                                         fix_weights=fix_embeddings)
+
         print("Embedding Module:", self.embedding)
         if task == "sentiment":
             self.mean = MeanModule(length_dim=(1 if batch_first else 0))
@@ -84,6 +88,7 @@ class CBOWModule(nn.Module):
             "activation_type": self.activation_type,
             "dropout": self.dropout,
             "embed_init_scaling": self.embed_init_scaling,
+            "fix_embeddings": self.fix_embeddings,
             "batch_first": self.batch_first,
         }
 
