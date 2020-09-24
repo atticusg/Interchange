@@ -33,7 +33,7 @@ class ComputationGraph:
     def get_indices(self,node):
         length = None
         for key in self.nodes[node].base_cache:
-            length = len(self.nodes[node].base_cache[key])
+            length = max(self.nodes[node].base_cache[key].shape)
         indices = []
         for i in range(length):
             for subset in itertools.combinations({x for x in range(0, length)},i+1):
@@ -179,8 +179,10 @@ class ComputationGraph:
                 self.compute(x)
             return node.base_cache[x]
         elif isinstance(x, Intervention):
-            if x.base not in node.base_cache:
-                self.intervene(x)
+            x.find_affected_nodes(self)
+            if x.base not in node.base_cache or x not in node.interv_cache:
+                base_res = self.compute(x.base)
+                self.root.compute(x)
             if node.name not in x.affected_nodes:
                 return node.base_cache[x.base]
             else:

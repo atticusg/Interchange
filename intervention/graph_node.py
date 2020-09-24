@@ -94,6 +94,10 @@ class GraphNode:
                 else:
                     # replace the whole tensor
                     result = intervention.intervention[self.name]
+                if len(self.children) != 0:
+                    for child in self.children:
+                        child_res = child.compute(
+                            inputs if intervention is None else intervention)
             else:
                 if len(self.children) == 0:
                     # leaf
