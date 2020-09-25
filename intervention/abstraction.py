@@ -5,6 +5,12 @@ from intervention.intervention import Intervention
 from intervention.location import Location
 
 def create_possible_mappings(low_model, high_model, fixed_assignments = dict()):
+    """
+    :param low_model:
+    :param high_model:
+    :param fixed_assignments: dict: str name of highlevel node -> (dict: name of low level node -> locations)
+    :return: list(dict: str name of highlevel node -> (dict: name of low level node -> locations))
+    """
     class MappingCertificate:
         def __init__(self, partial_mapping, high_nodes,dependencies):
             self.partial_mapping = partial_mapping
@@ -85,6 +91,7 @@ def create_possible_mappings(low_model, high_model, fixed_assignments = dict()):
             next_certificate = next(certificate)
     backtrack(root())
     return mappings
+
 
 def get_value(high_model, high_node, high_intervention):
     return np.array(high_model.get_result(high_node, high_intervention), dtype=np.float64)
@@ -221,6 +228,22 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
 
 
 def find_abstractions(low_model, high_model, high_inputs, total_high_interventions, fixed_assignments, input_mapping):
+    """
+
+    :param low_model:
+    :param high_model:
+    :param high_inputs:
+    :param total_high_interventions:
+    :param fixed_assignments:
+    :param input_mapping:
+    :return:
+        list(
+            tuple(
+                dict: tuple(low interv, high interv) -> True, if two interventions result in same output,
+                dict: str name of highlevel node -> (dict: name of low level node -> locations)
+            )
+        )
+    """
     result = []
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments)
     print(len(mappings))

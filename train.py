@@ -204,11 +204,14 @@ def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False):
         return correct_preds, total_preds
 
 
-def load_model(model_class, save_path):
+def load_model(model_class, save_path, device=None):
     checkpoint = torch.load(save_path)
     assert 'model_config' in checkpoint
     model_config = checkpoint['model_config']
     model = model_class(**model_config)
     model.load_state_dict(checkpoint['model_state_dict'])
-    model = model.to(model.device)
+    if device is None:
+        model = model.to(model.device)
+    else:
+        model = model.to(device)
     return model, checkpoint

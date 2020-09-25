@@ -22,6 +22,18 @@ class GraphNode:
             if name is None:
                 self.name = forward.__name__
 
+    def __call__(self, f):
+        """Invoked immediately after `__init__` during `@GraphNode()` decoration
+
+        :param f: the function to which the decorator is attached
+        :return: a new GraphNode object
+        """
+        self.forward = f
+        if self.name is None:
+            self.name = f.__name__
+        # adding the decorator GraphNode on a function returns GraphNode object
+        return self
+
     @property
     def children(self):
         return self._children
@@ -39,17 +51,6 @@ class GraphNode:
             self._children_dict = {c.name: c for c in self._children}
             return self._children_dict
 
-    def __call__(self, f):
-        """Invoked immediately after `__init__` during `@GraphNode()` decoration
-
-        :param f: the function to which the decorator is attached
-        :return: a new GraphNode object
-        """
-        self.forward = f
-        if self.name is None:
-            self.name = f.__name__
-        # adding the decorator GraphNode on a function returns GraphNode object
-        return self
 
     def __repr__(self):
         return "GraphNode(\"%s\")" % self.name
