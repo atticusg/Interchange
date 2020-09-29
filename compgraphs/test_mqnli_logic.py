@@ -1,5 +1,5 @@
 import pytest
-from comp_graphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from intervention import GraphInput
 from datasets.mqnli import MQNLIData
 
@@ -72,9 +72,35 @@ def test_graph_structure3():
     has_children(g, "negp", ["input", "vp"])
     has_children(g, "vp", "input")
 
-def test_graph_value1():
+def test_graph_value():
     intermediate_nodes = ["vp"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": "<input>"})
     res = g.compute(i)
-
+    assert g.get_result("vp", i) == """vp(v_bar(v_adv(get_p(<input>), get_h(<input>)), v_verb(get_p(<input>), get_h(<input>))), vp_q(get_p(<input>), get_h(<input>)), obj(obj_adj(get_p(<input>), get_h(<input>)), obj_noun(get_p(<input>), get_h(<input>))))"""
+    print(res)
+    """
+    sentence(
+        sentence_q(
+            get_p(<input>), get_h(<input>)
+        ), 
+        subj(
+            subj_adj(get_p(<input>), get_h(<input>)), 
+            subj_noun(get_p(<input>), get_h(<input>))
+        ), 
+        negp(
+            neg(get_p(<input>), get_h(<input>)), 
+            vp(
+                v_bar(
+                    v_adv(get_p(<input>), get_h(<input>)), 
+                    v_verb(get_p(<input>), get_h(<input>))
+                ), 
+                vp_q(get_p(<input>), get_h(<input>)), 
+                obj(
+                    obj_adj(get_p(<input>), get_h(<input>)), 
+                    obj_noun(get_p(<input>), get_h(<input>))
+                )
+            )
+        )
+    )
+    """

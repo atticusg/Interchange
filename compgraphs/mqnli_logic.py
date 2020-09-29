@@ -42,6 +42,9 @@ class AbstractableCompGraph(ComputationGraph):
         node_dict = {"input": input}
 
         for node_name in relevant_nodes:
+            if node_name == "input":
+                continue
+
             curr_children = self.get_children(node_name, relevant_node_set)
             args = [node_dict[child] for child in curr_children]
             forward = self.generate_forward_function(node_name, curr_children)
@@ -90,16 +93,16 @@ class AbstractableCompGraph(ComputationGraph):
         children_dict = {name: i for i, name in enumerate(children)}
 
         def _forward(*args):
-            if len(args) != children:
+            if len(args) != len(children):
                 raise ValueError(f"Got {len(args)} arguments to forward fxn of "
-                                 f"{abstracted_node}, expected{len(children)}")
+                                 f"{abstracted_node}, expected {len(children)}")
 
             def _implicit_call(node_name: str) -> Any:
                 if node_name in children_dict:
                     child_idx_in_args = children_dict[node_name]
                     return args[child_idx_in_args]
                 else:
-                    res = [_implicit_call(child) for child in self.full_graph]
+                    res = [_implicit_call(child) for child in self.full_graph[node_name]]
                     current_f = self.node_functions[node_name]
                     return current_f(*res)
 
@@ -167,69 +170,69 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     ### MQNLI functions
     def get_p(self, input):
-        print(f"get_p({input})")
-        return "<get_p>"
+        # print(f"get_p({input})")
+        return f"get_p({input})"
 
     def get_h(self, input):
-        print(f"get_h({input})")
-        return "<get_h>"
+        # print(f"get_h({input})")
+        return f"get_h({input})"
 
     def obj_noun(self, p, h):
-        print(f"obj_noun({p}, {h})")
-        return "<obj_noun>"
+        # print(f"obj_noun({p}, {h})")
+        return f"obj_noun({p}, {h})"
 
     def obj_adj(self, p, h):
-        print(f"obj_adj({p}, {h})")
-        return "<obj_adj>"
+        # print(f"obj_adj({p}, {h})")
+        return f"obj_adj({p}, {h})"
 
     def obj(self, a, n):
-        print(f"obj({a}, {n})")
-        return "<obj>"
+        # print(f"obj({a}, {n})")
+        return f"obj({a}, {n})"
 
     def vp_q(self, p, h):
-        print(f"vp_q({p}, {h})")
-        return "<vp_q>"
+        # print(f"vp_q({p}, {h})")
+        return f"vp_q({p}, {h})"
 
     def v_verb(self, p, h):
-        print(f"v_verb({p}, {h})")
-        return "<v_verb>"
+        # print(f"v_verb({p}, {h})")
+        return f"v_verb({p}, {h})"
 
     def v_adv(self, p, h):
-        print(f"v_adv({p}, {h})")
-        return "<v_adv>"
+        # print(f"v_adv({p}, {h})")
+        return f"v_adv({p}, {h})"
 
     def v_bar(self, a, v):
-        print(f"v_bar({a}, {v})")
-        return "<v_bar>"
+        # print(f"v_bar({a}, {v})")
+        return f"v_bar({a}, {v})"
 
     def vp(self, v, q, o):
-        print(f"vp({v}, {q}, {o})")
-        return "<vp>"
+        # print(f"vp({v}, {q}, {o})")
+        return f"vp({v}, {q}, {o})"
 
     def neg(self, p, h):
-        print(f"neg({p}, {h})")
-        return "<neg>"
+        # print(f"neg({p}, {h})")
+        return f"neg({p}, {h})"
 
     def negp(self, n, v):
-        print(f"negp({n}, {v})")
-        return "<negp>"
+        # print(f"negp({n}, {v})")
+        return f"negp({n}, {v})"
 
     def subj_noun(self, p, h):
-        print(f"subj_noun({p}, {h})")
-        return "<subj_noun>"
+        # print(f"subj_noun({p}, {h})")
+        return f"subj_noun({p}, {h})"
 
     def subj_adj(self, p, h):
-        print(f"subj_adj({p}, {h})")
-        return "<subj_adj>"
+        # print(f"subj_adj({p}, {h})")
+        return f"subj_adj({p}, {h})"
 
     def subj(self, a, n):
-        print(f"subj({a}, {n})")
-        return "<subj>"
+        # print(f"subj({a}, {n})")
+        return f"subj({a}, {n})"
 
     def sentence_q(self, p, h):
-        print(f"sentence_q({p}, {h})")
-        return "<sentence_q>"
+        # print(f"sentence_q({p}, {h})")
+        return f"sentence_q({p}, {h})"
 
     def sentence(self, q, s, n):
-        print(f"sentence({q}, {s}, {n})")
-        return "<sentence>"
+        # print(f"sentence({q}, {s}, {n})")
+        return f"sentence({q}, {s}, {n})"

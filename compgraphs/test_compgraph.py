@@ -1,4 +1,4 @@
-from comp_graphs.mqnli_lstm import MQNLI_LSTM_CompGraph
+from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph
 from intervention import GraphInput
 from train import load_model
 from modeling.lstm import LSTMModule
