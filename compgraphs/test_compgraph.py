@@ -8,6 +8,7 @@ from datasets.mqnli import MQNLIData
 import torch
 from torch.utils.data import DataLoader
 import pytest
+from tqdm import tqdm
 
 def test_func_defs():
     funcs = []
@@ -66,12 +67,12 @@ def test_lstm_compgraph_structure(mqnli_lstm_comp_graph):
     has_only_child(graph.nodes["hypothesis_emb"], "input")
 
 
-def test_lstm_compgraph_match_results(mqnli_data, mqnli_lstm_model, mqnli_lstm_comp_graph):
+def test_lstm_compgraph_batch_match(mqnli_data, mqnli_lstm_model, mqnli_lstm_comp_graph):
     model = mqnli_lstm_model
     graph = mqnli_lstm_comp_graph
     with torch.no_grad():
         collate_fn = lambda batch: my_collate(batch, batch_first=False)
-        dataloader = DataLoader(mqnli_data.dev, batch_size=100, shuffle=False,
+        dataloader = DataLoader(mqnli_data.dev, batch_size=1024, shuffle=False,
                                 collate_fn=collate_fn)
         for i, input_tuple in enumerate(dataloader):
             input_tuple = [x.to(model.device) for x in input_tuple]
@@ -79,47 +80,27 @@ def test_lstm_compgraph_match_results(mqnli_data, mqnli_lstm_model, mqnli_lstm_c
             graph_input = GraphInput({"input": input_tuple[0]})
             graph_pred = graph.compute(graph_input, store_cache=True)
 
-            emb_x = model.embedding(input_tuple)
-            assert torch.all(emb_x == graph.get_result("input", graph_input))
-
-            premise = model.premise_emb(emb_x)
-            assert torch.all(premise == graph.get_result("premise_emb", graph_input))
-
-            prem_lstm_0_out, _  = model.lstm_layers[0](premise)
-            assert torch.all(prem_lstm_0_out == graph.get_result("premise_lstm_0", graph_input))
-            prem_lstm_1_out, _ = model.lstm_layers[1](prem_lstm_0_out)
-            assert torch.all(prem_lstm_1_out == graph.get_result("premise_lstm_1", graph_input))
-
-            prem_lstm_2_out, _ = model.lstm_layers[2](prem_lstm_1_out)
-            assert torch.all(prem_lstm_2_out == graph.get_result("premise_lstm_2", graph_input))
-
-            prem_lstm_3_out, _ = model.lstm_layers[3](prem_lstm_2_out)
-            assert torch.all(prem_lstm_3_out == graph.get_result("premise_lstm_3", graph_input))
+            logits = model(input_tuple)
+            model_pred = torch.argmax(logits, dim=1)
 
 
-            premise_h = model._run_lstm(premise)
-            assert torch.all(premise_h == prem_lstm_3_out)
+            assert torch.all(model_pred == graph_pred), f"on batch {i}"
 
+def test_lstm_compgraph_single_match(mqnli_data, mqnli_lstm_model, mqnli_lstm_comp_graph):
+    model = mqnli_lstm_model
+    graph = mqnli_lstm_comp_graph
 
-            hypothesis = model.hypothesis_emb(emb_x)
-            hypothesis_h = model._run_lstm(hypothesis)
-            repr = model.concat_final_state(premise_h, hypothesis_h)
-            repr = model.dropout0(repr)
-
-            output = model.feed_forward1(repr)
-            output = model.activation1(output)
-            output = model.dropout1(output)
-
-            output = model.feed_forward2(output)
-            output = model.activation2(output)
-            output = model.dropout2(output)
-            output = model.logits(output)
-
-            model_explicit_pred = torch.argmax(output, dim=1)
+    with torch.no_grad():
+        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        dataloader = DataLoader(mqnli_data.dev, batch_size=1, shuffle=False,
+                                collate_fn=collate_fn)
+        for i, input_tuple in enumerate(dataloader):
+            graph_input = GraphInput({"input": mqnli_data.dev[i][0].to(model.device)})
+            graph_pred = graph.compute(graph_input, store_cache=True)
 
             logits = model(input_tuple)
-            model_implicit_pred = torch.argmax(logits, dim=1)
+            model_pred = torch.argmax(logits, dim=1)
 
-            assert torch.all(model_explicit_pred == model_implicit_pred)
-
-            assert torch.all(model_explicit_pred == graph_pred), f"on batch {i}"
+            assert torch.all(model_pred == graph_pred), f"result mismatch on batch {i}"
+            if i == 100:
+                break
