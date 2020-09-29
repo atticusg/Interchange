@@ -8,20 +8,21 @@ from typing import Any, Dict, List, Callable, Set
 
 class AbstractableCompGraph(ComputationGraph):
     def __init__(self, full_graph: Dict[str, List[str]],
-                 root_name: str,
+                 root_node_name: str,
                  abstract_nodes: List[str],
                  node_functions: Dict[str, Callable],
                  topological_order: List[str], ):
         """ An abstractable compgraph structure
 
         :param full_graph:
-        :param root_name:
+        :param root_node_name:
         :param abstract_nodes:
         :param node_functions:
         :param topological_order:
         """
         self.full_graph = full_graph
-        self.root_name = root_name
+        self.input_node_names = {k for k, v in full_graph.items() if len(v) == 0}
+        self.root_name = root_node_name
         self.node_functions = node_functions
         self.topological_order = topological_order
 
@@ -35,14 +36,10 @@ class AbstractableCompGraph(ComputationGraph):
         relevant_node_set = set(relevant_nodes)
 
         # define input leaf node
-        @GraphNode()
-        def input(x):
-            return x
-
-        node_dict = {"input": input}
+        node_dict = {name: self.generate_input_node(name) for name in self.input_node_names}
 
         for node_name in relevant_nodes:
-            if node_name == "input":
+            if node_name in self.input_node_names:
                 continue
 
             curr_children = self.get_children(node_name, relevant_node_set)
@@ -56,15 +53,17 @@ class AbstractableCompGraph(ComputationGraph):
     def get_node_names(self, abstract_nodes: List[str]) -> List[str]:
         """ Get topologically ordered list of node names in final compgraph,
         given intermediate nodes"""
-        nodes_in_graph = set(abstract_nodes)
-        if "sentence" not in nodes_in_graph:
-            nodes_in_graph.add("sentence")
-        if "input" not in nodes_in_graph:
-            nodes_in_graph.add("input")
+        abstract_nodes = set(abstract_nodes)
+        if self.root_name not in abstract_nodes:
+            abstract_nodes.add(self.root_name)
+
+        for input_node_name in self.input_node_names:
+            if input_node_name not in abstract_nodes:
+                abstract_nodes.add(input_node_name)
 
         res = []
         for i in range(len(self.topological_order) - 1, -1, -1):
-            if self.topological_order[i] in nodes_in_graph:
+            if self.topological_order[i] in abstract_nodes:
                 res.append(self.topological_order[i])
         return res
 
@@ -86,6 +85,11 @@ class AbstractableCompGraph(ComputationGraph):
                     if child not in visited:
                         stack.append(child)
         return res
+
+    def generate_input_node(self, name: str) -> GraphNode:
+        def _input_forward_fxn(x):
+            return x
+        return GraphNode(name=name, forward=_input_forward_fxn)
 
     def generate_forward_function(self, abstracted_node: str,
                                   children: List[str]) -> Callable:
@@ -158,7 +162,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
         super(MQNLI_Logic_CompGraph, self).__init__(
             full_graph=full_graph,
-            root_name="sentence",
+            root_node_name="sentence",
             abstract_nodes=intermediate_nodes,
             node_functions=node_functions,
             topological_order=topological_order
