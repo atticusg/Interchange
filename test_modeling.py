@@ -5,7 +5,7 @@ from datasets.sentiment import SentimentData
 from datasets.mqnli import MQNLIData
 from modeling.lstm import LSTMModule, LSTMSelfAttnModule
 from modeling.transformer import TransformerModule
-from modeling.ffnn import CBOWModule
+from modeling.cbow import CBOWModule
 from modeling.utils import modularize
 
 @pytest.fixture

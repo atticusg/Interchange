@@ -38,11 +38,13 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
                 f"x.shape is {x.shape}"
             return self.model.hypothesis_emb(x)
 
+        # Create lstm nodes
         prem_node = premise_emb
         for i in range(len(self.model.lstm_layers)):
             lstm_forward_fxn = generate_lstm_fxn(self.model.lstm_layers[i])
             prem_node = GraphNode(prem_node, name=f"premise_lstm_{i}", forward=lstm_forward_fxn)
 
+        # Create lstm nodes
         hyp_node = hypothesis_emb
         for i, lstm_layer in enumerate(self.model.lstm_layers):
             lstm_forward_fxn = generate_lstm_fxn(self.model.lstm_layers[i])
