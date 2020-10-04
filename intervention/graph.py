@@ -133,6 +133,7 @@ class ComputationGraph:
         return result
 
     def _iterative_compute(self, inputs):
+        """
         stack = deque()
         stack.append(self.root)
 
@@ -140,6 +141,9 @@ class ComputationGraph:
             curr_node = stack[-1]
             for c in curr_node.children:
                 stack.append(c)
+        """
+        raise NotImplementedError
+
 
 
     def intervene(self, intervention, store_cache=True):

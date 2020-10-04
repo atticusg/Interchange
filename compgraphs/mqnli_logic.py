@@ -1,151 +1,63 @@
 import torch
 
 from datasets.mqnli import MQNLIData
-from intervention import ComputationGraph
-from intervention import GraphNode
+from compgraphs.abstractable import AbstractableCompGraph
 from typing import Any, Dict, List, Callable, Set
 
 
-class AbstractableCompGraph(ComputationGraph):
-    def __init__(self, full_graph: Dict[str, List[str]],
-                 root_node_name: str,
-                 abstract_nodes: List[str],
-                 node_functions: Dict[str, Callable],
-                 topological_order: List[str], ):
-        """ An abstractable compgraph structure
-
-        :param full_graph:
-        :param root_node_name:
-        :param abstract_nodes:
-        :param node_functions:
-        :param topological_order:
-        """
-        self.full_graph = full_graph
-        self.input_node_names = {k for k, v in full_graph.items() if len(v) == 0}
-        self.root_name = root_node_name
-        self.node_functions = node_functions
-        self.topological_order = topological_order
-
-        root = self.generate_abstract_graph(abstract_nodes)
-        super(AbstractableCompGraph, self).__init__(root)
-
-    def generate_abstract_graph(self, abstract_nodes: List[str]) \
-            -> Dict[str, GraphNode]:
-        # rearrange nodes in reverse topological order
-        relevant_nodes = self.get_node_names(abstract_nodes)
-        relevant_node_set = set(relevant_nodes)
-
-        # define input leaf node
-        node_dict = {name: self.generate_input_node(name) for name in self.input_node_names}
-
-        for node_name in relevant_nodes:
-            if node_name in self.input_node_names:
-                continue
-
-            curr_children = self.get_children(node_name, relevant_node_set)
-            args = [node_dict[child] for child in curr_children]
-            forward = self.generate_forward_function(node_name, curr_children)
-            node_dict[node_name] = GraphNode(*args, name=node_name,
-                                               forward=forward)
-
-        return node_dict[self.root_name]
-
-    def get_node_names(self, abstract_nodes: List[str]) -> List[str]:
-        """ Get topologically ordered list of node names in final compgraph,
-        given intermediate nodes"""
-        abstract_nodes = set(abstract_nodes)
-        if self.root_name not in abstract_nodes:
-            abstract_nodes.add(self.root_name)
-
-        for input_node_name in self.input_node_names:
-            if input_node_name not in abstract_nodes:
-                abstract_nodes.add(input_node_name)
-
-        res = []
-        for i in range(len(self.topological_order) - 1, -1, -1):
-            if self.topological_order[i] in abstract_nodes:
-                res.append(self.topological_order[i])
-        return res
-
-    def get_children(self, abstract_node: str, abstract_node_set: Set[str]) \
-            -> List[str]:
-        """ Get immediate children in abstracted graph given an abstract node """
-        res = []
-        stack = [abstract_node]
-        visited = set()
-
-        while len(stack) > 0:
-            curr_node = stack.pop()
-            visited.add(curr_node)
-            if curr_node != abstract_node and curr_node in abstract_node_set:
-                res.append(curr_node)
-            else:
-                for i in range(len(self.full_graph[curr_node]) - 1, -1, -1):
-                    child = self.full_graph[curr_node][i]
-                    if child not in visited:
-                        stack.append(child)
-        return res
-
-    def generate_input_node(self, name: str) -> GraphNode:
-        def _input_forward_fxn(x):
-            return x
-        return GraphNode(name=name, forward=_input_forward_fxn)
-
-    def generate_forward_function(self, abstracted_node: str,
-                                  children: List[str]) -> Callable:
-        """ Generate forward function to construct an abstract node """
-        children_dict = {name: i for i, name in enumerate(children)}
-
-        def _forward(*args):
-            if len(args) != len(children):
-                raise ValueError(f"Got {len(args)} arguments to forward fxn of "
-                                 f"{abstracted_node}, expected {len(children)}")
-
-            def _implicit_call(node_name: str) -> Any:
-                if node_name in children_dict:
-                    child_idx_in_args = children_dict[node_name]
-                    return args[child_idx_in_args]
-                else:
-                    res = [_implicit_call(child) for child in self.full_graph[node_name]]
-                    current_f = self.node_functions[node_name]
-                    return current_f(*res)
-
-            return _implicit_call(abstracted_node)
-
-        return _forward
-
-
 class MQNLI_Logic_CompGraph(AbstractableCompGraph):
+    full_graph = {
+        "input": [],
+        "get_p": ["input"],
+        "get_h": ["input"],
+        "obj_noun": ["get_p", "get_h"],
+        "obj_adj": ["get_p", "get_h"],
+        "obj": ["obj_adj", "obj_noun"],
+        "vp_q": ["get_p", "get_h"],
+        "v_verb": ["get_p", "get_h"],
+        "v_adv": ["get_p", "get_h"],
+        "v_bar": ["v_adv", "v_verb"],
+        "vp": ["v_bar", "vp_q", "obj"],
+        "neg": ["get_p", "get_h"],
+        "negp": ["neg", "vp"],
+        "subj_noun": ["get_p", "get_h"],
+        "subj_adj": ["get_p", "get_h"],
+        "subj": ["subj_adj", "subj_noun"],
+        "sentence_q": ["get_p", "get_h"],
+        "sentence": ["sentence_q", "subj", "negp"]
+    }
+
+    topological_order = ["sentence", "sentence_q", "subj", "negp",
+                         "subj_adj", "subj_noun", "neg", "vp",
+                         "v_bar", "vp_q", "obj", "v_adv", "v_verb",
+                         "obj_adj", "obj_noun", "get_p", "get_h",
+                         "input"]
+
+    relations = {
+        "INDEP": 0,
+        "EQUIV": 1,
+        "ENTAIL": 2,
+        "REV_ENTAIL": 3,
+        "NEGATION": 4,
+        "ALTER": 5,
+        "COVER": 6
+    }
+
+    positions = {
+        "Q_S": 0,
+        "A_S": 1,
+        "N_S": 2,
+        "NEG": 3,
+        "ADV": 4,
+        "V": 5,
+        "Q_O": 6,
+        "A_O": 7,
+        "N_O": 8
+    }
+
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
         self.word_to_id = data.word_to_id
         self.id_to_word = data.id_to_word
-
-        full_graph = {
-            "input": [],
-            "get_p": ["input"],
-            "get_h": ["input"],
-            "obj_noun": ["get_p", "get_h"],
-            "obj_adj": ["get_p", "get_h"],
-            "obj": ["obj_adj", "obj_noun"],
-            "vp_q": ["get_p", "get_h"],
-            "v_verb": ["get_p", "get_h"],
-            "v_adv": ["get_p", "get_h"],
-            "v_bar": ["v_adv", "v_verb"],
-            "vp": ["v_bar", "vp_q", "obj"],
-            "neg": ["get_p", "get_h"],
-            "negp": ["neg", "vp"],
-            "subj_noun": ["get_p", "get_h"],
-            "subj_adj": ["get_p", "get_h"],
-            "subj": ["subj_adj", "subj_noun"],
-            "sentence_q": ["get_p", "get_h"],
-            "sentence": ["sentence_q", "subj", "negp"]
-        }
-
-        topological_order = ["sentence", "sentence_q", "subj", "negp",
-                             "subj_adj", "subj_noun", "neg", "vp",
-                             "v_bar", "vp_q", "obj", "v_adv", "v_verb",
-                             "obj_adj", "obj_noun", "get_p", "get_h",
-                             "input"]
 
         self.keyword_dict = {w: self.word_to_id[w] for w in [
             "emptystring", "no", "some", "every", "notevery", "doesnot"
@@ -161,53 +73,83 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         ]}
 
         super(MQNLI_Logic_CompGraph, self).__init__(
-            full_graph=full_graph,
+            full_graph=MQNLI_Logic_CompGraph.full_graph,
             root_node_name="sentence",
             abstract_nodes=intermediate_nodes,
-            node_functions=node_functions,
-            topological_order=topological_order
+            forward_functions=node_functions,
+            topological_order=MQNLI_Logic_CompGraph.topological_order
         )
 
     def __getattr__(self, item):
-        if item in self._keyword_dict:
-            return self._keyword_dict[item]
+        """ Used to retrieve keywords, relations or positions"""
+        if item in self.keyword_dict:
+            return self.keyword_dict[item]
+        elif item in MQNLI_Logic_CompGraph.relations:
+            return MQNLI_Logic_CompGraph.relations[item]
+        elif item in MQNLI_Logic_CompGraph.positions:
+            return MQNLI_Logic_CompGraph.positions[item]
+        else:
+            raise KeyError
 
-    ### MQNLI functions
-    def get_p(self, input):
-        # print(f"get_p({input})")
-        return f"get_p({input})"
+    def _intersective_projection(self, p: torch.Tensor, h: torch.Tensor) \
+            -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (2, batch_size)
+        eq = (p == h)
+        p_is_empty = (p == self.emptystring)
+        h_is_empty = (h == self.emptystring)
+        forward_entail = (~p_is_empty & h_is_empty)
+        backward_entail = (p_is_empty & ~h_is_empty)
 
-    def get_h(self, input):
-        # print(f"get_h({input})")
-        return f"get_h({input})"
+        res = torch.zeros(p.size(0), 2, dtype=torch.long)
+        res[eq] = torch.tensor([self.INDEP, self.EQUIV], dtype=torch.long)
+        res[forward_entail] = torch.tensor([self.INDEP, self.ENTAIL],
+                                           dtype=torch.long)
+        res[backward_entail] = torch.tensor([self.INDEP, self.REV_ENTAIL],
+                                            dtype=torch.long)
+        return res
 
-    def obj_noun(self, p, h):
-        # print(f"obj_noun({p}, {h})")
-        return f"obj_noun({p}, {h})"
+    # MQNLI functions
+    def get_p(self, input: torch.Tensor) -> torch.Tensor:
+        # (18, batch_size) ->  (9, batch_size)
+        assert isinstance(input, torch.Tensor) \
+               and len(input.shape) == 2 and input.shape[0] == 18, \
+               f"invalid input shape: {input.shape}"
+        return input[:9, :]
 
-    def obj_adj(self, p, h):
-        # print(f"obj_adj({p}, {h})")
-        return f"obj_adj({p}, {h})"
+    def get_h(self, input: torch.Tensor) -> torch.Tensor:
+        # (18, batch_size) ->  (9, batch_size)
+        assert isinstance(input, torch.Tensor) \
+               and len(input.shape) == 2 and input.shape[0] == 18, \
+            f"invalid input shape: {input.shape}"
+        return input[9:, :]
 
-    def obj(self, a, n):
-        # print(f"obj({a}, {n})")
-        return f"obj({a}, {n})"
+    def obj_noun(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (9, batch_size), (9, batch_size) -> (batch_size,)
+        return (p[self.N_O] == h[self.N_O]).type(torch.long)
+
+    def obj_adj(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (9, batch_size), (9, batch_size) -> (batch_size, 2)
+        return self._intersective_projection(p[self.A_O], h[self.A_O])
+
+    def obj(self, a: torch.Tensor, n: torch.Tensor):
+        # (batch_size, 2), (batch_size,) -> (batch_size,)
+        return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
 
     def vp_q(self, p, h):
         # print(f"vp_q({p}, {h})")
         return f"vp_q({p}, {h})"
 
     def v_verb(self, p, h):
-        # print(f"v_verb({p}, {h})")
-        return f"v_verb({p}, {h})"
+        # (9, batch_size), (9, batch_size) -> (batch_size,)
+        return (p[self.V] == h[self.V]).type(torch.long)
 
     def v_adv(self, p, h):
-        # print(f"v_adv({p}, {h})")
-        return f"v_adv({p}, {h})"
+        # (9, batch_size), (9, batch_size) -> (batch_size, 2)
+        return self._intersective_projection(p[self.ADV], h[self.ADV])
 
     def v_bar(self, a, v):
-        # print(f"v_bar({a}, {v})")
-        return f"v_bar({a}, {v})"
+        # (batch_size, 2), (batch_size,) -> (batch_size,)
+        return torch.gather(a, 1, v.unsqueeze(1)).squeeze()
 
     def vp(self, v, q, o):
         # print(f"vp({v}, {q}, {o})")
@@ -222,16 +164,16 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         return f"negp({n}, {v})"
 
     def subj_noun(self, p, h):
-        # print(f"subj_noun({p}, {h})")
-        return f"subj_noun({p}, {h})"
+        # (9, batch_size), (9, batch_size) -> (batch_size,)
+        return (p[self.N_S] == h[self.N_S]).type(torch.long)
 
     def subj_adj(self, p, h):
-        # print(f"subj_adj({p}, {h})")
-        return f"subj_adj({p}, {h})"
+        # (9, batch_size), (9, batch_size) -> (2, batch_size)
+        return self._intersective_projection(p[self.A_S], h[self.A_S])
 
     def subj(self, a, n):
-        # print(f"subj({a}, {n})")
-        return f"subj({a}, {n})"
+        # (batch_size, 2), (batch_size,) -> (batch_size,)
+        return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
 
     def sentence_q(self, p, h):
         # print(f"sentence_q({p}, {h})")

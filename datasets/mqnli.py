@@ -46,6 +46,27 @@ class MQNLIData:
         print("--- found {} unique words, max sentence len is {}".format(
             self.vocab_size, self.max_sentence_len))
 
+    def decode(self, t, return_str=False):
+        if return_str:
+            if isinstance(t, torch.Tensor) and len(t.shape) == 1:
+                return " ".join(self.id_to_word[w.item()] for w in t)
+            elif isinstance(t, torch.Tensor) and len(t.shape) == 2:
+                return [" ".join(self.id_to_word[w]) for s in t for w in s]
+            elif isinstance(t, list):
+                return " ".join(self.id_to_word[w] for w in t)
+            else:
+                raise ValueError("incorrect input type")
+        else:
+            if isinstance(t, torch.Tensor) and len(t.shape) == 1:
+                return [self.id_to_word[w.item()] for w in t]
+            elif isinstance(t, torch.Tensor) and len(t.shape) == 2:
+                return [[self.id_to_word[w] for w in s] for s in t]
+            elif isinstance(t, list):
+                return [self.id_to_word[w] for w in t]
+            else:
+                raise ValueError("incorrect input type")
+
+
 
 class MQNLIDataset(Dataset):
     def __init__(self, file_name, word_to_id, id_to_word, max_info, for_transformer=False):
