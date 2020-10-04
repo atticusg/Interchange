@@ -26,8 +26,46 @@ class AbstractableCompGraph(ComputationGraph):
 
         # TODO: extract topological order automatically
 
+        self.validate_full_graph()
+
         root = self.generate_abstract_graph(abstract_nodes)
         super(AbstractableCompGraph, self).__init__(root)
+
+    def validate_full_graph(self):
+        # all nodes must be present in keys of full_graph dict
+        nodes = set(n for _, nodes in self.full_graph for n in nodes)
+        keys = set(self.full_graph.keys())
+        diff = nodes.difference(keys)
+        if len(diff) > 0:
+            raise RuntimeError(f"All nodes in the underlying graph should be "
+                               f"in the keys of the dict. Missing: {diff}")
+
+        # each non-leaf node should have a forward function
+        no_forward = nodes.difference(self.input_node_names)\
+            .difference(set(self.forward_functions.keys()))
+        if len(no_forward) > 0:
+            raise RuntimeError(f"These nodes are missing an associated forward "
+                               f"function: {no_forward}")
+
+        # nodes in topological order
+        if set(self.topological_order) != nodes:
+            raise RuntimeError("Invalid topological order")
+
+        # TODO: check topological order
+        # TODO: check for cycles
+
+    @staticmethod
+    def find_topological_order(full_graph, root):
+        ordering = []
+        visited = set()
+        def recursive_call(node):
+            visited.add(node)
+            for i in range(len(full_graph[node])-1, -1, -1):
+                if full_graph[node][i] not in visited:
+                    recursive_call(full_graph[node][i])
+            ordering.append(node)
+        recursive_call(root)
+        return ordering[::-1]
 
     def generate_abstract_graph(self, abstract_nodes: List[str]) \
             -> Dict[str, GraphNode]:
