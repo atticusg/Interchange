@@ -9,7 +9,7 @@ class AbstractableCompGraph(ComputationGraph):
                  root_node_name: str,
                  abstract_nodes: List[str],
                  forward_functions: Dict[str, Callable],
-                 topological_order: List[str], ):
+                 topological_order: List[str]=None):
         """ An abstractable compgraph structure
 
         :param full_graph:
@@ -22,11 +22,12 @@ class AbstractableCompGraph(ComputationGraph):
         self.input_node_names = {k for k, v in full_graph.items() if len(v) == 0}
         self.root_node_name = root_node_name
         self.forward_functions = forward_functions
-        self.topological_order = topological_order
+        self.topological_order = AbstractableCompGraph.find_topological_order(
+            full_graph, root_node_name) if not topological_order else topological_order
 
         # TODO: extract topological order automatically
 
-        # self.validate_full_graph()
+        self.validate_full_graph()
 
         root = self.generate_abstract_graph(abstract_nodes)
         super(AbstractableCompGraph, self).__init__(root)
@@ -46,10 +47,6 @@ class AbstractableCompGraph(ComputationGraph):
         if len(no_forward) > 0:
             raise RuntimeError(f"These nodes are missing an associated forward "
                                f"function: {no_forward}")
-
-        # nodes in topological order
-        if set(self.topological_order) != nodes:
-            raise RuntimeError("Invalid topological order")
 
         # TODO: check topological order
         # TODO: check for cycles

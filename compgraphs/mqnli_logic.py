@@ -6,12 +6,13 @@ from typing import Any, Dict, List, Callable, Set
 
 INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER = range(7)
 
-IDX_D_S, IDX_A_S, IDX_N_S, IDX_NEG, IDX_ADV, IDX_V, IDX_D_O, IDX_A_O, IDX_N_O = \
-    range(9)
+IDX_D_S, IDX_A_S, IDX_N_S, IDX_NEG, IDX_ADV, IDX_V, IDX_D_O, IDX_A_O, IDX_N_O = range(9)
+
+SOME, EVERY, NO, NOTEVERY = range(4)
 
 
 def get_relation_composition():
-    res = dict()
+    composition_dict = dict()
     rel_list1 = [EQUIV, ENTAIL, REV_ENTAIL,
                  CONTRADICT,
                  COVER, ALTER, INDEP]
@@ -20,33 +21,34 @@ def get_relation_composition():
                  COVER, ALTER, INDEP]
     for r in rel_list1:
         for r2 in rel_list2:
-            res[(r, r2)] = INDEP
+            composition_dict[(r, r2)] = INDEP
     for r in rel_list1:
-        res[(EQUIV, r)] = r
-        res[(r, EQUIV)] = r
-    res[(ENTAIL, ENTAIL)] = ENTAIL
-    res[(ENTAIL, CONTRADICT)] = ALTER
-    res[(ENTAIL, ALTER)] = ALTER
-    res[
-        (REV_ENTAIL, REV_ENTAIL)] = REV_ENTAIL
-    res[(REV_ENTAIL, CONTRADICT)] = COVER
-    res[(REV_ENTAIL, COVER)] = COVER
-    res[(CONTRADICT, ENTAIL)] = COVER
-    res[(CONTRADICT, REV_ENTAIL)] = ALTER
-    res[(CONTRADICT, CONTRADICT)] = EQUIV
-    res[(CONTRADICT, COVER)] = REV_ENTAIL
-    res[(CONTRADICT, ALTER)] = ENTAIL
-    res[(ALTER, REV_ENTAIL)] = ALTER
-    res[(ALTER, CONTRADICT)] = ENTAIL
-    res[(ALTER, COVER)] = ENTAIL
-    res[(COVER, ENTAIL)] = COVER
-    res[(COVER, CONTRADICT)] = REV_ENTAIL
-    res[(COVER, ALTER)] = " reverse entails"
+        composition_dict[(EQUIV, r)] = r
+        composition_dict[(r, EQUIV)] = r
+    composition_dict[(ENTAIL, ENTAIL)] = ENTAIL
+    composition_dict[(ENTAIL, CONTRADICT)] = ALTER
+    composition_dict[(ENTAIL, ALTER)] = ALTER
+    composition_dict[(REV_ENTAIL, REV_ENTAIL)] = REV_ENTAIL
+    composition_dict[(REV_ENTAIL, CONTRADICT)] = COVER
+    composition_dict[(REV_ENTAIL, COVER)] = COVER
+    composition_dict[(CONTRADICT, ENTAIL)] = COVER
+    composition_dict[(CONTRADICT, REV_ENTAIL)] = ALTER
+    composition_dict[(CONTRADICT, CONTRADICT)] = EQUIV
+    composition_dict[(CONTRADICT, COVER)] = REV_ENTAIL
+    composition_dict[(CONTRADICT, ALTER)] = ENTAIL
+    composition_dict[(ALTER, REV_ENTAIL)] = ALTER
+    composition_dict[(ALTER, CONTRADICT)] = ENTAIL
+    composition_dict[(ALTER, COVER)] = ENTAIL
+    composition_dict[(COVER, ENTAIL)] = COVER
+    composition_dict[(COVER, CONTRADICT)] = REV_ENTAIL
+    composition_dict[(COVER, ALTER)] = REV_ENTAIL
+
+    res = torch.zeros(7,7,dtype=torch.long)
+    for (r1, r2), v in composition_dict:
+        res[r1,r2] = v
     return res
 
-
 relation_composition = get_relation_composition()
-
 
 def strong_composition(signature1, signature2, relation1, relation2):
     # returns the stronger relation of the first relation/signature composed
@@ -61,7 +63,30 @@ def strong_composition(signature1, signature2, relation1, relation2):
         print("This shouldn't happen", composition1, composition2)
     return composition1
 
+# TODO: test this
+def get_negation_signatures():
+    res = torch.zeros(2,2,7)
+    res[0,0] = torch.tensor([INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER], dtype=torch.long)
 
+    # {"equivalence":"equivalence",
+    # "entails":"reverse entails",
+    # "reverse entails":"entails",
+    # "contradiction":"contradiction",
+    # "cover":"alternation",
+    # "alternation":"cover",
+    # "independence":"independence"}
+    res[1,1] = torch.tensor([INDEP, EQUIV, REV_ENTAIL, ENTAIL, CONTRADICT, COVER, ALTER], dtype=torch.long)
+
+    for rel in range(7):
+        res[0,1,rel] = relation_composition[rel,CONTRADICT]
+
+    for rel in range(7):
+        res[1,0,rel] = res[0,1,res[1,1,rel]]
+
+    return res
+
+
+# TODO: test this
 def get_determiner_sigatures():
     det_sigs = dict()
     symmetric_relation = {EQUIV: EQUIV,
@@ -71,7 +96,7 @@ def get_determiner_sigatures():
                           ALTER: ALTER,
                           INDEP: INDEP}
 
-    det_sigs[("some", "some")] = (
+    det_sigs[(SOME, SOME)] = (
         {EQUIV: EQUIV, ENTAIL: ENTAIL,
          REV_ENTAIL: REV_ENTAIL, INDEP: INDEP},
         {EQUIV: EQUIV, ENTAIL: ENTAIL,
@@ -79,7 +104,7 @@ def get_determiner_sigatures():
          COVER: COVER, ALTER: INDEP,
          INDEP: INDEP}
     )
-    det_sigs[("every", "every")] = (
+    det_sigs[(EVERY, EVERY)] = (
         {EQUIV: EQUIV, ENTAIL: REV_ENTAIL,
          REV_ENTAIL: ENTAIL, INDEP: INDEP},
         {EQUIV: EQUIV, ENTAIL: ENTAIL,
@@ -106,29 +131,35 @@ def get_determiner_sigatures():
                 new_signature[(relation1, relation2)] = REV_ENTAIL
             else:
                 new_signature[(relation1, relation2)] = INDEP
-    det_sigs[("some", "every")] = new_signature
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)] = new_signature
+    det_sigs[(SOME, EVERY)][
         (ENTAIL, CONTRADICT)] = ALTER
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)][
         (ENTAIL, ALTER)] = ALTER
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)][
         (EQUIV, ALTER)] = ALTER
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)][
         (EQUIV, CONTRADICT)] = CONTRADICT
-    det_sigs[("some", "every")][(EQUIV, COVER)] = COVER
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)][(EQUIV, COVER)] = COVER
+    det_sigs[(SOME, EVERY)][
         (REV_ENTAIL, COVER)] = COVER
-    det_sigs[("some", "every")][
+    det_sigs[(SOME, EVERY)][
         (REV_ENTAIL, CONTRADICT)] = COVER
 
     new_signature = dict()
-    for key in det_sigs[("some", "every")]:
+    for key in det_sigs[(SOME, EVERY)]:
         new_signature[
             (symmetric_relation[key[0]], symmetric_relation[key[1]])] = \
-            symmetric_relation[det_sigs["some", "every"][key]]
-    det_sigs[("every", "some")] = new_signature
+            symmetric_relation[det_sigs[SOME, EVERY][key]]
+    det_sigs[(EVERY, SOME)] = new_signature
+    
+    res = torch.zeros(4,4,4,7, dtype=torch.long)
 
-    return det_sigs
+    for (q1, q2), d in det_sigs.items():
+        for (r1, r2), v in d.items():
+            res[q1,q2,r1,r2] = v
+
+    return res
 
 determiner_signatures = get_determiner_sigatures()
 
@@ -153,12 +184,6 @@ mqnli_logic_compgraph = {
     "sentence": ["sentence_q", "subj", "negp"]
 }
 
-topological_order = ["sentence", "sentence_q", "subj", "negp",
-                     "subj_adj", "subj_noun", "neg", "vp",
-                     "v_bar", "vp_q", "obj", "v_adv", "v_verb",
-                     "obj_adj", "obj_noun", "get_p", "get_h",
-                     "input"]
-
 
 class MQNLI_Logic_CompGraph(AbstractableCompGraph):
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
@@ -182,8 +207,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
             full_graph=mqnli_logic_compgraph,
             root_node_name="sentence",
             abstract_nodes=intermediate_nodes,
-            forward_functions=node_functions,
-            topological_order=topological_order
+            forward_functions=node_functions
         )
 
     def __getattr__(self, item):

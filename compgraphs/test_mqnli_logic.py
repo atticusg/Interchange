@@ -1,6 +1,7 @@
 import pytest
 import torch
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.abstractable import AbstractableCompGraph
+from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph, determiner_signatures
 from intervention import GraphInput
 from datasets.mqnli import MQNLIData
 
@@ -16,22 +17,24 @@ EVERY = mqnli_mini_data.word_to_id["every"]
 NOTEVERY = mqnli_mini_data.word_to_id["notevery"]
 DOESNOT = mqnli_mini_data.word_to_id["doesnot"]
 
-dummy_compgraph = MQNLI_Logic_CompGraph(mqnli_mini_data, [])
+# dummy_compgraph = MQNLI_Logic_CompGraph(mqnli_mini_data)
 
 node_name_test_set = [
     (["negp"], ["input", "negp",  "sentence"]),
     (["negp", "vp"], ["input", "vp", "negp", "sentence"]),
     (["vp", "negp"], ["input", "vp", "negp", "sentence"]),
     (["subj", "negp"], ["input", "negp", "subj", "sentence"]),
-    (["subj_adj", "subj_noun", "negp"], ["input",  "subj_noun", "subj_adj", "negp",  "sentence"])
+    (["subj_adj", "subj_noun", "negp"], ["input", "negp", "subj_noun", "subj_adj",  "sentence"])
 ]
 
 @pytest.mark.parametrize("intermediate_nodes, expected",node_name_test_set)
 def test_get_node_names(intermediate_nodes, expected):
-    res = dummy_compgraph.get_node_names(intermediate_nodes)
+    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    res = g.get_node_names(intermediate_nodes)
     assert all(res_name == expected_name for res_name, expected_name in zip(res, expected)), \
         f"Got {res}, expected {expected}"
 
+"""
 get_children_test_set = [
     ("sentence", {"input",  "sentence"}, ["input"]),
     ("sentence", {"input", "negp",  "sentence"}, ["input", "negp"]),
@@ -49,6 +52,8 @@ def test_get_children(node, node_set, expected):
     assert all(res_name == expected_name for res_name, expected_name in
                zip(res, expected)), \
         f"Got {res}, expected {expected}"
+"""
+
 
 def has_children(g, node, child_names):
     node = g.nodes[node]
@@ -172,3 +177,5 @@ def test_nodes(node, expected):
     assert torch.all(res == expected)
 
 
+def test_determiner_signatures():
+    print(determiner_signatures)
