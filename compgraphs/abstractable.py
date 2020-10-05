@@ -26,14 +26,14 @@ class AbstractableCompGraph(ComputationGraph):
 
         # TODO: extract topological order automatically
 
-        self.validate_full_graph()
+        # self.validate_full_graph()
 
         root = self.generate_abstract_graph(abstract_nodes)
         super(AbstractableCompGraph, self).__init__(root)
 
     def validate_full_graph(self):
         # all nodes must be present in keys of full_graph dict
-        nodes = set(n for _, nodes in self.full_graph for n in nodes)
+        nodes = set(n for _, nodes in self.full_graph.items() for n in nodes)
         keys = set(self.full_graph.keys())
         diff = nodes.difference(keys)
         if len(diff) > 0:
