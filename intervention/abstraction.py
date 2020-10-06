@@ -235,12 +235,12 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
 
 def find_abstractions(low_model, high_model, high_inputs, total_high_interventions, fixed_assignments, input_mapping):
     """
-
-    :param low_model:
-    :param high_model:
+    :param low_model: ComputationGraph
+    :param high_model: ComputationGraph (same names for leaves)
     :param high_inputs:
     :param total_high_interventions:
     :param fixed_assignments:
+
     :param input_mapping:
     :return:
         list(
