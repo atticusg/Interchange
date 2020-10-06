@@ -1,0 +1,12 @@
+some
+every
+no
+not every
+some2
+every2
+no2
+not every2
+some3
+every3
+no3
+not every3
