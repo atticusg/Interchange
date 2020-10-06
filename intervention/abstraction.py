@@ -98,6 +98,7 @@ def get_value(high_model, high_node, high_intervention):
 
 def create_new_realizations(low_model, high_model, high_node, mapping, low_intervention, high_intervention):
     new_realizations = dict()
+    new_realizations_to_inputs = dict()
     def fill_new_realizations(high_node, mapping, low_intervention, high_intervention):
         high_value = get_value(high_model, high_node, high_intervention)
         low_value = None
@@ -107,10 +108,12 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
             fill_new_realizations(child.name, mapping, low_intervention, high_intervention)
         if high_node in high_intervention.intervention.values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
             return
-        new_realizations[(high_node, high_value.tostring())] = low_value.tostring()
+        low_string = low_value.tostring()
+        new_realizations[(high_node, high_value.tostring())] = low_string
+        new_realizations_to_inputs[(low_string, high_node)] = low_intervention
 
     fill_new_realizations(high_node, mapping, low_intervention, high_intervention)
-    return new_realizations
+    return new_realizations, new_realizations_to_inputs
 
 
 def get_potential_realizations(new_realizations, total_realizations, high_node, high_model, new_high_intervention):
@@ -167,6 +170,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
     low_and_high_interventions = [(high_to_low(high_model, high_intervention, dict(), mapping, input_mapping), high_intervention) for high_intervention in high_inputs]
     total_realizations = dict()
     result = dict()
+    realizations_to_inputs = dict()
     counter =0
     while len(low_and_high_interventions) !=0:
         #print(mapping)
@@ -188,7 +192,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
             low_output = low_model.get_result(low_node,curr_low_intervention)
         result[(curr_low_intervention, curr_high_intervention)] = low_output == high_output
         #update the realizations
-        new_realizations = create_new_realizations(low_model, high_model,high_model.root.name, mapping, curr_low_intervention, curr_high_intervention)
+        new_realizations, new_realizations_to_inputs = create_new_realizations(low_model, high_model,high_model.root.name, mapping, curr_low_intervention, curr_high_intervention)
         #add on the new interventions that need to be checked
         used_high_interventions = set()
         for new_high_intervention in total_high_interventions:
@@ -215,6 +219,8 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
             else:
                 total_realizations[(high_node, truncate(high_value))] = {new_realizations[(high_node, high_value)]}
             #total_realizations[(high_node, high_value)] = list(set(total_realizations[(high_node, high_value)]))
+        for realization in new_realizations_to_inputs:
+            realizations_to_inputs[realization] = new_realizations_to_inputs[realization]
         counter +=1
         if counter > 100 and False:
             print(awefawefawefawe)
@@ -223,7 +229,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
         #print(key, len(total_realizations[key]))
         #for realization in total_realizations[key]:
         #    print(np.fromstring(realization))
-    return result
+    return (result,realizations_to_inputs)
 
 
 

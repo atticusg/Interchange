@@ -168,7 +168,8 @@ for _ in range(150):
             print(fawefaw)
 
     fail_list = []
-    for result,mapping in  find_abstractions(low_model, high_model, inputs,total_high_interventions,{x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]},input_mapping):
+    for temp,mapping in find_abstractions(low_model, high_model, inputs,total_high_interventions,{x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]},input_mapping):
+        result, realizations_to_inputs = temp
         fail = False
         verify_mapping(mapping, result, inputs, low_model)
         for interventions in result:
@@ -178,6 +179,7 @@ for _ in range(150):
                 fail = True
                 if "bool_intermediate1" in mapping["bool_intermediate"]:
                     print(afwoeij)
+        print(realizations_to_inputs)
         fail_list.append((fail,mapping))
 
     all_fails = True
