@@ -218,9 +218,9 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
         counter +=1
         if counter > 100 and False:
             print(awefawefawefawe)
-    print(mapping)
-    for key in total_realizations:
-        print(key, len(total_realizations[key]))
+    #print(mapping)
+    #for key in total_realizations:
+        #print(key, len(total_realizations[key]))
         #for realization in total_realizations[key]:
         #    print(np.fromstring(realization))
     return result
@@ -246,11 +246,10 @@ def find_abstractions(low_model, high_model, high_inputs, total_high_interventio
     """
     result = []
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments)
-    print(len(mappings))
+    #print(len(mappings))
+    #for mapping in mappings:
+    #    print(mapping)
     for mapping in mappings:
-        print(mapping)
-    for mapping in mappings:
-        print(len(test_mapping(low_model, high_model, high_inputs,total_high_interventions, mapping, input_mapping).keys()))
-        print(fawefawef)
+    #    print(len(test_mapping(low_model, high_model, high_inputs,total_high_interventions, mapping, input_mapping).keys()))
         result.append((test_mapping(low_model, high_model, high_inputs,total_high_interventions, mapping, input_mapping),mapping))
     return result

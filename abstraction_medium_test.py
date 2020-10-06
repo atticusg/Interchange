@@ -164,6 +164,7 @@ for result,mapping in find_abstractions(low_model, high_model, inputs,total_high
                 print(afwoeij)
     fail_list.append((fail,mapping))
 
+print("hi")
 for fail, mapping in fail_list:
     print(fail, mapping)
 print(meme)

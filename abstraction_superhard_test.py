@@ -1,4 +1,4 @@
-
+import json
 from intervention import ComputationGraph, GraphNode, GraphInput, Intervention, Location
 from intervention.abstraction import create_possible_mappings, find_abstractions
 import numpy as np
@@ -191,13 +191,23 @@ for _ in range(10):
                             MLPY.append(1)
                     else:
                         MLPY.append(0)
-    MLP = MLPClassifier(hidden_layer_sizes = (3,3), activation ='tanh', batch_size=1)
+    MLP = MLPClassifier(hidden_layer_sizes = (2,2), activation ='tanh', batch_size=1)
     MLP.fit(MLPX,MLPY)
     print(MLP.score(MLPX,MLPY))
     W,W2, W3 = MLP.coefs_
     b,b2, b3 = MLP.intercepts_
-    if first:
-        W = np.array([[0.5,0,0],[0.5,0,0],[0,0,1]],[0,1,0]])
+    if first and False:
+        verify_mapping(mapping, result, inputs, low_model)
+        for interventions in result:
+            low_intervention, high_intervention = interventions
+            verify_intervention(mapping,low_intervention, high_intervention, result[interventions], W, b, W2, b2, W3, b3)
+            if not result[interventions]:
+                fail = True
+                if "bool_intermediate1" in mapping["bool_intermediate"]:
+                    print(afwoeij)
+
+    if False:
+        W = np.array([[0.5,0,0],[0.5,0,0],[0,0,1],[0,1,0]])
         b = np.array([-1,0,0])
         W2 = np.array([[0.5,0,0],[0.5,0,0],[0,0,1]])
         b2 = np.array([-1,-1,0])
