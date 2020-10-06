@@ -144,7 +144,8 @@ low_model.get_result(low_model.root.name, low_input)
 
 fail_list = []
 meme = 0
-for result,mapping in find_abstractions(low_model, high_model, inputs,total_high_interventions,{x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]},input_mapping):
+for temp,mapping in find_abstractions(low_model, high_model, inputs,total_high_interventions,{x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]},input_mapping):
+    result, realizations_to_inputs = temp
     meme +=1
     fail = False
     verify_mapping(mapping, result, inputs, low_model)
@@ -168,3 +169,4 @@ print("hi")
 for fail, mapping in fail_list:
     print(fail, mapping)
 print(meme)
+print(realizations_to_inputs)
