@@ -120,7 +120,7 @@ def get_example_data(data, batch_size):
     return [get_intermediate_labels(s) for s in example_strs]
 
 
-batch_size = 20
+batch_size = 5
 examples = mqnli_mini_data.dev[:batch_size][0]
 labels = mqnli_mini_data.dev[:batch_size][1]
 example_batch = examples.transpose(0, 1)
@@ -181,7 +181,7 @@ example_2_str = mqnli_mini_data.decode(example_2[0])
 
 example_3batch = torch.stack((example_0[0], example_1[0], example_2[0]), dim=1)
 
-"""
+
 def test_get_p_h():
     intermediate_nodes = ["get_p", "get_h"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
@@ -290,7 +290,6 @@ def test_subject_quantifier_signatures():
     assert exp.shape == (batch_size, 4*7)
     assert torch.all(res == exp)
 
-"""
 
 @pytest.fixture
 def mqnli_data():

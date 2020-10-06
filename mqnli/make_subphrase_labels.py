@@ -5,6 +5,8 @@ import mqnli.natural_logic_model as nlm
 import mqnli.data_util as du
 import mqnli.generate_data as gd
 
+# copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
+
 data, _, _ = gd.process_data(1.0)
 def adjoin(words):
     result = ''

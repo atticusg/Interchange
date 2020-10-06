@@ -3,7 +3,7 @@ import copy
 import random
 from mqnli.data_util import sentence
 
-# Copied from MultiplyQuantifiedNLI repo
+# copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
 
 def strong_composition(signature1, signature2, relation1, relation2):
     #returns the stronger relation of the first relation/signature composed

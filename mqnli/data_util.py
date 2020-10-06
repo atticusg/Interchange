@@ -1,6 +1,6 @@
 import json
 
-# copied from MultiplyQuantifiedData repo
+# copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
 
 class sentence:
     #this class stores the logical representation of a sentence and generates the information necessary

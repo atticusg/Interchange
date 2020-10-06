@@ -8,6 +8,8 @@ import numpy as np
 from functools import reduce
 from tqdm import tqdm
 
+# copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
+
 mqnli_data_path = "/home/hansonlu/intervention/Interchange/mqnli/data"
 
 def process_data(train_ratio):
