@@ -6,12 +6,16 @@ from typing import Any, Dict, List, Callable, Set
 
 INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER = range(7)
 
-IDX_D_S, IDX_A_S, IDX_N_S, IDX_NEG, IDX_ADV, IDX_V, IDX_D_O, IDX_A_O, IDX_N_O = range(9)
+IDX_Q_S, IDX_A_S, IDX_N_S, IDX_NEG, IDX_ADV, IDX_V, \
+IDX_Q_O, IDX_A_O, IDX_N_O = range(9)
 
 SOME, EVERY, NO, NOTEVERY = range(4)
 
 
 def get_relation_composition():
+    # implement dict using exact same logic as
+    # MultiplyQuantifiedData/natural_logic_model.py
+
     composition_dict = dict()
     rel_list1 = [EQUIV, ENTAIL, REV_ENTAIL,
                  CONTRADICT,
@@ -25,6 +29,7 @@ def get_relation_composition():
     for r in rel_list1:
         composition_dict[(EQUIV, r)] = r
         composition_dict[(r, EQUIV)] = r
+
     composition_dict[(ENTAIL, ENTAIL)] = ENTAIL
     composition_dict[(ENTAIL, CONTRADICT)] = ALTER
     composition_dict[(ENTAIL, ALTER)] = ALTER
@@ -43,14 +48,18 @@ def get_relation_composition():
     composition_dict[(COVER, CONTRADICT)] = REV_ENTAIL
     composition_dict[(COVER, ALTER)] = REV_ENTAIL
 
-    res = torch.zeros(7,7,dtype=torch.long)
-    for (r1, r2), v in composition_dict:
+    # construct tensor
+    res = torch.zeros(7, 7, dtype=torch.long)
+    for (r1, r2), v in composition_dict.items():
         res[r1,r2] = v
     return res
 
+
 relation_composition = get_relation_composition()
 
+
 def strong_composition(signature1, signature2, relation1, relation2):
+    # helper function copied from MultiplyQuantifiedData/natural_logic_model.py
     # returns the stronger relation of the first relation/signature composed
     # with the second relation signature and vice versa
     composition1 = relation_composition[
@@ -63,54 +72,45 @@ def strong_composition(signature1, signature2, relation1, relation2):
         print("This shouldn't happen", composition1, composition2)
     return composition1
 
-# TODO: test this
+
 def get_negation_signatures():
-    res = torch.zeros(2,2,7)
-    res[0,0] = torch.tensor([INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER], dtype=torch.long)
-
-    # {"equivalence":"equivalence",
-    # "entails":"reverse entails",
-    # "reverse entails":"entails",
-    # "contradiction":"contradiction",
-    # "cover":"alternation",
-    # "alternation":"cover",
-    # "independence":"independence"}
-    res[1,1] = torch.tensor([INDEP, EQUIV, REV_ENTAIL, ENTAIL, CONTRADICT, COVER, ALTER], dtype=torch.long)
+    # use same logic as MultiplyQuantifiedData/natural_logic_model.py
+    res = torch.zeros(4, 7, dtype=torch.long)
+    res[0] = torch.tensor([INDEP, EQUIV, ENTAIL, REV_ENTAIL,
+                             CONTRADICT, ALTER, COVER], dtype=torch.long)
+    res[3] = torch.tensor([INDEP, EQUIV, REV_ENTAIL, ENTAIL,
+                             CONTRADICT, COVER, ALTER], dtype=torch.long)
 
     for rel in range(7):
-        res[0,1,rel] = relation_composition[rel,CONTRADICT]
+        res[1,rel] = relation_composition[rel,CONTRADICT]
 
     for rel in range(7):
-        res[1,0,rel] = res[0,1,res[1,1,rel]]
+        res[2,rel] = res[1,res[3,rel]]
 
-    return res
+    return res # [2*2, 7]
 
 
-# TODO: test this
-def get_determiner_sigatures():
+negation_signatures = get_negation_signatures()
+
+
+def get_quantifier_signatures():
+    # first implement dict using exact same logic as
+    # MultiplyQuantifiedData/natural_logic_model.py
+
     det_sigs = dict()
-    symmetric_relation = {EQUIV: EQUIV,
-                          ENTAIL: REV_ENTAIL,
-                          REV_ENTAIL: ENTAIL,
-                          CONTRADICT: CONTRADICT, COVER: COVER,
-                          ALTER: ALTER,
+    symmetric_relation = {EQUIV: EQUIV, ENTAIL: REV_ENTAIL, REV_ENTAIL: ENTAIL,
+                          CONTRADICT: CONTRADICT, COVER: COVER, ALTER: ALTER,
                           INDEP: INDEP}
 
     det_sigs[(SOME, SOME)] = (
-        {EQUIV: EQUIV, ENTAIL: ENTAIL,
-         REV_ENTAIL: REV_ENTAIL, INDEP: INDEP},
-        {EQUIV: EQUIV, ENTAIL: ENTAIL,
-         REV_ENTAIL: REV_ENTAIL, CONTRADICT: COVER,
-         COVER: COVER, ALTER: INDEP,
-         INDEP: INDEP}
+        {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL, INDEP: INDEP},
+        {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL,
+         CONTRADICT: COVER, COVER: COVER, ALTER: INDEP, INDEP: INDEP}
     )
     det_sigs[(EVERY, EVERY)] = (
-        {EQUIV: EQUIV, ENTAIL: REV_ENTAIL,
-         REV_ENTAIL: ENTAIL, INDEP: INDEP},
-        {EQUIV: EQUIV, ENTAIL: ENTAIL,
-         REV_ENTAIL: REV_ENTAIL, CONTRADICT: ALTER,
-         COVER: INDEP, ALTER: ALTER,
-         INDEP: INDEP}
+        {EQUIV: EQUIV, ENTAIL: REV_ENTAIL, REV_ENTAIL: ENTAIL, INDEP: INDEP},
+        {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL,
+         CONTRADICT: ALTER, COVER: INDEP, ALTER: ALTER, INDEP: INDEP}
     )
     for key in det_sigs:
         signature1, signature2 = det_sigs[key]
@@ -127,41 +127,40 @@ def get_determiner_sigatures():
     for relation1 in [EQUIV, ENTAIL, REV_ENTAIL,
                       INDEP]:
         for relation2 in relations:
-            if (relation2 == EQUIV or relation2 == REV_ENTAIL) and relation1 != INDEP:
+            if (relation2 == EQUIV or relation2 == REV_ENTAIL) \
+                    and relation1 != INDEP:
                 new_signature[(relation1, relation2)] = REV_ENTAIL
             else:
                 new_signature[(relation1, relation2)] = INDEP
     det_sigs[(SOME, EVERY)] = new_signature
-    det_sigs[(SOME, EVERY)][
-        (ENTAIL, CONTRADICT)] = ALTER
-    det_sigs[(SOME, EVERY)][
-        (ENTAIL, ALTER)] = ALTER
-    det_sigs[(SOME, EVERY)][
-        (EQUIV, ALTER)] = ALTER
-    det_sigs[(SOME, EVERY)][
-        (EQUIV, CONTRADICT)] = CONTRADICT
+    det_sigs[(SOME, EVERY)][(ENTAIL, CONTRADICT)] = ALTER
+    det_sigs[(SOME, EVERY)][(ENTAIL, ALTER)] = ALTER
+    det_sigs[(SOME, EVERY)][(EQUIV, ALTER)] = ALTER
+    det_sigs[(SOME, EVERY)][(EQUIV, CONTRADICT)] = CONTRADICT
     det_sigs[(SOME, EVERY)][(EQUIV, COVER)] = COVER
-    det_sigs[(SOME, EVERY)][
-        (REV_ENTAIL, COVER)] = COVER
-    det_sigs[(SOME, EVERY)][
-        (REV_ENTAIL, CONTRADICT)] = COVER
+    det_sigs[(SOME, EVERY)][(REV_ENTAIL, COVER)] = COVER
+    det_sigs[(SOME, EVERY)][(REV_ENTAIL, CONTRADICT)] = COVER
 
     new_signature = dict()
     for key in det_sigs[(SOME, EVERY)]:
-        new_signature[
-            (symmetric_relation[key[0]], symmetric_relation[key[1]])] = \
-            symmetric_relation[det_sigs[SOME, EVERY][key]]
+        new_signature[(symmetric_relation[key[0]], symmetric_relation[key[1]])] \
+            = symmetric_relation[det_sigs[SOME, EVERY][key]]
     det_sigs[(EVERY, SOME)] = new_signature
-    
-    res = torch.zeros(4,4,4,7, dtype=torch.long)
 
-    for (q1, q2), d in det_sigs.items():
-        for (r1, r2), v in d.items():
-            res[q1,q2,r1,r2] = v
+    # then construct tensor given the above
+    res = torch.zeros(4*4, 4*7, dtype=torch.long)
 
-    return res
+    for neg_1 in [0, 1]:
+        for neg_2 in [0, 1]:
+            for (q1, q2), d in det_sigs.items():
+                for (r1, r2), v in d.items():
+                    neg_sig = negation_signatures[neg_1*2 + neg_2]
+                    res[4*(neg_1*2+q1) + (neg_2*2+q2), 7*r1 + r2] = neg_sig[v]
+    return res # [4*4, 4*7]
 
-determiner_signatures = get_determiner_sigatures()
+quantifier_signatures = get_quantifier_signatures()
+
+output_remapping = torch.tensor([0, 1, 1, 0, 2, 2, 0], dtype=torch.long)
 
 mqnli_logic_compgraph = {
     "input": [],
@@ -219,7 +218,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def _intersective_projection(self, p: torch.Tensor, h: torch.Tensor) \
             -> torch.Tensor:
-        # (batch_size,), (batch_size,) -> (2, batch_size)
+        # (batch_size,), (batch_size,) -> (batch_size, 2)
         eq = (p == h)
         p_is_empty = (p == self.emptystring)
         h_is_empty = (h == self.emptystring)
@@ -233,6 +232,29 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         res[backward_entail] = torch.tensor([INDEP, REV_ENTAIL],
                                             dtype=torch.long)
         return res
+
+    def _merge_quantifiers(self, p: torch.Tensor, h: torch.Tensor) \
+            -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4*7)
+        p_idx_tensor = torch.zeros(p.size(0), dtype=torch.long)
+        h_idx_tensor = torch.zeros(h.size(0), dtype=torch.long)
+        for q_idx, q_token in enumerate([self.some, self.every, self.no, self.notevery]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 4 + h_idx_tensor
+        return quantifier_signatures.index_select(0, idx_tensor)
+
+    def _merge_negation(self, p: torch.Tensor, h: torch.Tensor) \
+            -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4, 7)
+        p_idx_tensor = torch.zeros(p.size(0), dtype=torch.long)
+        h_idx_tensor = torch.zeros(h.size(0), dtype=torch.long)
+        for q_idx, q_token in enumerate([self.emptystring, self.doesnot]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 2 + h_idx_tensor
+        return negation_signatures.index_select(0, idx_tensor)
+
 
     # MQNLI functions
     def get_p(self, input: torch.Tensor) -> torch.Tensor:
@@ -262,49 +284,53 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
 
     def vp_q(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        # (9, batch_size), (9, batch_size) -> (batch_size, 4, 4)
-        return None
+        # (9, batch_size), (9, batch_size) -> (batch_size, 4*7)
+        return self._merge_quantifiers(p[IDX_Q_O], h[IDX_Q_O])
 
-    def v_verb(self, p, h):
+    def v_verb(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size,)
         return (p[IDX_V] == h[IDX_V]).type(torch.long)
 
-    def v_adv(self, p, h):
+    def v_adv(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size, 2)
         return self._intersective_projection(p[IDX_ADV], h[IDX_ADV])
 
-    def v_bar(self, a, v):
+    def v_bar(self, a: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         # (batch_size, 2), (batch_size,) -> (batch_size,)
         return torch.gather(a, 1, v.unsqueeze(1)).squeeze()
 
-    def vp(self, v, q, o):
-        # print(f"vp({v}, {q}, {o})")
-        return f"vp({v}, {q}, {o})"
+    def vp(self, v: torch.Tensor, q: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
+        # (batch_size,), (batch_size, 4*7), (batch_size,) -> (batch_size,)
+        idxs = (v * 7 + o).unsqueeze(1)
+        return torch.gather(q, 1, idxs).squeeze()
 
-    def neg(self, p, h):
-        # print(f"neg({p}, {h})")
-        return f"neg({p}, {h})"
+    def neg(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (9, batch_size), (9, batch_size) -> (batch_size, 7)
+        return self._merge_negation(p[IDX_NEG], h[IDX_NEG])
 
-    def negp(self, n, v):
-        # print(f"negp({n}, {v})")
-        return f"negp({n}, {v})"
+    def negp(self, n: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+        # (batch_size, 7), (batch_size,) -> (batch_size,)
+        return torch.gather(n, 1, v.unsqueeze(1)).squeeze()
 
-    def subj_noun(self, p, h):
+    def subj_noun(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size,)
         return (p[IDX_N_S] == h[IDX_N_S]).type(torch.long)
 
-    def subj_adj(self, p, h):
+    def subj_adj(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (2, batch_size)
         return self._intersective_projection(p[IDX_A_S], h[IDX_A_S])
 
-    def subj(self, a, n):
+    def subj(self, a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
         # (batch_size, 2), (batch_size,) -> (batch_size,)
         return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
 
-    def sentence_q(self, p, h):
+    def sentence_q(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # print(f"sentence_q({p}, {h})")
-        return f"sentence_q({p}, {h})"
+        return self._merge_quantifiers(p[IDX_Q_S], h[IDX_Q_S])
 
-    def sentence(self, q, s, n):
-        # print(f"sentence({q}, {s}, {n})")
-        return f"sentence({q}, {s}, {n})"
+    def sentence(self, q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
+        # (batch_size, 4*7), (batch_size,), (batch_size,) -> (batch_size,)
+        idxs = (s * 7 + n).unsqueeze(1)
+        res = torch.gather(q, 1, idxs).squeeze()
+        res = output_remapping[res]
+        return res
