@@ -235,13 +235,14 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
 
 def find_abstractions(low_model, high_model, high_inputs, total_high_interventions, fixed_assignments, input_mapping):
     """
-    :param low_model: ComputationGraph
-    :param high_model: ComputationGraph (same names for leaves)
-    :param high_inputs:
-    :param total_high_interventions:
-    :param fixed_assignments:
 
-    :param input_mapping:
+    :param low_model: CompGraph
+    :param high_model: CompGraph
+    :param high_inputs: A list of Intervention objects that only have a base, but no intervention. These are the inputs you want to cover.
+    :param total_high_interventions: A list of Intervention objects that only have a base and an intervention. Th
+    :param fixed_assignments:This is a dictionary mappping from high level nodes to a dictionary mapping from low level nodes to Location objects.
+        Typically, this will look something like: {x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
+    :param input_mapping: A function that maps low level leaf inputs to high level leaf inputs
     :return:
         list(
             tuple(
