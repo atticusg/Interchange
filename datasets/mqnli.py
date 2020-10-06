@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 
 
 class MQNLIData:
-    def __init__(self, train_file, dev_file, test_file, for_transformer=False):
+    def __init__(self, train_file, dev_file, test_file, for_transformer=False, store_text=False):
         self.output_classes = 3
         self.word_to_id = {}
         self.id_to_word = {}
@@ -24,20 +24,18 @@ class MQNLIData:
             max_info['id'] = 3
 
         print("--- Loading Dataset ---")
-        self.train = MQNLIDataset(train_file, self.word_to_id,
-                                      self.id_to_word,
-                                      max_info, for_transformer)
+        self.train = MQNLIDataset(train_file, self.word_to_id, self.id_to_word,
+                                  max_info, for_transformer, store_text)
         train_ids = max_info["id"]
         print("--- finished loading train set, saw %d unique tokens up to now" % train_ids)
 
         self.dev = MQNLIDataset(dev_file, self.word_to_id, self.id_to_word,
-                                    max_info, for_transformer)
+                                max_info, for_transformer, store_text)
         dev_ids = max_info["id"]
         print("--- finished loading dev set, saw %d unique tokens up to now" % dev_ids)
 
-        self.test = MQNLIDataset(test_file, self.word_to_id,
-                                     self.id_to_word,
-                                     max_info, for_transformer)
+        self.test = MQNLIDataset(test_file, self.word_to_id, self.id_to_word,
+                                 max_info, for_transformer, store_text)
         test_ids = max_info["id"]
         print("--- finished loading test set, saw %d unique tokens up to now" % test_ids)
 
@@ -69,14 +67,19 @@ class MQNLIData:
 
 
 class MQNLIDataset(Dataset):
-    def __init__(self, file_name, word_to_id, id_to_word, max_info, for_transformer=False):
+    def __init__(self, file_name, word_to_id, id_to_word, max_info,
+                 for_transformer=False, store_text=False):
         print("--- Loading sentences from " + file_name)
         label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
         raw_x = []
         raw_y = []
+        if store_text:
+            self.example_text = []
         curr_id, max_sentence_len = max_info['id'], max_info['sentence_len']
         with open(file_name, 'r') as f:
             for line in f:
+                if store_text:
+                    self.example_text.append(line.strip())
                 example = json.loads(line.strip())
                 sentence1 = example["sentence1"].split()
                 sentence2 = example["sentence2"].split()

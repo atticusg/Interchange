@@ -94,32 +94,32 @@ negation_signatures = get_negation_signatures()
 
 
 def get_quantifier_signatures():
-    # first implement dict using exact same logic as
+    # first construct sigs_dict dict using exact same logic as
     # MultiplyQuantifiedData/natural_logic_model.py
 
-    det_sigs = dict()
+    sigs_dict = dict()
     symmetric_relation = {EQUIV: EQUIV, ENTAIL: REV_ENTAIL, REV_ENTAIL: ENTAIL,
                           CONTRADICT: CONTRADICT, COVER: COVER, ALTER: ALTER,
                           INDEP: INDEP}
 
-    det_sigs[(SOME, SOME)] = (
+    sigs_dict[(SOME, SOME)] = (
         {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL, INDEP: INDEP},
         {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL,
          CONTRADICT: COVER, COVER: COVER, ALTER: INDEP, INDEP: INDEP}
     )
-    det_sigs[(EVERY, EVERY)] = (
+    sigs_dict[(EVERY, EVERY)] = (
         {EQUIV: EQUIV, ENTAIL: REV_ENTAIL, REV_ENTAIL: ENTAIL, INDEP: INDEP},
         {EQUIV: EQUIV, ENTAIL: ENTAIL, REV_ENTAIL: REV_ENTAIL,
          CONTRADICT: ALTER, COVER: INDEP, ALTER: ALTER, INDEP: INDEP}
     )
-    for key in det_sigs:
-        signature1, signature2 = det_sigs[key]
+    for key in sigs_dict:
+        signature1, signature2 = sigs_dict[key]
         new_signature = dict()
         for key1 in signature1:
             for key2 in signature2:
                 new_signature[(key1, key2)] = strong_composition(
                     signature1, signature2, key1, key2)
-        det_sigs[key] = new_signature
+        sigs_dict[key] = new_signature
 
     new_signature = dict()
     relations = [EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT,
@@ -132,27 +132,27 @@ def get_quantifier_signatures():
                 new_signature[(relation1, relation2)] = REV_ENTAIL
             else:
                 new_signature[(relation1, relation2)] = INDEP
-    det_sigs[(SOME, EVERY)] = new_signature
-    det_sigs[(SOME, EVERY)][(ENTAIL, CONTRADICT)] = ALTER
-    det_sigs[(SOME, EVERY)][(ENTAIL, ALTER)] = ALTER
-    det_sigs[(SOME, EVERY)][(EQUIV, ALTER)] = ALTER
-    det_sigs[(SOME, EVERY)][(EQUIV, CONTRADICT)] = CONTRADICT
-    det_sigs[(SOME, EVERY)][(EQUIV, COVER)] = COVER
-    det_sigs[(SOME, EVERY)][(REV_ENTAIL, COVER)] = COVER
-    det_sigs[(SOME, EVERY)][(REV_ENTAIL, CONTRADICT)] = COVER
+    sigs_dict[(SOME, EVERY)] = new_signature
+    sigs_dict[(SOME, EVERY)][(ENTAIL, CONTRADICT)] = ALTER
+    sigs_dict[(SOME, EVERY)][(ENTAIL, ALTER)] = ALTER
+    sigs_dict[(SOME, EVERY)][(EQUIV, ALTER)] = ALTER
+    sigs_dict[(SOME, EVERY)][(EQUIV, CONTRADICT)] = CONTRADICT
+    sigs_dict[(SOME, EVERY)][(EQUIV, COVER)] = COVER
+    sigs_dict[(SOME, EVERY)][(REV_ENTAIL, COVER)] = COVER
+    sigs_dict[(SOME, EVERY)][(REV_ENTAIL, CONTRADICT)] = COVER
 
     new_signature = dict()
-    for key in det_sigs[(SOME, EVERY)]:
+    for key in sigs_dict[(SOME, EVERY)]:
         new_signature[(symmetric_relation[key[0]], symmetric_relation[key[1]])] \
-            = symmetric_relation[det_sigs[SOME, EVERY][key]]
-    det_sigs[(EVERY, SOME)] = new_signature
+            = symmetric_relation[sigs_dict[SOME, EVERY][key]]
+    sigs_dict[(EVERY, SOME)] = new_signature
 
     # then construct tensor given the above
     res = torch.zeros(4*4, 4*7, dtype=torch.long)
 
     for neg_1 in [0, 1]:
         for neg_2 in [0, 1]:
-            for (q1, q2), d in det_sigs.items():
+            for (q1, q2), d in sigs_dict.items():
                 for (r1, r2), v in d.items():
                     neg_sig = negation_signatures[neg_1*2 + neg_2]
                     res[4*(neg_1*2+q1) + (neg_2*2+q2), 7*r1 + r2] = neg_sig[v]
@@ -162,7 +162,7 @@ quantifier_signatures = get_quantifier_signatures()
 
 output_remapping = torch.tensor([0, 1, 1, 0, 2, 2, 0], dtype=torch.long)
 
-mqnli_logic_compgraph = {
+compgraph_structure = {
     "input": [],
     "get_p": ["input"],
     "get_h": ["input"],
@@ -183,7 +183,6 @@ mqnli_logic_compgraph = {
     "sentence": ["sentence_q", "subj", "negp"]
 }
 
-
 class MQNLI_Logic_CompGraph(AbstractableCompGraph):
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
         self.word_to_id = data.word_to_id
@@ -203,7 +202,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         ]}
 
         super(MQNLI_Logic_CompGraph, self).__init__(
-            full_graph=mqnli_logic_compgraph,
+            full_graph=compgraph_structure,
             root_node_name="sentence",
             abstract_nodes=intermediate_nodes,
             forward_functions=node_functions
@@ -301,7 +300,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def vp(self, v: torch.Tensor, q: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
         # (batch_size,), (batch_size, 4*7), (batch_size,) -> (batch_size,)
-        idxs = (v * 7 + o).unsqueeze(1)
+        idxs = (o * 7 + v).unsqueeze(1) # note that o is the first argument
         return torch.gather(q, 1, idxs).squeeze()
 
     def neg(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
@@ -325,7 +324,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
 
     def sentence_q(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        # print(f"sentence_q({p}, {h})")
+        # (9, batch_size), (9, batch_size) -> (batch_size, 4*7)
         return self._merge_quantifiers(p[IDX_Q_S], h[IDX_Q_S])
 
     def sentence(self, q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:

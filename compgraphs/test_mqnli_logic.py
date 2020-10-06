@@ -1,9 +1,11 @@
 import pytest
 import torch
-from compgraphs.abstractable import AbstractableCompGraph
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph, quantifier_signatures, negation_signatures
+import time
+from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+
+from mqnli.make_subphrase_labels import get_intermediate_labels
+
 from intervention import GraphInput
-from train import load_model
 from datasets.utils import my_collate
 from datasets.mqnli import MQNLIData
 from torch.utils.data import DataLoader
@@ -11,7 +13,9 @@ from torch.utils.data import DataLoader
 
 mqnli_mini_data = MQNLIData("../mqnli_data/mini.train.txt",
                      "../mqnli_data/mini.dev.txt",
-                     "../mqnli_data/mini.test.txt")
+                     "../mqnli_data/mini.test.txt", store_text=True)
+
+
 
 # dummy_compgraph = MQNLI_Logic_CompGraph(mqnli_mini_data)
 
@@ -109,7 +113,64 @@ def test_graph_run_without_errors():
             )
         )
     )
-    """
+"""
+
+def get_example_data(data, batch_size):
+    example_strs = data.dev.example_text[:batch_size]
+    return [get_intermediate_labels(s) for s in example_strs]
+
+
+batch_size = 20
+examples = mqnli_mini_data.dev[:batch_size][0]
+labels = mqnli_mini_data.dev[:batch_size][1]
+example_batch = examples.transpose(0, 1)
+example_data = get_example_data(mqnli_mini_data, batch_size)
+
+INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER = range(7)
+
+SOME, EVERY, NO, NOTEVERY = range(4)
+
+dataidx2node = ["subj_adj", "subj_noun", "v_adv", "v_verb", "obj_adj", "obj_noun",
+                "subj", "v_bar", "obj", "vp", "negp", "sentence"]
+node2dataidx = {k: i for i, k in enumerate(dataidx2node)}
+idx2rln = ["independence", "equivalence", "entails", "reverse entails", "contradiction", "alternation", "cover"]
+rln2idx = {r: i for i, r in enumerate(idx2rln)}
+
+DATA_A_S, DATA_N_S, DATA_ADV, DATA_V, DATA_A_O, DATA_N_O, \
+    DATA_SUBJ, DATA_VBAR, DATA_OBJ, DATA_VP, DATA_NEGP, DATA_SENT = range(12)
+
+@pytest.mark.parametrize("node", ["vp", "negp"])
+def test_intermediate_values(node):
+    for i, ex in enumerate(examples):
+        words = mqnli_mini_data.decode(ex)
+        print(f"\n{i} p: {words[:9]}")
+        print(f"{i} h: {words[9:]}")
+        print(f"{i} data: {example_data[i]}")
+        print(f"{i} label: {labels[i]}")
+
+    i = GraphInput({"input": example_batch})
+
+    intermediate_nodes = [node]
+    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g.compute(i)
+    got = g.get_result(node, i)
+
+    idx_in_data = node2dataidx[node]
+
+    expected = [rln2idx[example_data[i]['gold_label'][idx_in_data]] for i in range(batch_size)]
+    expected = torch.tensor(expected, dtype=torch.long)
+    assert torch.all(expected == got)
+
+def test_final_value():
+    intermediate_nodes = ["vp"]
+    i = GraphInput({"input": example_batch})
+    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    res = g.compute(i)
+    print("res", res)
+    print("labels", labels)
+    assert all(r == l for r, l in zip(res.tolist(), labels))
+
+######### old tests ##########
 
 example_0 = mqnli_mini_data.dev[0]
 example_1 = mqnli_mini_data.dev[1]
@@ -120,29 +181,8 @@ example_2_str = mqnli_mini_data.decode(example_2[0])
 
 example_3batch = torch.stack((example_0[0], example_1[0], example_2[0]), dim=1)
 
-examples = mqnli_mini_data.dev[:5][0]
-labels = mqnli_mini_data.dev[:5][1]
-example_5batch = examples.transpose(0,1)
-
-INDEP = 0
-EQUIV = 1
-ENTAIL = 2
-REV_ENTAIL = 3
-NEGATION = 4
-ALTER = 5
-COVER = 6
-
-SOME = 0
-EVERY = 1
-NO = 2
-NOTEVERY = 3
-
+"""
 def test_get_p_h():
-    for i, ex in enumerate(examples):
-        words = mqnli_mini_data.decode(ex)
-        print(f"\n{i}p: {words[:9]}")
-        print(f"{i}h: {words[9:]}")
-
     intermediate_nodes = ["get_p", "get_h"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
 
@@ -155,8 +195,6 @@ def test_get_p_h():
     assert torch.all(p == example_3batch[:9, :])
     assert torch.all(h == example_3batch[9:, :])
     # i = GraphInput({})
-
-
 
 test_set = [("obj_noun", torch.tensor([1,1,0,1,1])),
             ("obj_adj", torch.tensor([[INDEP, ENTAIL],
@@ -172,7 +210,7 @@ test_set = [("obj_noun", torch.tensor([1,1,0,1,1])),
 def test_nodes(node, expected):
     intermediate_nodes = [node]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result(node, i)
     assert torch.all(res == expected)
@@ -181,24 +219,24 @@ def test_nodes(node, expected):
 def test_object_quantifier_signatures():
     intermediate_nodes = ["vp_q"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("vp_q", i)
-    assert res.shape == (5, 4*7)
+    assert res.shape == (batch_size, 4*7)
     exp_idx = torch.tensor([NO*4 + NOTEVERY,
                             NOTEVERY*4 + NO,
                             NOTEVERY*4 + SOME,
                             EVERY*4 + NOTEVERY,
                             NOTEVERY*4 + EVERY], dtype=torch.long)
-    assert exp_idx.shape == (5,)
+    assert exp_idx.shape == (batch_size,)
     exp = quantifier_signatures.index_select(0, exp_idx)
-    assert exp.shape == (5, 4*7)
+    assert exp.shape == (batch_size, 4*7)
     assert torch.all(res == exp)
 
 def test_vp_shape():
     intermediate_nodes = ["vp"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     got = g.get_result("vp", i)
 
@@ -208,20 +246,21 @@ def test_vp_shape():
 def test_negp_shape():
     intermediate_nodes = ["negp"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     got = g.get_result("negp", i)
 
-    assert got.shape == (5,)
+    assert got.shape == (batch_size,)
     print(got)
+
 
 def test_neg_signatures():
     intermediate_nodes = ["neg"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("neg", i)
-    assert res.shape == (5, 7)
+    assert res.shape == (batch_size, 7)
     DOESNOT = 1
     E = 0
     exp_idx = torch.tensor([DOESNOT*2 + E,
@@ -229,36 +268,29 @@ def test_neg_signatures():
                             E*2 + DOESNOT,
                             E*2 + E,
                             DOESNOT*2 + DOESNOT], dtype=torch.long)
-    assert exp_idx.shape == (5,)
+    assert exp_idx.shape == (batch_size,)
     exp = negation_signatures.index_select(0, exp_idx)
-    assert exp.shape == (5, 7)
+    assert exp.shape == (batch_size, 7)
     assert torch.all(res == exp)
 
 def test_subject_quantifier_signatures():
     intermediate_nodes = ["sentence_q"]
     g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
+    i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("sentence_q", i)
-    assert res.shape == (5, 4*7)
+    assert res.shape == (batch_size, 4*7)
     exp_idx = torch.tensor([NO*4 + NO,
                             NO*4 + NOTEVERY,
                             NO*4 + EVERY,
                             NOTEVERY*4 + NO,
                             SOME*4 + NOTEVERY], dtype=torch.long)
-    assert exp_idx.shape == (5,)
+    assert exp_idx.shape == (batch_size,)
     exp = quantifier_signatures.index_select(0, exp_idx)
-    assert exp.shape == (5, 4*7)
+    assert exp.shape == (batch_size, 4*7)
     assert torch.all(res == exp)
 
-def test_final_result():
-    intermediate_nodes = []
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
-    i = GraphInput({"input": example_5batch})
-    res = g.compute(i)
-    assert res.shape == (5,)
-    print(res)
-    print(labels)
+"""
 
 @pytest.fixture
 def mqnli_data():
@@ -266,19 +298,20 @@ def mqnli_data():
                      "../mqnli_data/mqnli.dev.txt",
                      "../mqnli_data/mqnli.test.txt")
 
-"""
+
 def test_whole_graph(mqnli_data):
     intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
-    graph = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    graph = MQNLI_Logic_CompGraph(mqnli_data, intermediate_nodes)
     with torch.no_grad():
         collate_fn = lambda batch: my_collate(batch, batch_first=False)
-        dataloader = DataLoader(mqnli_data.dev, batch_size=1024, shuffle=False,
+        dataloader = DataLoader(mqnli_data.train, batch_size=2048, shuffle=False,
                                 collate_fn=collate_fn)
+        start_time = time.time()
         for i, input_tuple in enumerate(dataloader):
             graph_input = GraphInput({"input": input_tuple[0]})
             graph_pred = graph.compute(graph_input, store_cache=True)
-            print(graph_pred)
             labels = input_tuple[1]
 
             assert torch.all(labels == graph_pred), f"on batch {i}"
-"""
+        duration = time.time() - start_time
+        print(f"---- Ran {len(mqnli_data.train)} examples in {duration:.2f} s ----")
