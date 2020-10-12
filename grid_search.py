@@ -3,6 +3,7 @@ from train import Trainer
 
 from itertools import product
 from datetime import datetime
+import json
 
 SAMPLE_RES_DICT = {
     'dev_acc': 0.,
@@ -27,7 +28,7 @@ def db_connect(db_file):
 
 
 class GridSearch:
-    def __init__(self, model_class, data, base_model_opts, base_train_opts, db_path):
+    def __init__(self, model_class, data, base_model_opts, base_train_opts, db_path, base_res_dict=None):
         """Initializes the GridSearch class.
         Assumes that parameters of the s0 models are not changed
         """
@@ -35,6 +36,8 @@ class GridSearch:
         self.data = data
         self.base_model_opts = base_model_opts.copy()
         self.base_train_opts = base_train_opts.copy()
+        if base_res_dict is None:
+            base_res_dict = SAMPLE_RES_DICT
 
         all_opts = {}
         all_opts.update(self.base_model_opts)
@@ -42,13 +45,13 @@ class GridSearch:
 
         if "device" in all_opts:
             del all_opts["device"]
-        all_opts["model_name"]: type(model_class)
         self.db_path = db_path
         if self.db_path:
             conn = db_connect(self.db_path)
-            cmd, opts_cols, res_cols = create_cmd(all_opts)
+            cmd, opts_cols, res_cols = create_cmd(all_opts, base_res_dict)
             with conn:
                 cur = conn.cursor()
+                print(cmd)
                 cur.execute(cmd)
             self.db_opts_cols = opts_cols
             self.db_res_cols = res_cols
@@ -91,9 +94,9 @@ class GridSearch:
         res_dict = {"dev_acc": best_model_ckpt["best_dev_acc"], "loss": best_model_ckpt["loss"],
                     "epoch": best_model_ckpt["epoch"], "step": best_model_ckpt["step"]}
 
-        self._record_results(model_config, train_config, res_dict)
+        self.record_results(model_config, train_config, res_dict)
 
-    def _record_results(self, model_config, train_config, res_dict):
+    def record_results(self, model_config, train_config, res_dict):
         if self.db_path:
             opts = {}
             opts.update(model_config)
@@ -109,9 +112,15 @@ class GridSearch:
         cmd = insert_cmd(all_cols)
         l = []
         for item in self.db_opts_cols:
-            l.append(opts[item])
+            value = opts[item]
+            if isinstance(value, list) or isinstance(value, tuple) or isinstance(value, dict):
+                value = json.dumps(value)
+            l.append(value)
         for item in self.db_res_cols:
-            l.append(res_dict[item])
+            value = res_dict[item]
+            if isinstance(value, list) or isinstance(value,tuple) or isinstance(value, dict):
+                value = json.dumps(value)
+            l.append(value)
 
         cmd_tuple = tuple(l)
 
@@ -126,44 +135,41 @@ class GridSearch:
 def insert_cmd(cols):
     cols_string = '(' + ','.join(cols) + ')'
     vals_string = '(' + ','.join(['?' for x in cols]) + ')'
-    cmd = 'INSERT INTO results {} VALUES {}'.format(cols_string, vals_string)
+    cmd = f'INSERT INTO results {cols_string} VALUES {vals_string}'
 
     return cmd
 
 
-def create_cmd(opts):
+def create_cmd(opts, base_res_dict):
     cmd = "CREATE TABLE IF NOT EXISTS results(\nid integer PRIMARY KEY,\n"
 
     type2str = {float: 'real', int: 'integer', list: 'text', str: 'text',
-                bool: 'bool'}
+                bool: 'bool', tuple: 'text', dict: 'text'}
 
     opts_cols = []
 
-    for k, v in opts.items():
-        col = k
+    for col, value in opts.items():
         opts_cols.append(col)
-        type_is_list = isinstance(v, list)
-        data_type = type(v)
-        type_str = type2str[data_type]
-        default = str(v)
+        type_str = type2str[type(value)]
+        default = str(value)
         if type_str == 'text':
-            default = '\'' + default + '\''
-        if default == '\'None\'':
+            default = '\"' + default + '\"'
+        if default == '\"None\"':
             default = 'NULL'
 
-        s = '{} {} DEFAULT {}'.format(col, type_str, default)
+        s = f'{col} {type_str} DEFAULT {default}'
 
-        if not type_is_list:
+        if not isinstance(value, list):
             s += ' NOT NULL'
         s += ',\n'
         cmd += s
 
     res_cols = []
-    for k, v in SAMPLE_RES_DICT.items():
+    for k, value in base_res_dict.items():
         col = k
         res_cols.append(col)
-        type_str = type2str[type(v)]
-        s = '{} {} NOT NULL'.format(col, type_str)
+        type_str = type2str[type(value)]
+        s = f'{col} {type_str} NOT NULL'
         s += ',\n'
         cmd += s
 

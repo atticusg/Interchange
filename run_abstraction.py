@@ -12,12 +12,97 @@ from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGra
 
 import time
 import torch
+import pickle
+import os
+from datetime import datetime
 from torch.utils.data import DataLoader
+from grid_search import GridSearch
+
+SAMPLE_RES_DICT = {
+    'runtime': 0.,
+    'save_path': "",
+}
+
+
+class AbstractionGridSearch(GridSearch):
+    def __init__(self, model_path, data_path, base_opts, db_path):
+        self.module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
+        self.module.eval()
+        data = torch.load(data_path)
+        super(AbstractionGridSearch, self).__init__(None, data,
+                base_opts, {}, db_path, base_res_dict=SAMPLE_RES_DICT)
+
+    def run_once(self, opts, _):
+        abstraction = opts["abstraction"]
+        high_intermediate_node = abstraction[0]
+        low_intermediate_nodes = abstraction[1]
+        num_inputs = opts["num_inputs"]
+        save_dir = opts["res_save_dir"]
+
+        high_intermediate_nodes = [high_intermediate_node]
+
+        interv_info = {
+            "target_loc": loc_mapping[high_intermediate_node]
+        }
+
+        base_compgraph = MQNLI_LSTM_CompGraph(self.module)
+        low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
+                                               low_intermediate_nodes,
+                                               interv_info=interv_info)
+        high_model = MQNLI_Logic_CompGraph(self.data, high_intermediate_nodes)
+
+        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        dataloader = DataLoader(self.data.dev, batch_size=1, shuffle=False,
+                                collate_fn=collate_fn)
+
+        inputs = []
+        high_interventions = []
+        for i, input_tuple in enumerate(dataloader):
+            if i == num_inputs: break
+
+            input_value = input_tuple[0].to(self.module.device)
+            base_input = Intervention({"input": input_value}, {})
+            inputs.append(base_input)
+            for proj in mqnli_logic.intersective_projections:
+                intervention = Intervention({"input": input_value},
+                                            {high_intermediate_node: proj})
+                high_interventions.append(intervention)
+        fixed_assignments = {x: {x: LOC[:]} for x in ["root", "input"]}
+        input_mapping = lambda x: x  # identity function
+
+        unwanted_nodes = {"root", "input"}
+
+        start_time = time.time()
+        with torch.no_grad():
+            res = find_abstractions(
+                low_model=low_model,
+                high_model=high_model,
+                high_inputs=inputs,
+                total_high_interventions=high_interventions,
+                fixed_assignments=fixed_assignments,
+                input_mapping=input_mapping,
+                unwanted_low_nodes=unwanted_nodes
+            )
+        duration = time.time() - start_time
+        print(f"Finished finding abstractions, took {duration:.2f} s")
+
+        # pickle file
+        time_str = datetime.now().strftime("%b%d-%H%M%S")
+        res_file_name = f"res-{num_inputs}-{time_str}-{high_intermediate_node}.pkl"
+        save_path = os.path.join(save_dir, res_file_name)
+
+        res_dict = {"runtime": duration, "save_path": save_path}
+
+        with open(save_path, "wb") as f:
+            pickle.dump(res, f)
+
+        self.record_results(opts, {}, res_dict)
 
 
 loc_mapping = {
     "obj_adj": LOC[mqnli_logic.IDX_A_O],
 }
+
 
 def main():
     data_path = "mqnli_data/mqnli.pt"
@@ -26,61 +111,18 @@ def main():
     #                  "mqnli_data/mqnli.test.txt")
     # torch.save(data, data_path)
 
-    high_intermediate_node = "obj_adj"
-
     model_path = "mqnli_models/lstm_best.pt"
-    high_intermediate_nodes = [high_intermediate_node]
-    low_intermediate_nodes = ["premise_lstm_0"]
-    num_inputs = 100
 
-    data = torch.load(data_path)
+    base_opts = {"abstraction": ["obj_adj", ["premise_lstm_0"]],
+                 "num_inputs": 100,
+                 "res_save_dir": "experiment_data/"}
 
-    module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
-    module.eval()
+    db_path = "experiment_data/runtime.db"
 
-    interv_info = {
-        "target_loc": loc_mapping[high_intermediate_node]
-    }
+    gs = AbstractionGridSearch(model_path, data_path, base_opts, db_path)
+    grid_dict = {"num_inputs": [50, 100, 200]}
+    gs.execute(grid_dict)
 
-    base_compgraph = MQNLI_LSTM_CompGraph(module)
-    low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
-                                           low_intermediate_nodes,
-                                           interv_info=interv_info)
-    high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
-
-    collate_fn = lambda batch: my_collate(batch, batch_first=False)
-    dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
-                            collate_fn=collate_fn)
-
-    inputs = []
-    high_interventions = []
-    for i, input_tuple in enumerate(dataloader):
-        if i == num_inputs: break
-
-        input_value = input_tuple[0].to(module.device)
-        base_input = Intervention({"input": input_value}, {})
-        inputs.append(base_input)
-        for proj in mqnli_logic.intersective_projections:
-            intervention = Intervention({"input": input_value}, {high_intermediate_node: proj})
-            high_interventions.append(intervention)
-    fixed_assignments = {x: {x: LOC[:]} for x in ["root", "input"]}
-    input_mapping = lambda x : x #identity function
-
-    unwanted_nodes = {"root", "input"}
-
-    start_time = time.time()
-    with torch.no_grad():
-        res = find_abstractions(
-            low_model=low_model,
-            high_model=high_model,
-            high_inputs=inputs,
-            total_high_interventions=high_interventions,
-            fixed_assignments=fixed_assignments,
-            input_mapping=input_mapping,
-            unwanted_low_nodes=unwanted_nodes
-        )
-        duration = time.time() - start_time
-        print(f"Finished finding abstractions, took {duration:.2f} s")
     
 
 if __name__ == "__main__":
