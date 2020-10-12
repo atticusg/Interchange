@@ -180,8 +180,15 @@ compgraph_structure = {
     "subj_adj": ["get_p", "get_h"],
     "subj": ["subj_adj", "subj_noun"],
     "sentence_q": ["get_p", "get_h"],
-    "sentence": ["sentence_q", "subj", "negp"]
+    "root": ["sentence_q", "subj", "negp"]
 }
+
+def get_intersective_projections():
+    ps = [[INDEP, INDEP], [INDEP, EQUIV], [INDEP, ENTAIL], [INDEP, REV_ENTAIL]]
+    return [torch.tensor(p, dtype=torch.long).unsqueeze(0) for p in ps]
+
+intersective_projections = get_intersective_projections()
+
 
 class MQNLI_Logic_CompGraph(AbstractableCompGraph):
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
@@ -198,12 +205,12 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
             self.vp_q, self.v_verb, self.v_adv, self.v_bar, self.vp,
             self.neg, self.negp,
             self.subj_noun, self.subj_adj, self.subj,
-            self.sentence_q, self.sentence
+            self.sentence_q, self.root
         ]}
 
         super(MQNLI_Logic_CompGraph, self).__init__(
             full_graph=compgraph_structure,
-            root_node_name="sentence",
+            root_node_name="root",
             abstract_nodes=intermediate_nodes,
             forward_functions=node_functions
         )
@@ -280,7 +287,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def obj(self, a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
         # (batch_size, 2), (batch_size,) -> (batch_size,)
-        return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
+        return torch.gather(a, 1, n.unsqueeze(1)).view(n.shape[0])
 
     def vp_q(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size, 4*7)
@@ -296,12 +303,12 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def v_bar(self, a: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         # (batch_size, 2), (batch_size,) -> (batch_size,)
-        return torch.gather(a, 1, v.unsqueeze(1)).squeeze()
+        return torch.gather(a, 1, v.unsqueeze(1)).view(v.shape[0])
 
     def vp(self, v: torch.Tensor, q: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
         # (batch_size,), (batch_size, 4*7), (batch_size,) -> (batch_size,)
         idxs = (o * 7 + v).unsqueeze(1) # note that o is the first argument
-        return torch.gather(q, 1, idxs).squeeze()
+        return torch.gather(q, 1, idxs).view(v.shape[0])
 
     def neg(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size, 7)
@@ -309,7 +316,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def negp(self, n: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         # (batch_size, 7), (batch_size,) -> (batch_size,)
-        return torch.gather(n, 1, v.unsqueeze(1)).squeeze()
+        return torch.gather(n, 1, v.unsqueeze(1)).view(v.shape[0])
 
     def subj_noun(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size,)
@@ -321,15 +328,15 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def subj(self, a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
         # (batch_size, 2), (batch_size,) -> (batch_size,)
-        return torch.gather(a, 1, n.unsqueeze(1)).squeeze()
+        return torch.gather(a, 1, n.unsqueeze(1)).view(n.shape[0])
 
     def sentence_q(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         # (9, batch_size), (9, batch_size) -> (batch_size, 4*7)
         return self._merge_quantifiers(p[IDX_Q_S], h[IDX_Q_S])
 
-    def sentence(self, q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
+    def root(self, q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
         # (batch_size, 4*7), (batch_size,), (batch_size,) -> (batch_size,)
         idxs = (s * 7 + n).unsqueeze(1)
-        res = torch.gather(q, 1, idxs).squeeze()
+        res = torch.gather(q, 1, idxs).view(n.shape[0])
         res = output_remapping[res]
         return res

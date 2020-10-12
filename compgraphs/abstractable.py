@@ -10,13 +10,20 @@ class AbstractableCompGraph(ComputationGraph):
                  abstract_nodes: List[str],
                  forward_functions: Dict[str, Callable],
                  topological_order: List[str]=None):
-        """ An abstractable compgraph structure
+        """ An abstractable compgraph structure.
 
-        :param full_graph:
-        :param root_node_name:
-        :param abstract_nodes:
-        :param forward_functions:
-        :param topological_order:
+        :param full_graph: A dict describing the structure of a computation
+            graph, mapping name of each parent node to list of names of children
+        :param root_node_name: The name of the root node
+        :param abstract_nodes: Names of intermediate nodes that we would like
+            to keep, while abstracting away all other nodes
+        :param forward_functions: Forward function for each node in full_graph
+        :param topological_order: Topological ordering of nodes
+
+        Usage notes: Currently, all leaf nodes in the full graph are treated as
+            having the identity function as their forward function. Any
+            forward functions specified for leaf nodes in the `forward_functions`
+            argument will be ignored.
         """
         self.full_graph = full_graph
         self.input_node_names = {k for k, v in full_graph.items() if len(v) == 0}
@@ -25,12 +32,11 @@ class AbstractableCompGraph(ComputationGraph):
         self.topological_order = AbstractableCompGraph.find_topological_order(
             full_graph, root_node_name) if not topological_order else topological_order
 
-        # TODO: extract topological order automatically
-
         self.validate_full_graph()
 
         root = self.generate_abstract_graph(abstract_nodes)
         super(AbstractableCompGraph, self).__init__(root)
+
 
     def validate_full_graph(self):
         # all nodes must be present in keys of full_graph dict
@@ -129,7 +135,7 @@ class AbstractableCompGraph(ComputationGraph):
     def generate_forward_function(self, abstracted_node: str,
                                   children: List[str]) -> Callable:
         """ Generate forward function to construct an abstract node """
-        children_dict = {name: i for i, name in enumerate(children)}
+        child_name_to_idx = {name: i for i, name in enumerate(children)}
 
         def _forward(*args):
             if len(args) != len(children):
@@ -137,8 +143,8 @@ class AbstractableCompGraph(ComputationGraph):
                                  f"{abstracted_node}, expected {len(children)}")
 
             def _implicit_call(node_name: str) -> Any:
-                if node_name in children_dict:
-                    child_idx_in_args = children_dict[node_name]
+                if node_name in child_name_to_idx:
+                    child_idx_in_args = child_name_to_idx[node_name]
                     return args[child_idx_in_args]
                 else:
                     res = [_implicit_call(child) for child in self.full_graph[node_name]]

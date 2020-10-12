@@ -27,3 +27,5 @@ test_set = [(graph_1, "A", expected_1),
 def test_find_topological_order(full_graph, root, expected):
     order = AbstractableCompGraph.find_topological_order(full_graph, root)
     assert all(n1 == n2 for n1, n2 in zip(order, expected)), f"expected f{expected}, got f{order}"
+
+

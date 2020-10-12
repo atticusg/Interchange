@@ -64,6 +64,12 @@ class MQNLIData:
             else:
                 raise ValueError("incorrect input type")
 
+    def save(self, f):
+        torch.save(self, f)
+
+    @staticmethod
+    def load(f):
+        return torch.load(f)
 
 
 class MQNLIDataset(Dataset):
@@ -127,3 +133,12 @@ class MQNLIDataset(Dataset):
     def __getitem__(self, i):
         sample = (torch.tensor(self.raw_x[i], dtype=torch.long), self.raw_y[i])
         return sample
+
+
+if __name__ == "__main__":
+    train_file = "../mqnli_data/mqnli.train.txt"
+    dev_file = "../mqnli_data/mqnli.dev.txt"
+    test_file = "../mqnli_data/mqnli.test.txt"
+    data = MQNLIData(train_file, dev_file, test_file, for_transformer=False)
+    pickle_file = "../mqnli_data/mqnli.pt"
+    data.save(pickle_file)

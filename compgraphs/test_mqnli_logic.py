@@ -314,3 +314,22 @@ def test_whole_graph(mqnli_data):
             assert torch.all(labels == graph_pred), f"on batch {i}"
         duration = time.time() - start_time
         print(f"---- Ran {len(mqnli_data.train)} examples in {duration:.2f} s ----")
+
+
+def test_whole_graph_single_batch():
+    intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
+    graph = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    with torch.no_grad():
+        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        dataloader = DataLoader(mqnli_mini_data.train, batch_size=1, shuffle=False,
+                                collate_fn=collate_fn)
+        start_time = time.time()
+        for i, input_tuple in enumerate(dataloader):
+            input_tensor = input_tuple[0]
+            graph_input = GraphInput({"input": input_tuple[0]})
+            graph_pred = graph.compute(graph_input, store_cache=True)
+            labels = input_tuple[1]
+
+            assert torch.all(labels == graph_pred), f"on batch {i}"
+        duration = time.time() - start_time
+        print(f"---- Ran {len(mqnli_mini_data.train)} examples in {duration:.2f} s ----")

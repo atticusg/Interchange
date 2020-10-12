@@ -42,7 +42,7 @@ class ComputationGraph:
                 indices.append(Location()[subset])
         return indices
 
-    def get_locations(self, root_locations):
+    def get_locations(self, root_locations, unwanted_low_nodes=None):
         root_nodes = []
         for location in root_locations:
             for node_name in location:
@@ -61,6 +61,8 @@ class ComputationGraph:
                 viable_nodes = viable_nodes.intersection(current_nodes)
         result = []
         for viable_node in viable_nodes:
+            if unwanted_low_nodes and viable_node in unwanted_low_nodes:
+                continue
             for index in self.get_indices(viable_node):
                 result.append({viable_node:index})
         return result

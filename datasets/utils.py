@@ -1,9 +1,5 @@
-import boolean
-import itertools
 import torch
-import json
-import numpy as np
-from torch.utils.data import Dataset
+
 
 def my_collate(batch, batch_first=True):
     sorted_batch = sorted(batch, key=lambda pair: pair[0].shape[0], reverse=True)
@@ -12,3 +8,13 @@ def my_collate(batch, batch_first=True):
     lengths = torch.tensor([len(x) for x in sequences])
     labels = torch.tensor([x[1] for x in sorted_batch])
     return (sequences_padded, labels, lengths)
+
+
+def write_pickle(d, f):
+    torch.save(d, f)
+
+
+def read_pickle(f):
+    return torch.load(f)
+
+

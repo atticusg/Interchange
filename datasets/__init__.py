@@ -1,1 +1,1 @@
-from datasets.utils import *
+from datasets.utils import my_collate

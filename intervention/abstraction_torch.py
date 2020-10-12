@@ -1,8 +1,12 @@
 import copy
 import numpy as np
+import torch
 from intervention.graph_input import GraphInput
 from intervention.intervention import Intervention
 from intervention.location import Location
+
+from intervention.utils import serialize, deserialize
+
 
 def create_possible_mappings(low_model, high_model, fixed_assignments=dict(),
                              unwanted_low_nodes=None):
@@ -95,7 +99,7 @@ def create_possible_mappings(low_model, high_model, fixed_assignments=dict(),
 
 
 def get_value(high_model, high_node, high_intervention):
-    return np.array(high_model.get_result(high_node, high_intervention), dtype=np.float64)
+    return high_model.get_result(high_node, high_intervention)
 
 def create_new_realizations(low_model, high_model, high_node, mapping, low_intervention, high_intervention):
     new_realizations = dict()
@@ -109,8 +113,10 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
             fill_new_realizations(child.name, mapping, low_intervention, high_intervention)
         if high_node in high_intervention.intervention.values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
             return
-        low_string = low_value.tostring()
-        new_realizations[(high_node, high_value.tostring())] = low_string
+
+        low_string = serialize(low_value)
+        high_string = serialize(high_value)
+        new_realizations[(high_node, high_string)] = low_string
         new_realizations_to_inputs[(low_string, high_node)] = low_intervention
 
     fill_new_realizations(high_node, mapping, low_intervention, high_intervention)
@@ -120,11 +126,11 @@ def create_new_realizations(low_model, high_model, high_node, mapping, low_inter
 def get_potential_realizations(new_realizations, total_realizations, high_node, high_model, new_high_intervention):
     partial_realizations = [dict()]
     for high_node2 in new_high_intervention.intervention.values:
-        high_value2 = get_value(high_model, high_node2, new_high_intervention).tostring()
+        high_value2 = serialize(get_value(high_model, high_node2, new_high_intervention))
         if high_model.nodes[high_node2] in high_model.leaves or high_node2 == high_model.root.name:
             continue
         if high_node2 == high_node:
-            high_value = get_value(high_model, high_node, new_high_intervention).tostring()
+            high_value = serialize(get_value(high_model, high_node, new_high_intervention))
             new_partial_realizations = []
             for partial_realization in partial_realizations:
                 if (high_node, high_value) not in new_realizations:
@@ -158,9 +164,10 @@ def high_to_low(high_model, high_intervention,realization, mapping, input_mappin
         for low_node in mapping[high_node.name]:
             base[low_node] = input_mapping(get_value(high_model, high_node.name, high_intervention))
     for high_node in high_intervention.intervention.values:
-        high_value = get_value(high_model, high_node, high_intervention).tostring()
+        high_value = serialize(get_value(high_model, high_node, high_intervention))
         for low_node in mapping[high_node]:
-            intervention[low_node] = np.array(np.fromstring(realization[(high_node, high_value)]), dtype=np.float64)
+            low_value = deserialize(realization[(high_node, high_value)])
+            intervention[low_node] = low_value
             location[low_node] = mapping[high_node][low_node]
     return Intervention(base,intervention,location)
 

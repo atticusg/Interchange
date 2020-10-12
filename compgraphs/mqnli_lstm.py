@@ -1,7 +1,9 @@
 import torch
 
-from intervention import ComputationGraph
-from intervention import GraphNode
+from intervention import ComputationGraph, GraphNode
+from compgraphs.abstractable import AbstractableCompGraph
+
+from typing import List, Any
 
 
 def generate_lstm_fxn(lstm_layer):
@@ -9,6 +11,7 @@ def generate_lstm_fxn(lstm_layer):
         res, _ = lstm_layer(x)
         return res
     return _lstm_layer_fxn
+
 
 class MQNLI_LSTM_CompGraph(ComputationGraph):
     def __init__(self, lstm_model):
@@ -18,20 +21,24 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
 
         @GraphNode()
         def input(x):
+            return x
+
+        @GraphNode(input)
+        def embed(x):
             # (18,) or (18, batch_size)
             if len(x.shape) == 1:
                 x = x.unsqueeze(1)
             assert len(x.shape) == 2 and x.shape[0] == 18, f"x.shape is {x.shape}"
             return self.model.embedding((x,))
 
-        @GraphNode(input)
+        @GraphNode(embed)
         def premise_emb(x):
             # (18, emb_size) or (18, batch_size, emb_size)
             assert len(x.shape) == 3 and x.shape[0] == 18 and x.shape[2] == self.model.embed_dim, \
                 f"x.shape is {x.shape}"
             return self.model.premise_emb(x)
 
-        @GraphNode(input)
+        @GraphNode(embed)
         def hypothesis_emb(x):
             # (18, emb_size) or (18, batch_size, emb_size)
             assert len(x.shape) == 3 and x.shape[0] == 18 and x.shape[2] == self.model.embed_dim, \
@@ -102,9 +109,30 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
         @GraphNode(logits)
         def root(x):
             return torch.argmax(x, dim=1)
-
-
         super(MQNLI_LSTM_CompGraph, self).__init__(root)
 
 
+class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
+    def __init__(self, base_compgraph: MQNLI_LSTM_CompGraph,
+                 intermediate_nodes: List[str], interv_info: Any = None):
+        self.base = base_compgraph
+        self.interv_info = interv_info
 
+        full_graph = {node_name: [child.name for child in node.children]
+                      for node_name, node in base_compgraph.nodes.items()}
+
+        forward_functions = {node_name: node.forward
+                        for node_name, node in base_compgraph.nodes.items()}
+
+        super(Abstr_MQNLI_LSTM_CompGraph, self).__init__(
+            full_graph=full_graph,
+            root_node_name="root",
+            abstract_nodes=intermediate_nodes,
+            forward_functions=forward_functions
+        )
+
+    def get_indices(self, node: str):
+        if node == "premise_lstm_0":
+            return [self.interv_info["target_loc"]]
+        else:
+            return super().get_indices(node)
