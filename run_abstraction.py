@@ -2,6 +2,7 @@ import time
 import torch
 import pickle
 import os
+import json
 from datetime import datetime
 import argparse
 
@@ -113,7 +114,9 @@ def main():
     parser.add_argument("--model_path", required=True)
     parser.add_argument("--db_path", required=True)
     parser.add_argument("--res_save_dir", required=True)
+    parser.add_argument("--abstraction", type=str)
     parser.add_argument("--num_inputs", type=int, nargs="+")
+
     # data_path = "mqnli_data/mqnli.pt"
     # data = MQNLIData("mqnli_data/mqnli.train.txt",
     #                  "mqnli_data/mqnli.dev.txt",
@@ -124,12 +127,16 @@ def main():
 
     args = parser.parse_args()
 
-    base_opts = {"abstraction": ["obj_adj", ["premise_lstm_0"]],
+    base_opts = {"abstraction": [],
                  "num_inputs": 100,
                  "res_save_dir": args.res_save_dir}
 
     gs = AbstractionGridSearch(args.model_path, args.data_path, base_opts, args.db_path)
-    grid_dict = {"num_inputs": args.num_inputs}
+    grid_dict = {}
+    if args.num_inputs:
+        grid_dict["num_inputs"] = args.num_inputs
+    if args.abstraction:
+        grid_dict["abstraction"] = json.loads(args.abstraction)
     gs.execute(grid_dict)
 
 

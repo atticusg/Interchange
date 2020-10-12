@@ -257,7 +257,7 @@ def find_abstractions(low_model, high_model, high_inputs, total_high_interventio
             tuple(
                 tuple (
                     dict: "results" tuple(low interv, high interv) -> bool (True if two interventions result in same output),
-                    dict: "realizations_to_inputs" (array value of intervention low level run, string node name)  ->  low interv
+                    dict: "realizations_to_inputs" (serialized value of intervention low level run, string node name)  ->  low interv object
                 )
                 dict: "mapping" str name of highlevel node -> (dict: name of low level node -> locations)
             )

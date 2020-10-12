@@ -1,6 +1,8 @@
 from intervention.intervention import Intervention
 from intervention.utils import copy_helper
 
+# TODO: add type hints
+
 class GraphNode:
     def __init__(self, *args, name=None, forward=None):
         """Construct a computation graph node, can be used as function decorator
