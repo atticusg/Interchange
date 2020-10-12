@@ -132,7 +132,6 @@ def main():
     grid_dict = {"num_inputs": args.num_inputs}
     gs.execute(grid_dict)
 
-    
 
 if __name__ == "__main__":
     main()
