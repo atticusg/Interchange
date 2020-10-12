@@ -1,3 +1,10 @@
+import time
+import torch
+import pickle
+import os
+from datetime import datetime
+import argparse
+
 from intervention.abstraction_torch import find_abstractions
 
 from intervention import Intervention, LOC
@@ -10,11 +17,7 @@ from compgraphs import mqnli_logic
 from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
-import time
-import torch
-import pickle
-import os
-from datetime import datetime
+
 from torch.utils.data import DataLoader
 from grid_search import GridSearch
 
@@ -105,22 +108,28 @@ loc_mapping = {
 
 
 def main():
-    data_path = "mqnli_data/mqnli.pt"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", required=True)
+    parser.add_argument("--model_path", required=True)
+    parser.add_argument("--db_path", required=True)
+    parser.add_argument("--res_save_dir", required=True)
+    parser.add_argument("--num_inputs", type=int, nargs="+")
+    # data_path = "mqnli_data/mqnli.pt"
     # data = MQNLIData("mqnli_data/mqnli.train.txt",
     #                  "mqnli_data/mqnli.dev.txt",
     #                  "mqnli_data/mqnli.test.txt")
     # torch.save(data, data_path)
+    # model_path = "mqnli_models/lstm_best.pt"
+    # db_path = "experiment_data/runtime.db"
 
-    model_path = "mqnli_models/lstm_best.pt"
+    args = parser.parse_args()
 
     base_opts = {"abstraction": ["obj_adj", ["premise_lstm_0"]],
                  "num_inputs": 100,
-                 "res_save_dir": "experiment_data/"}
+                 "res_save_dir": args.res_save_dir}
 
-    db_path = "experiment_data/runtime.db"
-
-    gs = AbstractionGridSearch(model_path, data_path, base_opts, db_path)
-    grid_dict = {"num_inputs": [50, 100, 200]}
+    gs = AbstractionGridSearch(args.model_path, args.data_path, base_opts, args.db_path)
+    grid_dict = {"num_inputs": args.num_inputs}
     gs.execute(grid_dict)
 
     
