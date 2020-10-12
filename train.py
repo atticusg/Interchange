@@ -205,7 +205,10 @@ def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False):
 
 
 def load_model(model_class, save_path, device=None):
-    checkpoint = torch.load(save_path)
+    if device:
+        checkpoint = torch.load(save_path, map_location=device)
+    else:
+        checkpoint = torch.load(save_path)
     assert 'model_config' in checkpoint
     model_config = checkpoint['model_config']
     model = model_class(**model_config)

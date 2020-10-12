@@ -31,7 +31,7 @@ class AbstractionGridSearch(GridSearch):
     def __init__(self, model_path, data_path, base_opts, db_path):
         self.module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
         self.module.eval()
-        data = torch.load(data_path)
+        data = torch.load(data_path, map_location=torch.device('cpu'))
         super(AbstractionGridSearch, self).__init__(None, data,
                 base_opts, {}, db_path, base_res_dict=SAMPLE_RES_DICT)
 
