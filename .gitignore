@@ -10,3 +10,4 @@ __pycache__/
 /mqnli_models
 /experiment_data
 intervention/forward_tree_dump.txt
+*.swp

@@ -27,6 +27,11 @@ SAMPLE_RES_DICT = {
     'save_path': "",
 }
 
+LOC_MAPPING = {
+    "obj_adj": LOC[mqnli_logic.IDX_A_O],
+    "subj_adj": LOC[mqnli_logic.IDX_A_S],
+    "v_adv": LOC[mqnli_logic.IDX_ADV]
+}
 
 class AbstractionGridSearch(GridSearch):
     def __init__(self, model_path, data_path, base_opts, db_path):
@@ -46,7 +51,7 @@ class AbstractionGridSearch(GridSearch):
         high_intermediate_nodes = [high_intermediate_node]
 
         interv_info = {
-            "target_loc": loc_mapping[high_intermediate_node]
+            "target_loc": LOC_MAPPING[high_intermediate_node]
         }
 
         base_compgraph = MQNLI_LSTM_CompGraph(self.module)
@@ -89,7 +94,6 @@ class AbstractionGridSearch(GridSearch):
             )
         duration = time.time() - start_time
         print(f"Finished finding abstractions, took {duration:.2f} s")
-
         # pickle file
         time_str = datetime.now().strftime("%b%d-%H%M%S")
         res_file_name = f"res-{num_inputs}-{time_str}-{high_intermediate_node}.pkl"
@@ -101,11 +105,6 @@ class AbstractionGridSearch(GridSearch):
             pickle.dump(res, f)
 
         self.record_results(opts, {}, res_dict)
-
-
-loc_mapping = {
-    "obj_adj": LOC[mqnli_logic.IDX_A_O],
-}
 
 
 def main():
@@ -131,12 +130,21 @@ def main():
                  "num_inputs": 100,
                  "res_save_dir": args.res_save_dir}
 
-    gs = AbstractionGridSearch(args.model_path, args.data_path, base_opts, args.db_path)
     grid_dict = {}
     if args.num_inputs:
         grid_dict["num_inputs"] = args.num_inputs
     if args.abstraction:
-        grid_dict["abstraction"] = json.loads(args.abstraction)
+        with open(args.abstraction, "r") as f:
+            abstractions = []
+            for line in f:
+                line = line.strip()
+                if line:
+                    abstraction = json.loads(line)
+                    abstractions.append(abstraction)
+        grid_dict["abstraction"] = abstractions
+
+
+    gs = AbstractionGridSearch(args.model_path, args.data_path, base_opts, args.db_path)
     gs.execute(grid_dict)
 
 

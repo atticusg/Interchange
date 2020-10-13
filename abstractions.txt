@@ -1,0 +1,12 @@
+["obj_adj", ["hypothesis_lstm_0"]]
+["obj_adj", ["premise_lstm_1"]]
+["obj_adj", ["hypothesis_lstm_1"]]
+["v_adv", ["premise_lstm_0"]]
+["v_adv", ["premise_lstm_1"]]
+["v_adv", ["hypothesis_lstm_0"]]
+["v_adv", ["hypothesis_lstm_1"]]
+["subj_adj", ["premise_lstm_0"]]
+["subj_adj", ["premise_lstm_1"]]
+["subj_adj", ["hypothesis_lstm_0"]]
+["subj_adj", ["hypothesis_lstm_1"]]
+

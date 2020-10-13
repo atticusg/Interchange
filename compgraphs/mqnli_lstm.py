@@ -1,4 +1,5 @@
 import torch
+import re
 
 from intervention import ComputationGraph, GraphNode
 from compgraphs.abstractable import AbstractableCompGraph
@@ -132,7 +133,9 @@ class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
         )
 
     def get_indices(self, node: str):
-        if node == "premise_lstm_0":
+        pattern = r".*\_lstm\_[0-9]*"
+
+        if re.match(pattern, node):
             return [self.interv_info["target_loc"]]
         else:
             return super().get_indices(node)
