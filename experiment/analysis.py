@@ -5,13 +5,15 @@ from intervention import Intervention
 from intervention.utils import serialize
 
 class Analysis:
-    def __init__(self, pickle_file):
-        with open(pickle_file, "rb") as f:
-            res = pickle.load(f)
-        (experiments, realizations_to_inputs), mapping = res[0]
+    def __init__(self, graph_data):
+        if isinstance(graph_data, str):
+            with open(graph_data, "rb") as f:
+                graph_data = pickle.load(f)
+        (experiments, realizations_to_inputs), mapping = graph_data[0]
         self.experiments = experiments
         self.realizations_to_inputs = realizations_to_inputs
         self.mapping = mapping
+        self.res_dict = {}
 
     def get_original_input(self, low_interv: Intervention,
                            low_node: str, high_node: str) -> Intervention:
@@ -90,7 +92,7 @@ class Analysis:
 
 
 def main():
-    pickle_file = "experiment_data/res-200-Oct11-212216-obj_adj.pkl"
+    pickle_file = "../experiment_data/res-200-Oct11-212216-obj_adj.pkl"
     analysis = Analysis(pickle_file)
     analysis.analyze()
 
