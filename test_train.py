@@ -357,7 +357,8 @@ def test_train_lstm_mqnli_mini_sep(mqnli_mini_sep_data):
     }
     train_config = {
         'batch_first': False,
-        'batch_size': 500,
+        'batch_size': 15,
+        'run_steps': 3,
         'max_epochs': 100,
         'evals_per_epoch': 2,
         'patient_epochs': 400,

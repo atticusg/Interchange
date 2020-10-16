@@ -1,12 +1,15 @@
-import pytest
 import torch
-
+import argparse
 from grid_search import GridSearch
 from modeling.lstm import LSTMModule
 from datasets.mqnli import MQNLIData
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("layers", type=int)
+    args = parser.parse_args()
+
     mqnli_data = MQNLIData("mqnli_data/mqnli.train.txt",
                            "mqnli_data/mqnli.dev.txt",
                            "mqnli_data/mqnli.test.txt",
@@ -41,9 +44,9 @@ def main():
 
     gs = GridSearch(LSTMModule, mqnli_data, base_lstm_model_config,
                     base_train_config, "experiment_data/lstm_sep.db")
-    grid_dict = {"lr": [0.003, 0.001, 0.0003, 0.0001],
-                 "dropout": [0, 0.1, 0.3],
-                 "num_lstm_layers": [1,2,4]}
+    grid_dict = {"num_lstm_layers": [args.layers],
+                 "lr": [0.001, 0.0003, 0.0001],
+                 "dropout": [0, 0.1, 0.3],}
     gs.execute(grid_dict)
 
 
