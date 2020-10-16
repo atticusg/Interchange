@@ -41,7 +41,7 @@ def main():
 
     gs = GridSearch(LSTMModule, mqnli_data, base_lstm_model_config,
                     base_train_config, "experiment_data/lstm_sep.db")
-    grid_dict = {"lr": [0.003, 0.001, 0.0003],
+    grid_dict = {"lr": [0.003, 0.001, 0.0003, 0.0001],
                  "dropout": [0, 0.1, 0.3],
                  "num_lstm_layers": [1,2,4]}
     gs.execute(grid_dict)
