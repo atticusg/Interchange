@@ -27,10 +27,17 @@ def mqnli_mini_data():
                      "mqnli_data/mini.test.txt")
 
 @pytest.fixture
+def mqnli_mini_sep_data():
+    return MQNLIData("mqnli_data/mini.train.txt",
+                     "mqnli_data/mini.dev.txt",
+                     "mqnli_data/mini.test.txt",
+                     use_separator=True)
+
+@pytest.fixture
 def mqnli_data():
     return MQNLIData("mqnli_data/mqnli.train.txt",
                      "mqnli_data/mqnli.dev.txt",
-                     "mqnli_data/mqnli.test.txt")
+                     "mqnli_data/mqnli.test.txt",)
 
 save_path_1 = "sentiment_models/test_lstm.pt"
 save_path_2 = "sentiment_models/test_train_lstm.pt"
@@ -252,37 +259,6 @@ def test_train_lstm_mqnli(mqnli_data):
     trainer = Trainer(mqnli_data, model, **train_config)
     trainer.train()
 
-def test_train_lstm_mqnli_mini(mqnli_mini_data):
-    model_config = {
-        'task': 'mqnli',
-        'output_classes': mqnli_mini_data.output_classes,
-        'vocab_size': mqnli_mini_data.vocab_size,
-
-        'embed_dim': 512,
-        'lstm_hidden_dim': 256,
-        'bidirectional': False,
-        'num_lstm_layers': 2,
-        'dropout': 0,
-        'embed_init_scaling': 0.1,
-        'batch_first': False,
-        'device': torch.device("cuda")
-    }
-    train_config = {
-        'batch_first': False,
-        'run_steps': 5,
-        'batch_size': 500,
-        'max_epochs': 400,
-        'evals_per_epoch': 2,
-        'patient_epochs': 400,
-        'lr': 0.003,
-        'weight_norm': 0,
-        'model_save_path': "mqnli_models/lstm.pt"
-    }
-
-    model = LSTMModule(**model_config).to(torch.device("cuda"))
-    trainer = Trainer(mqnli_mini_data, model, **train_config)
-    trainer.train()
-
 def test_run_transformer_mqnli_mini(mqnli_mini_data):
     model_config = {
         'hidden_dim': 128,
@@ -331,3 +307,65 @@ def test_run_transformer_mqnli(mqnli_data):
     trainer = Trainer(mqnli_data, model, **train_config)
     trainer.train()
 
+def test_train_lstm_mqnli_mini(mqnli_mini_data):
+    model_config = {
+        'task': 'mqnli',
+        'output_classes': mqnli_mini_data.output_classes,
+        'vocab_size': mqnli_mini_data.vocab_size,
+
+        'embed_dim': 256,
+        'lstm_hidden_dim': 128,
+        'bidirectional': True,
+        'num_lstm_layers': 4,
+        'dropout': 0,
+        'embed_init_scaling': 0.1,
+        'batch_first': False,
+        'device': torch.device("cuda")
+    }
+    train_config = {
+        'batch_first': False,
+        'run_steps': 5,
+        'batch_size': 500,
+        'max_epochs': 400,
+        'evals_per_epoch': 2,
+        'patient_epochs': 400,
+        'lr': 0.003,
+        'weight_norm': 0,
+        'model_save_path': "mqnli_models/lstm_sep_test.pt"
+    }
+
+    model = LSTMModule(**model_config).to(torch.device("cuda"))
+    trainer = Trainer(mqnli_mini_data, model, **train_config)
+    trainer.train()
+
+
+def test_train_lstm_mqnli_mini_sep(mqnli_mini_sep_data):
+    model_config = {
+        'task': 'mqnli',
+        'output_classes': mqnli_mini_sep_data.output_classes,
+        'vocab_size': mqnli_mini_sep_data.vocab_size,
+
+        'embed_dim': 256,
+        'lstm_hidden_dim': 128,
+        'bidirectional': True,
+        'num_lstm_layers': 4,
+        'dropout': 0,
+        'embed_init_scaling': 0.1,
+        'batch_first': False,
+        'p_h_separator': 1,
+        'device': torch.device("cuda")
+    }
+    train_config = {
+        'batch_first': False,
+        'batch_size': 500,
+        'max_epochs': 100,
+        'evals_per_epoch': 2,
+        'patient_epochs': 400,
+        'lr': 0.003,
+        'weight_norm': 0,
+        'model_save_path': "mqnli_models/lstm_sep_test.pt"
+    }
+
+    model = LSTMModule(**model_config).to(torch.device("cuda"))
+    trainer = Trainer(mqnli_mini_sep_data, model, **train_config)
+    trainer.train()

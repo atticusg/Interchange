@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 
 
 class MQNLIData:
-    def __init__(self, train_file, dev_file, test_file, for_transformer=False, store_text=False):
+    def __init__(self, train_file, dev_file, test_file, use_separator=False, for_transformer=False, store_text=False):
         self.output_classes = 3
         self.word_to_id = {}
         self.id_to_word = {}
@@ -22,6 +22,11 @@ class MQNLIData:
             self.id_to_word[2] = '<SEP>'
             self.word_to_id['<SEP>'] = 2
             max_info['id'] = 3
+        else:
+            if use_separator:
+                self.id_to_word[1] = '<SEP>'
+                self.word_to_id['<SEP>'] = 1
+                max_info['id'] = 2
 
         print("--- Loading Dataset ---")
         self.train = MQNLIDataset(train_file, self.word_to_id, self.id_to_word,

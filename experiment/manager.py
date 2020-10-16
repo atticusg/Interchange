@@ -3,6 +3,7 @@ import os
 
 TABLE_NAME = "results"
 
+
 class Experiment:
     def experiment(self, opts: dict):
         raise NotImplementedError
@@ -57,6 +58,3 @@ class ExperimentManager:
         expts = self.fetch(n)
         for expt_opts in expts:
             self.dispatch(expt_opts)
-
-# utils for db
-
