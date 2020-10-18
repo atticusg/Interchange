@@ -139,3 +139,66 @@ def test_lstm_abstractable(mqnli_data, mqnli_lstm_model, mqnli_lstm_comp_graph):
 
             assert torch.all(model_pred == graph_pred), f"on batch {i}"
 
+
+
+@pytest.fixture
+def mqnli_sep_data():
+    return MQNLIData("../mqnli_data/mqnli.train.txt",
+                     "../mqnli_data/mqnli.dev.txt",
+                     "../mqnli_data/mqnli.test.txt",
+                     use_separator=True)
+
+@pytest.fixture
+def mqnli_lstm_sep_model():
+    model, _ = load_model(LSTMModule, "../mqnli_models/lstm_sep_best.pt")
+    model.eval()
+    return model
+
+@pytest.fixture
+def mqnli_lstm_sep_comp_graph(mqnli_lstm_sep_model):
+    return MQNLI_LSTM_CompGraph(mqnli_lstm_sep_model)
+
+def test_lstm_sep_compgraph_batch_match(mqnli_sep_data, mqnli_lstm_sep_model,
+                                        mqnli_lstm_sep_comp_graph):
+    model = mqnli_lstm_sep_model
+    graph = mqnli_lstm_sep_comp_graph
+    with torch.no_grad():
+        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        dataloader = DataLoader(mqnli_sep_data.dev, batch_size=1024, shuffle=False,
+                                collate_fn=collate_fn)
+        for i, input_tuple in enumerate(dataloader):
+            input_tuple = [x.to(model.device) for x in input_tuple]
+
+            graph_input = GraphInput({"input": input_tuple[0]})
+            graph_pred = graph.compute(graph_input, store_cache=True)
+
+            logits = model(input_tuple)
+            model_pred = torch.argmax(logits, dim=1)
+
+
+            assert torch.all(model_pred == graph_pred), f"on batch {i}"
+
+
+def test_lstm_sep_abstractable(mqnli_sep_data, mqnli_lstm_sep_model,
+                               mqnli_lstm_sep_comp_graph):
+    model = mqnli_lstm_sep_model
+    graph = Abstr_MQNLI_LSTM_CompGraph(mqnli_lstm_sep_comp_graph,
+                                       ["lstm_0"])
+    g_has_children(graph, "root", "lstm_0")
+    g_has_children(graph, "lstm_0", "input")
+
+
+    with torch.no_grad():
+        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        dataloader = DataLoader(mqnli_sep_data.dev, batch_size=1024, shuffle=False,
+                                collate_fn=collate_fn)
+        for i, input_tuple in enumerate(dataloader):
+            input_tuple = [x.to(model.device) for x in input_tuple]
+
+            graph_input = GraphInput({"input": input_tuple[0]})
+            graph_pred = graph.compute(graph_input, store_cache=True)
+
+            logits = model(input_tuple)
+            model_pred = torch.argmax(logits, dim=1)
+
+            assert torch.all(model_pred == graph_pred), f"on batch {i}"

@@ -40,7 +40,14 @@ def create_cmd(table_name, opts):
     for col, value in opts.items():
         opts_cols.append(col)
         type_str = type2str[type(value)]
-        cmd += f'{col} {type_str},\n'
+
+        default = str(value)
+        if type_str == 'text':
+            default = '\"' + default + '\"'
+        elif default == '\"None\"':
+            default = 'NULL'
+
+        cmd += f'{col} {type_str} DEFAULT {default},\n'
 
     cmd = cmd.strip(',\n') + '\n);'
     return cmd
@@ -63,7 +70,7 @@ def add_cols(db_file, table_name, res_dict):
             c.execute(cmd_str)
 
 
-def insert(db_path, table_name, insert_dict, id=None):
+def update(db_path, table_name, insert_dict, id=None):
     all_cols = list(insert_dict.keys())
     cmd = insert_cmd(table_name, all_cols, id)
 
@@ -107,7 +114,8 @@ def fetch_new(db_path, table_name, opt_cols, n=None):
             cmd += f" LIMIT {n}"
         cmd += ";"
         cur.execute(cmd)
-        res = [{col_name: value for col_name, value in zip(cols, row)}
-               for row in cur.fetchall()]
+        rows = cur.fetchall()
+    print("closed connection")
+    res = [{col_name: value for col_name, value in zip(cols, row)} for row in rows]
     return res
 

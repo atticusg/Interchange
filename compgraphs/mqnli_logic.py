@@ -336,6 +336,9 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
 
     def root(self, q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
         # (batch_size, 4*7), (batch_size,), (batch_size,) -> (batch_size,)
+        print("q.shape", q.shape)
+        print("s.shape", s.shape)
+        print("n.shape", n.shape)
         idxs = (s * 7 + n).unsqueeze(1)
         res = torch.gather(q, 1, idxs).view(n.shape[0])
         res = output_remapping[res]
