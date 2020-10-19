@@ -66,7 +66,7 @@ class ExperimentManager:
 
     def query(self, cols=None, status=None, abstraction=None, id=None, limit=None):
         cond_dict = {}
-        if status: cond_dict["status"] = status
+        if status is not None: cond_dict["status"] = status
         if id: cond_dict["id"] = id
         like_dict = {}
         if abstraction:

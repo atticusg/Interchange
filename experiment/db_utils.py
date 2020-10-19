@@ -112,7 +112,7 @@ def fetch_new(db_path, table_name, opt_cols, n=None):
 def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None):
     cmd = select_cmd(table_name, cols=cols, cond_dict=cond_dict, like=like,
                      limit=limit)
-
+    print(cmd)
     conn = db_connect(db_path)
     with conn:
         cur = conn.cursor()
@@ -125,7 +125,7 @@ def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None
 
 
 def select_cmd(table_name, cols=None, cond_dict=None, like=None, limit=None):
-    cols_string = "*" if cols else ", ".join(cols)
+    cols_string = "*" if not cols else ", ".join(cols)
     cmd = f"SELECT {cols_string} FROM {table_name}"
     if cond_dict:
         cmd += " WHERE "
@@ -135,7 +135,7 @@ def select_cmd(table_name, cols=None, cond_dict=None, like=None, limit=None):
     if like:
         if not cond_dict:
             cmd += " WHERE "
-        cmd += " AND ".join(f"{k} LIKE {p}" for k, p in like.items())
+        cmd += " AND ".join(f'{k} LIKE "{p}"' for k, p in like.items())
     if limit:
         cmd += f" LIMIT {limit}"
 
