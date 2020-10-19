@@ -25,9 +25,10 @@ class Experiment:
 
 class ExperimentManager:
     def __init__(self, db_path: str, expt_opts: Union[Dict, List],
-                 launch_script: str):
+                 launch_script: str, metascript: str=None):
         self.db_path = db_path
         self.launch_script = launch_script
+        self.metascript = metascript
 
         if not os.path.exists(db_path):
             print("Creating new database for experiment manager")
@@ -49,7 +50,10 @@ class ExperimentManager:
     def insert(self, opts):
         "insert a new experiment"
         opts["status"] = 0
-        db.update(self.db_path, TABLE_NAME, opts)
+        return db.update(self.db_path, TABLE_NAME, opts)
+
+    def update(self, opts, id):
+        return db.update(self.db_path, TABLE_NAME, opts, id=id)
 
     def insert_grid(self, opts_dict):
         "insert many experiments"
@@ -70,7 +74,12 @@ class ExperimentManager:
 
         script_args += ["--db_path", f"{self.db_path}"]
         script = " ".join(script_args)
-        print("----running script", script)
+
+        if self.metascript:
+            if self.metascript.startswith("nlprun"):
+                
+
+        print("----running:\n", script)
 
         os.system(script)
 

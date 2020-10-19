@@ -72,7 +72,7 @@ def add_cols(db_file, table_name, res_dict):
 
 def update(db_path, table_name, insert_dict, id=None):
     all_cols = list(insert_dict.keys())
-    cmd = insert_cmd(table_name, all_cols, id)
+    cmd = update_cmd(table_name, all_cols, id)
 
     l = []
     for item in all_cols:
@@ -91,7 +91,7 @@ def update(db_path, table_name, insert_dict, id=None):
     return new_id
 
 
-def insert_cmd(table_name, cols, id=None):
+def update_cmd(table_name, cols, id=None):
     if id:
         set_str = ", ".join([f"{c} = ?" for c in cols])
         cond_str = f"id = {id}"
@@ -104,18 +104,37 @@ def insert_cmd(table_name, cols, id=None):
 
 
 def fetch_new(db_path, table_name, opt_cols, n=None):
-    conn = db_connect(db_path)
     cols = ["id"] + opt_cols
+    cond_dict = {"status": 0}
+    return select(db_path, table_name, cols=cols, cond_dict=cond_dict, limit=n)
+
+
+def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None):
+    cmd = select_cmd(table_name, cols=cols, cond_dict=cond_dict, like=like,
+                     limit=limit)
+
+    conn = db_connect(db_path)
     with conn:
         cur = conn.cursor()
-        cols_string = ", ".join(cols)
-        cmd = f"SELECT {cols_string} FROM {table_name} WHERE status = 0"
-        if n:
-            cmd += f" LIMIT {n}"
-        cmd += ";"
         cur.execute(cmd)
         rows = cur.fetchall()
-    print("closed connection")
-    res = [{col_name: value for col_name, value in zip(cols, row)} for row in rows]
+
+    res = [{col_name: value for col_name, value in zip(cols, row)}
+           for row in rows]
     return res
 
+
+def select_cmd(table_name, cols=None, cond_dict=None, like=None, limit=None):
+    cols_string = "*" if cols is None else ", ".join(cols)
+    cmd = f"SELECT {cols_string} FROM {table_name}"
+    if cond_dict:
+        cmd += " WHERE "
+        cmd += " AND ".join(f"{k} = {v}" for k, v in cond_dict.items())
+    if like:
+        cmd += " AND "
+        cmd += " AND ".join(f"{k} LIKE {p}" for k, p in like.items())
+    if limit:
+        cmd += f" LIMIT {limit}"
+
+    cmd += ";"
+    return cmd

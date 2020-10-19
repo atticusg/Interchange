@@ -14,8 +14,9 @@
 #    -d "experiment_data/sep/test.db" \
 #    -t "lstm" \
 #    -m "mqnli_models/lstm_sep_best.pt" \
-#    -n 20
+#    -n 20 \
+#    -o "experiment_data/sep"
 
 python experiment.py run \
     -d "experiment_data/sep/test.db" \
-    -n 2
+    -n 10
