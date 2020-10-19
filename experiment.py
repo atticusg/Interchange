@@ -59,7 +59,7 @@ def query(db_path, id=None, status=None, abstraction=None, limit=None):
     rows = manager.query(cols=cols, status=status, abstraction=abstraction,
                          id=id, limit=limit)
     for row in rows:
-        s = ", ".join(row[col] for col in cols)
+        s = ", ".join(str(row[col]) for col in cols)
         print(s)
 
 def main():
