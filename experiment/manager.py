@@ -1,7 +1,10 @@
 import experiment.db_utils as db
 import os
+import stat
 import shlex
 import subprocess
+import tempfile
+import time
 
 from datetime import datetime
 from typing import Dict, List, Union
@@ -107,11 +110,23 @@ class ExperimentManager:
         script = " ".join(script_args)
 
         if self.metascript:
-            script = metascript + f'"{script}"'
+            script_file_path = os.path.join(save_dir, "script.sh")
+            with open(script_file_path, "w") as f:
+                f.write(script)
 
-        print("----running:\n", script)
-        cmds = shlex.split(script)
-        subprocess.Popen(cmds, start_new_session=True)
+            # make executable
+            st = os.stat(script_file_path)
+            os.chmod(script_file_path, st.st_mode | stat.S_IXUSR)
+
+            cmds = shlex.split(metascript)
+            cmds.append(script_file_path)
+            print(f"----running:\n{cmds}")
+            print(f"----script:\n{script}")
+            subprocess.Popen(cmds, start_new_session=True)
+        else:
+            cmds = shlex.split(script)
+            print("----running:\n", cmds)
+            subprocess.Popen(cmds, start_new_session=True)
 
     def run(self, n=None):
         expts = self.fetch(n)

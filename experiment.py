@@ -37,7 +37,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
         for high_node in HIGH_NODES:
             for layer in range(num_layers):
                 for n in num_inputs:
-                    abstraction = f'["{high_node}", ["lstm_{layer}"]]'
+                    abstraction = f'["{high_node}",["lstm_{layer}"]]'
                     id = manager.insert({"abstraction": abstraction,
                                         "num_inputs": n})
                     res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
