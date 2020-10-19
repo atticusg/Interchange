@@ -1,5 +1,4 @@
 from experiment import ExperimentManager
-from experiment import db_utils as db
 from datasets.mqnli import MQNLIData
 from train import load_model
 from modeling.lstm import LSTMModule

@@ -1,5 +1,7 @@
 import experiment.db_utils as db
 import os
+import shlex
+import subprocess
 
 from datetime import datetime
 from typing import Dict, List, Union
@@ -103,7 +105,10 @@ class ExperimentManager:
             script = metascript + f'"{script}"'
 
         print("----running:\n", script)
-        os.system(script)
+        cmds = shlex.split(script)
+        subprocess.Popen(cmds, start_new_session=True,
+                         stderr=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL)
 
     def run(self, n=None):
         expts = self.fetch(n)
