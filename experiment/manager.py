@@ -106,9 +106,7 @@ class ExperimentManager:
 
         print("----running:\n", script)
         cmds = shlex.split(script)
-        subprocess.Popen(cmds, start_new_session=True,
-                         stderr=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL)
+        subprocess.Popen(cmds, start_new_session=True)
 
     def run(self, n=None):
         expts = self.fetch(n)
