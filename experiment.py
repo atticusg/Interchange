@@ -11,7 +11,7 @@ import os
 EXPT_OPTS = ["data_path", "model_path", "log_path", "res_save_dir", "abstraction", "num_inputs"]
 LAUNCH_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
-META_SCRIPT = None
+META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 
 def setup(db_path, model_path, data_path):
     default_opts = {
@@ -25,7 +25,7 @@ def setup(db_path, model_path, data_path):
     manager = ExperimentManager(db_path, default_opts, LAUNCH_SCRIPT)
 
 def run(db_path, n):
-    manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT)
+    manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT, META_SCRIPT)
     manager.run(n)
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
