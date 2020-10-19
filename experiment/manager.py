@@ -90,7 +90,7 @@ class ExperimentManager:
 
         if self.metascript:
             script = metascript + f'"{script}"'
-            
+
         print("----running:\n", script)
         os.system(script)
 
