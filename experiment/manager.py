@@ -79,6 +79,11 @@ class ExperimentManager:
 
     def dispatch(self, opts):
         "launch an experiment by running bash script"
+        save_dir = opts["res_save_dir"]
+        print("res_save_dir", save_dir)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
         update_dict = {"status": -1}
 
         if self.metascript:
@@ -86,7 +91,7 @@ class ExperimentManager:
             if metascript.startswith("nlprun"):
                 assert "-o" not in metascript
                 time_str = datetime.now().strftime("%m%d-%H%M%S")
-                log_path = os.path.join(opts["res_save_dir"], f"{time_str}.log")
+                log_path = os.path.join(save_dir, f"{time_str}.log")
                 metascript += f" -o {log_path} "
                 update_dict["log_path"] = log_path
 
