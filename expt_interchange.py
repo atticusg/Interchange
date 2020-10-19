@@ -187,7 +187,6 @@ def main():
     parser.add_argument("--res_save_dir", required=True)
     parser.add_argument("--abstraction", type=str)
     parser.add_argument("--num_inputs", type=int, default=20)
-    parser.add_argument("--log_path", type=str)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
