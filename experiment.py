@@ -90,6 +90,13 @@ def main():
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
     run_parser.add_argument("-n", "--n", type=int, required=True)
 
+    query_parser = subparsers.add_parser("query")
+    query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
+    query_parser.add_argument("-i", "--id", type=int)
+    query_parser.add_argument("-s", "--status", type=int)
+    query_parser.add_argument("-a", "--abstraction", type=str)
+    query_parser.add_argument("-l", "--limit", type=int)
+
     kwargs = vars(parser.parse_args())
     globals()[kwargs.pop("subparser")](**kwargs)
 
