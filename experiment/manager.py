@@ -64,7 +64,7 @@ class ExperimentManager:
         "Get all experiments that are not yet run from database"
         return db.fetch_new(self.db_path, TABLE_NAME, self.expt_opts, n=n)
 
-    def query(self, cols=None, status=None, abstraction=None, id=None, limit=n):
+    def query(self, cols=None, status=None, abstraction=None, id=None, limit=None):
         cond_dict = {}
         if status: cond_dict["status"] = status
         if id: cond_dict["id"] = id
