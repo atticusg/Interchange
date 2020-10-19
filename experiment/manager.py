@@ -1,6 +1,7 @@
 import experiment.db_utils as db
 import os
 
+from datetime import datetime
 from typing import Dict, List, Union
 
 TABLE_NAME = "results"
@@ -65,7 +66,19 @@ class ExperimentManager:
 
     def dispatch(self, opts):
         "launch an experiment by running bash script"
-        db.update(self.db_path, TABLE_NAME, {"status": -1}, opts["id"])
+        update_dict = {"status": -1}
+
+        if self.metascript:
+            metascript = self.metascript
+            if metascript.startswith("nlprun"):
+                assert "-o" not in metascript
+                time_str = datetime.now().strftime("%m%d-%H%M%S")
+                log_path = os.path.join(opts["res_save_dir"], f"{time_str}.log")
+                metascript += f" -o {log_path}"
+                update_dict["log_path"] = log_path
+
+        db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+
         script_args = [self.launch_script]
 
         for opt_name, value in opts.items():
@@ -76,11 +89,9 @@ class ExperimentManager:
         script = " ".join(script_args)
 
         if self.metascript:
-            if self.metascript.startswith("nlprun"):
-                
-
+            script = metascript + f'"{script}"'
+            
         print("----running:\n", script)
-
         os.system(script)
 
     def run(self, n=None):

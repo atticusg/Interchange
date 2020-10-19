@@ -9,7 +9,7 @@ import argparse
 import torch
 import os
 
-EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction", "num_inputs"]
+EXPT_OPTS = ["data_path", "model_path", "log_path", "res_save_dir", "abstraction", "num_inputs"]
 LAUNCH_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 
@@ -17,6 +17,7 @@ def setup(db_path, model_path, data_path):
     default_opts = {
         "data_path": data_path,
         "model_path": model_path,
+        "log_path": "",
         "res_save_dir": "",
         "abstraction": "",
         "num_inputs": 20
