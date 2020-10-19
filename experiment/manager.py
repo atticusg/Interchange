@@ -1,5 +1,7 @@
 import experiment.db_utils as db
 import os
+import shlex
+import subprocess
 
 from datetime import datetime
 from typing import Dict, List, Union
@@ -85,7 +87,7 @@ class ExperimentManager:
                 assert "-o" not in metascript
                 time_str = datetime.now().strftime("%m%d-%H%M%S")
                 log_path = os.path.join(opts["res_save_dir"], f"{time_str}.log")
-                metascript += f" -o {log_path}"
+                metascript += f" -o {log_path} "
                 update_dict["log_path"] = log_path
 
         db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
@@ -103,7 +105,10 @@ class ExperimentManager:
             script = metascript + f'"{script}"'
 
         print("----running:\n", script)
-        os.system(script)
+        cmds = shlex.split(script)
+        subprocess.Popen(cmds, start_new_session=True,
+                         stderr=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL)
 
     def run(self, n=None):
         expts = self.fetch(n)

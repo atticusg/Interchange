@@ -7,9 +7,8 @@
 #python experiment.py setup \
 #    --db_path "experiment_data/sep/test.db" \
 #    --model_path "mqnli_models/lstm_sep_best.pt" \
-#    --data_path "mqnli_data/mqnli_sep.pt" \
-#    --res_save_dir "experiment_data/sep"
-
+#    --data_path "mqnli_data/mqnli_sep.pt"
+#
 #python experiment.py add \
 #    -d "experiment_data/sep/test.db" \
 #    -t "lstm" \
@@ -19,4 +18,4 @@
 
 python experiment.py run \
     -d "experiment_data/sep/test.db" \
-    -n 10
+    -n 3
