@@ -8,6 +8,7 @@ from datetime import datetime
 import argparse
 import torch
 import os
+import pandas as pd
 
 EXPT_OPTS = ["data_path", "model_path", "log_path", "res_save_dir", "abstraction", "num_inputs"]
 LAUNCH_SCRIPT = "python expt_interchange.py"
@@ -58,9 +59,14 @@ def query(db_path, id=None, status=None, abstraction=None, limit=None):
     cols = ["id", "log_path", "res_save_dir", "abstraction", "num_inputs", "status"]
     rows = manager.query(cols=cols, status=status, abstraction=abstraction,
                          id=id, limit=limit)
+    if len(rows) == 0:
+        return "No data found"
+    s = ", ".join(col for col in cols)
+    print(s)
+    print("-"*len(s))
     for row in rows:
-        s = ", ".join(str(row[col]) for col in cols)
-        print(s)
+        print(row)
+        print("-------")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -95,7 +101,7 @@ def main():
     query_parser.add_argument("-i", "--id", type=int)
     query_parser.add_argument("-s", "--status", type=int)
     query_parser.add_argument("-a", "--abstraction", type=str)
-    query_parser.add_argument("-l", "--limit", type=int)
+    query_parser.add_argument("-n", "--limit", type=int)
 
     kwargs = vars(parser.parse_args())
     globals()[kwargs.pop("subparser")](**kwargs)
