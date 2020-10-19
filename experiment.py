@@ -8,7 +8,6 @@ from datetime import datetime
 import argparse
 import torch
 import os
-import pandas as pd
 
 EXPT_OPTS = ["data_path", "model_path", "log_path", "res_save_dir", "abstraction", "num_inputs"]
 LAUNCH_SCRIPT = "python expt_interchange.py"
