@@ -125,13 +125,16 @@ def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None
 
 
 def select_cmd(table_name, cols=None, cond_dict=None, like=None, limit=None):
-    cols_string = "*" if cols is None else ", ".join(cols)
+    cols_string = "*" if cols else ", ".join(cols)
     cmd = f"SELECT {cols_string} FROM {table_name}"
     if cond_dict:
         cmd += " WHERE "
         cmd += " AND ".join(f"{k} = {v}" for k, v in cond_dict.items())
+        if like:
+            cmd += " AND "
     if like:
-        cmd += " AND "
+        if not cond_dict:
+            cmd += " WHERE "
         cmd += " AND ".join(f"{k} LIKE {p}" for k, p in like.items())
     if limit:
         cmd += f" LIMIT {limit}"

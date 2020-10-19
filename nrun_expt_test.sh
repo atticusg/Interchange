@@ -1,4 +1,4 @@
-# python experiment.py preprocess \
+#python experiment.py preprocess \
 #    "mqnli_data/mqnli.train.txt" \
 #    "mqnli_data/mqnli.dev.txt" \
 #    "mqnli_data/mqnli.test.txt" \

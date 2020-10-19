@@ -12,6 +12,7 @@ import os
 EXPT_OPTS = ["data_path", "model_path", "log_path", "res_save_dir", "abstraction", "num_inputs"]
 LAUNCH_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
+META_SCRIPT = None
 
 def setup(db_path, model_path, data_path):
     default_opts = {
@@ -52,10 +53,14 @@ def preprocess(train, dev, test, data_path, no_separator=False, for_transformer=
     torch.save(data, data_path)
 
 
-def query(db_path, id=None, status=None, abstraction=None):
-
-    rows = db.select()
-
+def query(db_path, id=None, status=None, abstraction=None, limit=None):
+    manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT)
+    cols = ["id", "log_path", "res_save_dir", "abstraction", "num_inputs", "status"]
+    rows = manager.query(cols=cols, status=status, abstraction=abstraction,
+                         id=id, limit=limit)
+    for row in rows:
+        s = ", ".join(row[col] for col in cols)
+        print(s)
 
 def main():
     parser = argparse.ArgumentParser()
