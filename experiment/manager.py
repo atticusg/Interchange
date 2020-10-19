@@ -64,6 +64,17 @@ class ExperimentManager:
         "Get all experiments that are not yet run from database"
         return db.fetch_new(self.db_path, TABLE_NAME, self.expt_opts, n=n)
 
+    def query(self, cols=None, status=None, abstraction=None, id=None, limit=n):
+        cond_dict = {}
+        if status: cond_dict["status"] = status
+        if id: cond_dict["id"] = id
+        like_dict = {}
+        if abstraction:
+            like_dict["abstraction"] = f"%{abstraction}%"
+        return db.select(self.db_path, TABLE_NAME, cols=cols,
+                         cond_dict=cond_dict, like=like_dict, limit=limit)
+
+
     def dispatch(self, opts):
         "launch an experiment by running bash script"
         update_dict = {"status": -1}
