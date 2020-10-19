@@ -85,7 +85,7 @@ class ExperimentManager:
                 assert "-o" not in metascript
                 time_str = datetime.now().strftime("%m%d-%H%M%S")
                 log_path = os.path.join(opts["res_save_dir"], f"{time_str}.log")
-                metascript += f" -o {log_path}"
+                metascript += f" -o {log_path} "
                 update_dict["log_path"] = log_path
 
         db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
