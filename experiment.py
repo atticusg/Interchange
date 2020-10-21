@@ -44,7 +44,8 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
                     id = manager.insert({"abstraction": abstraction,
                                         "num_inputs": n})
                     res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
-                    manager.update({"res_save_dir": res_save_dir}, id)
+                    manager.update({"model_path": model_path,
+                                    "res_save_dir": res_save_dir}, id)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
 
