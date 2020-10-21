@@ -54,7 +54,7 @@ def main():
 
     args = parser.parse_args()
 
-    e = InterchangeAnalysis(running_status=-2, finished_status=2)
+    e = InterchangeAnalysis(finished_status=2)
     e.run(vars(args))
 
 if __name__ == "__main__":

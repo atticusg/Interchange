@@ -13,19 +13,13 @@ TABLE_NAME = "results"
 
 
 class Experiment:
-    def __init__(self, running_status=-1, finished_status=1):
-        self.running_status = running_status
+    def __init__(self, finished_status=1):
         self.finished_status = finished_status
 
     def experiment(self, opts: Dict):
         raise NotImplementedError
 
     def run(self, opts: Dict) -> Dict:
-        if "db_path" in opts and opts["db_path"]:
-            if self.running_status is not None:
-                db.update(opts["db_path"], TABLE_NAME,
-                          {"status": self.running_status}, opts["id"])
-
         res_dict = self.experiment(opts)
 
         if "db_path" in opts and opts["db_path"]:
@@ -101,8 +95,12 @@ class ExperimentManager:
         return script
 
 
-    def dispatch(self, opts, launch_script, metascript=None, detach=False):
+    def dispatch(self, opts, launch_script, metascript=None, detach=False,
+                 started_status=None):
         "launch an experiment by running bash script"
+        update_dict = {}
+        if started_status is not None:
+            update_dict["status"] = started_status
         if metascript:
             # need result save dir to exist for logging purposes
             save_dir = opts["res_save_dir"]
@@ -116,8 +114,10 @@ class ExperimentManager:
                 time_str = datetime.now().strftime("%m%d-%H%M%S")
                 log_path = os.path.join(save_dir, f"{time_str}.log")
                 metascript += f" -o {log_path} "
-                update_dict = {"log_path": log_path}
-                db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+                update_dict["log_path"] = log_path
+
+        if update_dict:
+            db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
 
         # generate script to launch task
         script = self.get_script(opts, launch_script)
@@ -149,23 +149,26 @@ class ExperimentManager:
                 subprocess.run(cmds)
 
     def run(self, launch_script, n=None, detach=False, metascript=None,
-            metascript_batch=False, metascript_log_dir=None, status=0):
+            metascript_batch=False, metascript_log_dir=None, ready_status=0,
+            started_status=None):
         if metascript and metascript_batch:
             self.run_metascript_batch(launch_script, metascript, metascript_log_dir,
-                                      n=n, detach=detach, status=status)
+                                      n=n, detach=detach, ready_status=ready_status,
+                                      started_status=started_status)
         else:
-            expts = self.fetch(n, status=status)
+            expts = self.fetch(n, status=ready_status)
             for expt_opts in expts:
                 self.dispatch(expt_opts, launch_script=launch_script,
-                              metascript=metascript, detach=detach)
+                              metascript=metascript, detach=detach,
+                              started_status=started_status)
 
 
 
     def run_metascript_batch(self, launch_script, metascript, log_dir, n=None,
-                             detach=False, status=1):
+                             detach=False, ready_status=1, started_status=None):
         """ Put a batch of scripts into one script file and run the whole batch
         with a given metascript """
-        expts = self.fetch(n, status=status)
+        expts = self.fetch(n, status=ready_status)
 
         if not os.path.exists(log_dir):
             print("Creating directory to save results:", log_dir)
@@ -179,8 +182,9 @@ class ExperimentManager:
         scripts = []
         for opts in expts:
             scripts.append(self.get_script(opts, launch_script))
-            update_dict = {"status": -2}
-            db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+            if started_status is not None:
+                update_dict = {"status": started_status}
+                db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
 
 
         script_file_path = os.path.join(log_dir, f"script-{time_str}.sh")

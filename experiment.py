@@ -51,7 +51,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
 
 
 def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log_dir,
-        status):
+        ready_status, started_status):
     manager = ExperimentManager(db_path, EXPT_OPTS)
 
     if os.path.exists(script):
@@ -65,10 +65,10 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
     manager.run(launch_script=script, n=n, detach=detach,
                 metascript=metascript, metascript_batch=metascript_batch,
                 metascript_log_dir=metascript_log_dir,
-                status=status)
+                ready_status=ready_status, started_status=started_status)
 
 
-def analyze(db_path, n, detach, metascript, log_dir):
+def analyze(db_path, n, detach, metascript, log_dir, ready_status, started_status):
     expt_opts = ["data_path", "model_path", "save_path", "abstraction",
                  "num_inputs"]
     manager = ExperimentManager(db_path, expt_opts)
@@ -81,7 +81,7 @@ def analyze(db_path, n, detach, metascript, log_dir):
     manager.run(launch_script=script, n=n, detach=detach,
                 metascript=metascript, metascript_batch=True,
                 metascript_log_dir=log_dir,
-                status=1)
+                ready_status=ready_status, started_status=started_status)
 
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
@@ -125,13 +125,14 @@ def main():
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
-    run_parser.add_argument("-r", "--script", type=str, default=DEFAULT_SCRIPT)
+    run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
     run_parser.add_argument("-n", "--n", type=int, default=None)
     run_parser.add_argument("-x", "--detach", action="store_true")
     run_parser.add_argument("-m", "--metascript", type=str, default=None)
     run_parser.add_argument("-b", "--metascript_batch", action="store_true")
     run_parser.add_argument("-l", "--metascript_log_dir", type=str)
-    run_parser.add_argument("-s", "--status", type=int, default=0)
+    run_parser.add_argument("-r", "--ready_status", type=int, default=0)
+    run_parser.add_argument("-s", "--started_status", type=int, default=None)
 
     analyze_parser = subparsers.add_parser("analyze")
     analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
@@ -139,6 +140,8 @@ def main():
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
     analyze_parser.add_argument("-l", "--log_dir", type=str)
+    analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
+    analyze_parser.add_argument("-s", "--started_status", type=int, default=None)
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
