@@ -102,22 +102,27 @@ def get_value(high_model, high_node, high_intervention):
     return high_model.get_result(high_node, high_intervention)
 
 def create_new_realizations(low_model, high_model, high_node, mapping, low_intervention, high_intervention):
+    """H: Return a direct mapping between each high intermediate node values and low intermediate node value,
+    given a pair of interventions"""
     new_realizations = dict()
     new_realizations_to_inputs = dict()
     def fill_new_realizations(high_node, mapping, low_intervention, high_intervention):
         high_value = get_value(high_model, high_node, high_intervention)
         low_value = None
         for low_node in mapping[high_node]:
-            low_value = low_model.get_result(low_node,low_intervention)[mapping[high_node][low_node]]
+            low_value = low_model.get_result(low_node,low_intervention)[mapping[high_node][low_node]] # index into location
         for child in high_model.nodes[high_node].children:
             fill_new_realizations(child.name, mapping, low_intervention, high_intervention)
         if high_node in high_intervention.intervention.values or high_model.nodes[high_node] in high_model.leaves or high_node == high_model.root.name:
-            return
+            return # H: ignore intervened nodes, leaf nodes and root nodes
 
+        # H: in first dry run without interv, low_value and high_value will be intermediate nodes
+        # H: make hypothetical mapping between <high node and value> and <low node and value>
         low_string = serialize(low_value)
         high_string = serialize(high_value)
         new_realizations[(high_node, high_string)] = low_string
         new_realizations_to_inputs[(low_string, high_node)] = low_intervention
+        # H: The low intervention that potentially realizes this high-level intermediate value
 
     fill_new_realizations(high_node, mapping, low_intervention, high_intervention)
     return new_realizations, new_realizations_to_inputs
@@ -128,14 +133,16 @@ def get_potential_realizations(new_realizations, total_realizations, high_node, 
     for high_node2 in new_high_intervention.intervention.values:
         high_value2 = serialize(get_value(high_model, high_node2, new_high_intervention))
         if high_model.nodes[high_node2] in high_model.leaves or high_node2 == high_model.root.name:
-            continue
+            continue # H: ignore leaves and root
         if high_node2 == high_node:
+            # H: this is definitely the case for now
             high_value = serialize(get_value(high_model, high_node, new_high_intervention))
             new_partial_realizations = []
             for partial_realization in partial_realizations:
                 if (high_node, high_value) not in new_realizations:
                     return []
                 partial_realization[(high_node, high_value)] = new_realizations[(high_node, high_value)]
+                # H: fetch low level node value that is hypothesized to correspond to intervention value
                 new_partial_realizations.append(partial_realization)
             partial_realizations = new_partial_realizations
         else:
@@ -192,32 +199,34 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
                 #for realization in total_realizations[key]:
                     #print(np.fromstring(realization))
         #print("\n\n")
+        # H: pop one low, high intervention pair
         curr_low_intervention,curr_high_intervention = low_and_high_interventions[0]
         low_and_high_interventions = low_and_high_interventions[1:]
-        #store whether the output matches
+        # store whether the output matches
         high_output = get_value(high_model, high_model.root.name, curr_high_intervention)
         for low_node in mapping[high_model.root.name]:
             low_output = low_model.get_result(low_node,curr_low_intervention)
         result[(curr_low_intervention, curr_high_intervention)] = low_output == high_output
-        #update the realizations
+        # update the realizations H: for this low, high intervention pair
         new_realizations, new_realizations_to_inputs = create_new_realizations(low_model, high_model,high_model.root.name, mapping, curr_low_intervention, curr_high_intervention)
-        #add on the new interventions that need to be checked
+        # add on the new interventions that need to be checked
         used_high_interventions = set()
         for new_high_intervention in total_high_interventions:
-            for high_node, high_value in new_realizations:
+            for high_node, high_value in new_realizations: # H: just one pair for now
                 if high_node in new_high_intervention.intervention.values and new_high_intervention not in used_high_interventions:
+                    # H: pick an intervention from total_high_interventions (there is only one intermediate high node so it's okay)
                     realizations = get_potential_realizations( new_realizations, total_realizations, high_node, high_model, new_high_intervention)
+                    # H: realizations: (high_node, high_value) -> stringified_low_value
+                    # H: realizations may be empty , because
                     for realization in realizations:
                         if (high_node, truncate(high_value)) in total_realizations:
                             if new_realizations[(high_node, high_value)] in total_realizations[(high_node, truncate(high_value))]:
                                 continue
-                        #print("realization",realization)
-                        #print("total_realization",total_realizations)
-                        #print("realization", np.fromstring(new_realizations[(high_node, high_value)]))
+
+                        # H: based on realizations, create new low intervention such that
+                        # intervention value corresponds to that in stringified_low_value
                         new_low_intervention = high_to_low(high_model,new_high_intervention, realization,mapping, input_mapping)
-                        #print("newhigh", new_high_intervention.intervention.values, new_high_intervention.base.values)
-                        #print("newlow", new_low_intervention.intervention.values, new_low_intervention.base.values)
-                        #print(len(low_and_high_interventions))
+
                         low_and_high_interventions.append((new_low_intervention, new_high_intervention))
                         used_high_interventions.add(new_high_intervention)
         #merge the new_realizations into the total realizations

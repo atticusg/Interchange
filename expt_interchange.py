@@ -170,8 +170,9 @@ class InterchangeExperiment(Experiment):
 
     def analyze_results(self, res: List, abstraction: str,
                         high_model, low_model) -> Dict:
-        a = Analysis(res, abstraction, high_model=high_model, low_model=low_model)
-        return a.analyze()
+        # a = Analysis(res, abstraction, high_model=high_model, low_model=low_model)
+        # return a.analyze()
+        return {}
 
     def experiment(self, opts: Dict) -> Dict:
         res, duration, high_model, low_model = self.get_results(opts)

@@ -20,11 +20,10 @@ class Analysis:
         self.high_model = high_model
         self.low_model = low_model
 
-    def get_original_input(self, low_interv: Intervention,
-                           low_node: str, high_node: str) -> Intervention:
-        interv_tensor = low_interv.intervention[low_node]
-        k = (serialize(interv_tensor), high_node)
-        return self.realizations_to_inputs[k]
+    def get_original_input(self, low_interv: Intervention) -> Intervention:
+        interv_tensor = low_interv.intervention[self.low_node]
+        k = (serialize(interv_tensor), self.high_node)
+        return self.realizations_to_inputs[k].base
 
     def analyze(self):
         experiments = self.experiments
@@ -35,6 +34,74 @@ class Analysis:
         #   (low_effect_eq)    =?=                     =?=   (high_effect_eq)
         #                 interv_output    =?=    interv_output
         #                              (interv_eq)
+
+        #   hi_effect_eq?   -true--   E
+        #        | false
+        #    interv_eq?     --false-- D
+        #        | true
+        #   lo_effect_eq?   --true--  C
+        #        | false
+        #     base_eq?      --false-- B
+        #        | true
+        #        A
+
+        interv_count = 0  # A + B + C + D + E
+        effective_count = 0  # A + B + C + D
+        interv_eq_count = 0  # A + B + C
+        success_effective_count = 0  # A
+
+        source_high_eq_count = 0
+
+        count = 0
+        for k, v in experiments.items():
+            low, high = k
+
+            if len(low.intervention.values) > 0 and len(
+                    high.intervention.values) > 0:
+                interv_count += 1
+                low_base_output, low_interv_output = self.low_model.intervene(
+                    low)
+                high_base_output, high_interv_output = self.high_model.intervene(
+                    high)
+
+                interv_source_input = self.get_original_input(low)
+                interv_source_output = self.low_model.compute(interv_source_input)
+
+                res_interv_outputs_eq = v.item()
+                base_eq = (low_base_output == high_base_output).item()
+                interv_eq = (low_interv_output == high_interv_output).item()
+                low_effect_eq = (low_base_output == low_interv_output).item()
+                high_effect_eq = (high_base_output == high_interv_output).item()
+                source_high_eq = (interv_source_output == high_interv_output).item()
+
+                if source_high_eq: source_high_eq_count += 1
+
+                if not high_effect_eq:
+                    effective_count += 1
+                    if interv_eq:
+                        interv_eq_count += 1
+                        if not low_effect_eq and base_eq:
+                            success_effective_count += 1
+
+            count += 1
+
+        effective_ratio = effective_count / interv_count if interv_count != 0 else 0
+        interv_eq_rate = interv_eq_count / effective_count if effective_count != 0 else 0
+        success_effective_rate = success_effective_count / effective_count if effective_count != 0 else 0
+        source_high_eq_rate = source_high_eq_count / interv_count if interv_count != 0 else 0
+        print(f"Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
+        print(f"interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
+        print(f"success_effective_rate: {success_effective_count}/{effective_count}={success_effective_rate * 100:.3f}%")
+        print(f"source_high_eq_rate: {source_high_eq_count}/{interv_count}={source_high_eq_rate*100:.3f}%")
+
+        return {
+            "interv_count": interv_count,
+            "effective_ratio": effective_ratio,
+            "interv_eq_rate": interv_eq_rate,
+            "success_effective_rate": success_effective_rate
+        }
+
+
         #
         # |---------------|-------------------------|----------|
         # |               |         base_eq         |          |
@@ -46,57 +113,56 @@ class Analysis:
         # |---------------|------------|------------|----------|
 
 
-        interv_count = 0             # A + B + C + D + E
-        correct_count = 0            # A + B + C + D
-        success_count = 0            # A + C
-        effective_count = 0          # A + B
-        success_effective_count = 0  # A
-
-        count = 0
-        for k, v in experiments.items():
-            low, high = k
-
-            if len(low.intervention.values) > 0 and len(high.intervention.values) > 0:
-                interv_count += 1
-                low_base_output, low_interv_output = self.low_model.intervene(low)
-                high_base_output, high_interv_output = self.high_model.intervene(high)
-
-                res_interv_outputs_eq = v.item()
-                base_eq = (low_base_output == high_base_output).item()
-                interv_eq = (low_interv_output == high_interv_output).item()
-                low_effect_eq = (low_base_output == low_interv_output).item()
-                high_effect_eq = (low_base_output == low_interv_output).item()
-
-                if not base_eq: continue
-
-                assert res_interv_outputs_eq == interv_eq
-                assert low_effect_eq == high_effect_eq
-
-                correct_count += 1
-                if interv_eq: success_count += 1
-                if not low_effect_eq: effective_count += 1
-                if (not low_effect_eq) and interv_eq: success_effective_count += 1
-
-            count += 1
-
-        success_rate = success_count/correct_count if correct_count != 0 else 0
-        success_rate_in_effective = success_effective_count/effective_count if effective_count != 0 else 0
-        effective_rate = effective_count/correct_count if correct_count != 0 else 0
-        print(f"Base accuracy: {correct_count}/{interv_count}={correct_count/interv_count*100:.3f}%")
-        print(f"Success rate: {success_count}/{correct_count}={success_rate*100:.3f}%")
-        print(f"Effective rate: {effective_count}/{correct_count}={effective_rate*100:.3f}%")
-        print(f"Success rate in effective: {success_effective_count}/{effective_count}={success_rate_in_effective*100:.3f}%")
-
-        return {
-            "interv_count": interv_count,
-            "correct_count": correct_count,
-            "success_count": success_count,
-            "effective_count": effective_count,
-            "success_effective_count": success_effective_count,
-            "effective_rate": effective_rate,
-            "success_rate": success_rate,
-            "success_rate_in_effective": success_rate_in_effective
-        }
+        # interv_count = 0             # A + B + C + D + E
+        # correct_count = 0            # A + B + C + D
+        # success_count = 0            # A + C
+        # effective_count = 0          # A + B
+        # success_effective_count = 0  # A
+        #
+        # count = 0
+        # for k, v in experiments.items():
+        #     low, high = k
+        #
+        #     if len(low.intervention.values) > 0 and len(high.intervention.values) > 0:
+        #         interv_count += 1
+        #         low_base_output, low_interv_output = self.low_model.intervene(low)
+        #         high_base_output, high_interv_output = self.high_model.intervene(high)
+        #
+        #         res_interv_outputs_eq = v.item()
+        #         base_eq = (low_base_output == high_base_output).item()
+        #         interv_eq = (low_interv_output == high_interv_output).item()
+        #         low_effect_eq = (low_base_output == low_interv_output).item()
+        #         high_effect_eq = (low_base_output == low_interv_output).item()
+        #
+        #         if not base_eq: continue
+        #
+        #         assert res_interv_outputs_eq == interv_eq
+        #
+        #         correct_count += 1
+        #         if interv_eq: success_count += 1
+        #         if not low_effect_eq: effective_count += 1
+        #         if (not low_effect_eq) and interv_eq: success_effective_count += 1
+        #
+        #     count += 1
+        #
+        # success_rate = success_count/correct_count if correct_count != 0 else 0
+        # success_rate_in_effective = success_effective_count/effective_count if effective_count != 0 else 0
+        # effective_rate = effective_count/correct_count if correct_count != 0 else 0
+        # print(f"Base accuracy: {correct_count}/{interv_count}={correct_count/interv_count*100:.3f}%")
+        # print(f"Success rate: {success_count}/{correct_count}={success_rate*100:.3f}%")
+        # print(f"Effective rate: {effective_count}/{correct_count}={effective_rate*100:.3f}%")
+        # print(f"Success rate in effective: {success_effective_count}/{effective_count}={success_rate_in_effective*100:.3f}%")
+        #
+        # return {
+        #     "interv_count": interv_count,
+        #     "correct_count": correct_count,
+        #     "success_count": success_count,
+        #     "effective_count": effective_count,
+        #     "success_effective_count": success_effective_count,
+        #     "effective_rate": effective_rate,
+        #     "success_rate": success_rate,
+        #     "success_rate_in_effective": success_rate_in_effective
+        # }
 
         # print("check some examples in realizations_to_inputs")
         # for i, (k, v) in enumerate(realizations_to_inputs.items()):
