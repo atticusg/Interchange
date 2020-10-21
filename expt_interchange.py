@@ -6,10 +6,13 @@ import json
 from datetime import datetime
 import argparse
 
-from intervention.abstraction_torch import find_abstractions
 
+from intervention.abstraction_torch import find_abstractions
 from intervention import Intervention, LOC
+
+from torch.utils.data import DataLoader
 from datasets.utils import my_collate
+
 from modeling.lstm import LSTMModule
 from train import load_model
 
@@ -18,11 +21,10 @@ from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 from experiment import Experiment
-
-from torch.utils.data import DataLoader
+from experiment import db_utils as db
+from analysis import Analysis
 
 from typing import List, Dict, Tuple
-
 
 SAMPLE_RES_DICT = {
     'runtime': 0.,
@@ -87,7 +89,7 @@ class InterchangeExperiment(Experiment):
 
         return res
 
-    def get_results(self, opts: Dict) -> Tuple[List, float]:
+    def get_results(self, opts: Dict):
         module, _ = load_model(LSTMModule, opts["model_path"],
                                device=torch.device("cpu"))
         module.eval()
@@ -148,7 +150,7 @@ class InterchangeExperiment(Experiment):
             )
         duration = time.time() - start_time
         print(f"Finished finding abstractions, took {duration:.2f} s")
-        return res, duration
+        return res, duration, high_model, low_model
 
     def save_results(self, opts: Dict, res: List) -> str:
         abstraction = json.loads(opts["abstraction"])
@@ -166,15 +168,17 @@ class InterchangeExperiment(Experiment):
 
         return save_path
 
-    def analyze_results(self, res: List):
-        return {}
+    def analyze_results(self, res: List, abstraction: str,
+                        high_model, low_model) -> Dict:
+        a = Analysis(res, abstraction, high_model=high_model, low_model=low_model)
+        return a.analyze()
 
     def experiment(self, opts: Dict) -> Dict:
-        res, duration = self.get_results(opts)
+        res, duration, high_model, low_model = self.get_results(opts)
         # pickle file
         save_path = self.save_results(opts, res)
         res_dict = {"runtime": duration, "save_path": save_path}
-        analysis_res = self.analyze_results(res)
+        analysis_res = self.analyze_results(res, opts["abstraction"], high_model, low_model)
         res_dict.update(analysis_res)
         return res_dict
 

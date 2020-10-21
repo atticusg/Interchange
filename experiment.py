@@ -9,9 +9,15 @@ import torch
 import os
 
 EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction", "num_inputs"]
-LAUNCH_SCRIPT = "python expt_interchange.py"
+DEFAULT_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
+
+def preprocess(train, dev, test, data_path, no_separator=False, for_transformer=False):
+    data = MQNLIData(train, dev, test, for_transformer=for_transformer,
+                     use_separator=(not no_separator))
+    torch.save(data, data_path)
+
 
 def setup(db_path, model_path, data_path):
     default_opts = {
@@ -22,15 +28,12 @@ def setup(db_path, model_path, data_path):
         "abstraction": "",
         "num_inputs": 20
     }
-    manager = ExperimentManager(db_path, default_opts, LAUNCH_SCRIPT)
+    manager = ExperimentManager(db_path, default_opts)
 
-def run(db_path, n):
-    manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT, META_SCRIPT)
-    manager.run(n)
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
     if model_type == "lstm":
-        manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT)
+        manager = ExperimentManager(db_path, EXPT_OPTS)
         module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
         num_layers = module.num_lstm_layers
         time_str = datetime.now().strftime("%m%d-%H%M%S")
@@ -46,14 +49,42 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
         raise ValueError(f"Unsupported model type: {model_type}")
 
 
-def preprocess(train, dev, test, data_path, no_separator=False, for_transformer=False):
-    data = MQNLIData(train, dev, test, for_transformer=for_transformer,
-                     use_separator=(not no_separator))
-    torch.save(data, data_path)
+def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log_dir,
+        status):
+    manager = ExperimentManager(db_path, EXPT_OPTS)
+
+    if os.path.exists(script):
+        with open(script, "r") as f:
+            script = f.read().strip()
+
+    if metascript and os.path.exists(metascript):
+        with open(metascript, "r") as f:
+            metascript = f.read().strip()
+
+    manager.run(launch_script=script, n=n, detach=detach,
+                metascript=metascript, metascript_batch=metascript_batch,
+                metascript_log_dir=metascript_log_dir,
+                status=status)
+
+
+def analyze(db_path, n, detach, metascript, log_dir):
+    expt_opts = ["data_path", "model_path", "save_path", "abstraction",
+                 "num_inputs"]
+    manager = ExperimentManager(db_path, expt_opts)
+    script = "python expt_interchange_analysis.py"
+
+    if metascript and os.path.exists(metascript):
+        with open(metascript, "r") as f:
+            metascript = f.read().strip()
+
+    manager.run(launch_script=script, n=n, detach=detach,
+                metascript=metascript, metascript_batch=True,
+                metascript_log_dir=log_dir,
+                status=1)
 
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
-    manager = ExperimentManager(db_path, EXPT_OPTS, LAUNCH_SCRIPT)
+    manager = ExperimentManager(db_path, EXPT_OPTS)
     cols = ["id", "log_path", "res_save_dir", "abstraction", "num_inputs", "status"]
     rows = manager.query(cols=cols, status=status, abstraction=abstraction,
                          id=id, limit=limit)
@@ -65,6 +96,7 @@ def query(db_path, id=None, status=None, abstraction=None, limit=None):
     for row in rows:
         print(row)
         print("-------")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -92,7 +124,20 @@ def main():
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
-    run_parser.add_argument("-n", "--n", type=int, required=True)
+    run_parser.add_argument("-r", "--script", type=str, default=DEFAULT_SCRIPT)
+    run_parser.add_argument("-n", "--n", type=int, default=None)
+    run_parser.add_argument("-x", "--detach", action="store_true")
+    run_parser.add_argument("-m", "--metascript", type=str, default=None)
+    run_parser.add_argument("-b", "--metascript_batch", action="store_true")
+    run_parser.add_argument("-l", "--metascript_log_dir", type=str)
+    run_parser.add_argument("-s", "--status", type=int, default=0)
+
+    analyze_parser = subparsers.add_parser("analyze")
+    analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
+    analyze_parser.add_argument("-n", "--n", type=int, required=True)
+    analyze_parser.add_argument("-x", "--detach", action="store_true")
+    analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
+    analyze_parser.add_argument("-l", "--log_dir", type=str)
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")

@@ -71,6 +71,9 @@ def add_cols(db_file, table_name, res_dict):
 
 
 def update(db_path, table_name, insert_dict, id=None):
+    if not insert_dict:
+        return
+
     all_cols = list(insert_dict.keys())
     cmd = update_cmd(table_name, all_cols, id)
 
@@ -103,9 +106,9 @@ def update_cmd(table_name, cols, id=None):
     return cmd
 
 
-def fetch_new(db_path, table_name, opt_cols, n=None):
+def fetch_new(db_path, table_name, opt_cols, n=None, status=0):
     cols = ["id"] + opt_cols
-    cond_dict = {"status": 0}
+    cond_dict = {"status": status}
     return select(db_path, table_name, cols=cols, cond_dict=cond_dict, limit=n)
 
 

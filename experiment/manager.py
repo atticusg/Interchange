@@ -13,32 +13,40 @@ TABLE_NAME = "results"
 
 
 class Experiment:
+    def __init__(self, running_status=-1, finished_status=1):
+        self.running_status = running_status
+        self.finished_status = finished_status
+
     def experiment(self, opts: Dict):
         raise NotImplementedError
 
     def run(self, opts: Dict) -> Dict:
+        if "db_path" in opts and opts["db_path"]:
+            if self.running_status is not None:
+                db.update(opts["db_path"], TABLE_NAME,
+                          {"status": self.running_status}, opts["id"])
+
         res_dict = self.experiment(opts)
+
         if "db_path" in opts and opts["db_path"]:
             self.record_results(res_dict, opts["db_path"], opts["id"])
         return res_dict
 
     def record_results(self, res_dict: Dict, db_path: str, xid: int):
         complete_dict = res_dict.copy()
-        complete_dict["status"] = 1
+        if self.finished_status is not None:
+            complete_dict["status"] = self.finished_status
         db.add_cols(db_path, TABLE_NAME, complete_dict)
         db.update(db_path, TABLE_NAME, complete_dict, xid)
 
 
 class ExperimentManager:
-    def __init__(self, db_path: str, expt_opts: Union[Dict, List],
-                 launch_script: str, metascript: str=None):
+    def __init__(self, db_path: str, expt_opts: Union[Dict, List]):
         self.db_path = db_path
-        self.launch_script = launch_script
-        self.metascript = metascript
 
         if not os.path.exists(db_path):
             print("Creating new database for experiment manager")
-            assert isinstance(expt_opts, Dict)
+            assert isinstance(expt_opts, dict)
             self.expt_opts = list(expt_opts.keys())
             opts = expt_opts.copy()
             if "status" not in opts:
@@ -65,9 +73,10 @@ class ExperimentManager:
         "insert many experiments"
         pass
 
-    def fetch(self, n=None):
+    def fetch(self, n=None, status=0):
         "Get all experiments that are not yet run from database"
-        return db.fetch_new(self.db_path, TABLE_NAME, self.expt_opts, n=n)
+        return db.fetch_new(self.db_path, TABLE_NAME, self.expt_opts, n=n,
+                            status=status)
 
     def query(self, cols=None, status=None, abstraction=None, id=None, limit=None):
         cond_dict = {}
@@ -80,27 +89,8 @@ class ExperimentManager:
                          cond_dict=cond_dict, like=like_dict, limit=limit)
 
 
-    def dispatch(self, opts):
-        "launch an experiment by running bash script"
-        save_dir = opts["res_save_dir"]
-        print("res_save_dir", save_dir)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        update_dict = {"status": -1}
-
-        if self.metascript:
-            metascript = self.metascript
-            if metascript.startswith("nlprun"):
-                assert "-o" not in metascript
-                time_str = datetime.now().strftime("%m%d-%H%M%S")
-                log_path = os.path.join(save_dir, f"{time_str}.log")
-                metascript += f" -o {log_path} "
-                update_dict["log_path"] = log_path
-
-        db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
-
-        script_args = [self.launch_script]
+    def get_script(self, opts, launch_script):
+        script_args = [launch_script]
 
         for opt_name, value in opts.items():
             script_args.append(f"--{opt_name}")
@@ -108,8 +98,32 @@ class ExperimentManager:
 
         script_args += ["--db_path", f"{self.db_path}"]
         script = " ".join(script_args)
+        return script
 
-        if self.metascript:
+
+    def dispatch(self, opts, launch_script, metascript=None, detach=False):
+        "launch an experiment by running bash script"
+        if metascript:
+            # need result save dir to exist for logging purposes
+            save_dir = opts["res_save_dir"]
+            if not os.path.exists(save_dir):
+                print("Creating directory to save results:", save_dir)
+                os.makedirs(save_dir)
+
+            if metascript.startswith("nlprun"):
+                # manage logging output for nlprun
+                assert "-o" not in metascript
+                time_str = datetime.now().strftime("%m%d-%H%M%S")
+                log_path = os.path.join(save_dir, f"{time_str}.log")
+                metascript += f" -o {log_path} "
+                update_dict = {"log_path": log_path}
+                db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+
+        # generate script to launch task
+        script = self.get_script(opts, launch_script)
+
+        if metascript:
+            # save script to a file, and use this script file for metascript
             script_file_path = os.path.join(save_dir, "script.sh")
             with open(script_file_path, "w") as f:
                 f.write(script)
@@ -122,13 +136,69 @@ class ExperimentManager:
             cmds.append(script_file_path)
             print(f"----running:\n{cmds}")
             print(f"----script:\n{script}")
-            subprocess.Popen(cmds, start_new_session=True)
+            if detach:
+                subprocess.Popen(cmds, start_new_session=detach)
+            else:
+                subprocess.run(cmds)
         else:
             cmds = shlex.split(script)
             print("----running:\n", cmds)
-            subprocess.Popen(cmds, start_new_session=True)
+            if detach:
+                subprocess.Popen(cmds, start_new_session=detach)
+            else:
+                subprocess.run(cmds)
 
-    def run(self, n=None):
-        expts = self.fetch(n)
-        for expt_opts in expts:
-            self.dispatch(expt_opts)
+    def run(self, launch_script, n=None, detach=False, metascript=None,
+            metascript_batch=False, metascript_log_dir=None, status=0):
+        if metascript and metascript_batch:
+            self.run_metascript_batch(launch_script, metascript, metascript_log_dir,
+                                      n=n, detach=detach, status=status)
+        else:
+            expts = self.fetch(n, status=status)
+            for expt_opts in expts:
+                self.dispatch(expt_opts, launch_script=launch_script,
+                              metascript=metascript, detach=detach)
+
+
+
+    def run_metascript_batch(self, launch_script, metascript, log_dir, n=None,
+                             detach=False, status=1):
+        """ Put a batch of scripts into one script file and run the whole batch
+        with a given metascript """
+        expts = self.fetch(n, status=status)
+
+        if not os.path.exists(log_dir):
+            print("Creating directory to save results:", log_dir)
+            os.makedirs(log_dir)
+
+        assert "-o" not in metascript
+        time_str = datetime.now().strftime("%m%d-%H%M%S")
+        log_path = os.path.join(log_dir, f"out-{time_str}.log")
+        metascript += f" -o {log_path} "
+
+        scripts = []
+        for opts in expts:
+            scripts.append(self.get_script(opts, launch_script))
+            update_dict = {"status": -2}
+            db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+
+
+        script_file_path = os.path.join(log_dir, f"script-{time_str}.sh")
+
+        with open(script_file_path, "w") as f:
+            for script in scripts:
+                f.write(script + "\n")
+
+        # make executable
+        st = os.stat(script_file_path)
+        os.chmod(script_file_path, st.st_mode | stat.S_IXUSR)
+
+        cmds = shlex.split(metascript)
+        cmds.append(script_file_path)
+        print(f"----running:\n{cmds}")
+
+        if detach:
+            subprocess.Popen(cmds, start_new_session=detach)
+        else:
+            subprocess.run(cmds)
+        # subprocess.Popen(cmds, start_new_session=True)
