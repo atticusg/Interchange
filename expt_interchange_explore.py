@@ -1,13 +1,28 @@
-import pickle
-import torch
+import os
 import json
+import torch
+import argparse
+from tqdm import tqdm
 
-from intervention import Intervention
+from collections import defaultdict
+
+from experiment import Experiment
+
+from intervention import Intervention, GraphInput
 from intervention.utils import serialize
+from typing import Dict
+import pickle
 
-class Analysis:
+from train import load_model
+from modeling.lstm import LSTMModule
+from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
+
+
+class ExploratoryAnalysis:
     def __init__(self, graph_data, abstraction_str, high_model, low_model):
         if isinstance(graph_data, str):
+            print("loading data from pickle")
             with open(graph_data, "rb") as f:
                 graph_data = pickle.load(f)
         (experiments, realizations_to_inputs), mapping = graph_data[0]
@@ -20,7 +35,7 @@ class Analysis:
         self.high_model = high_model
         self.low_model = low_model
 
-    def get_original_input(self, low_interv: Intervention) -> Intervention:
+    def get_original_input(self, low_interv: Intervention) -> GraphInput:
         interv_tensor = low_interv.intervention[self.low_node]
         k = (serialize(interv_tensor), self.high_node)
         return self.realizations_to_inputs[k].base
@@ -45,62 +60,82 @@ class Analysis:
         #        | true
         #        A
 
-        interv_count = 0  # A + B + C + D + E
-        effective_count = 0  # A + B + C + D
+        interv_count = 0  # A + B + C + D + E = U + V + W + X + Y + Z
+        effective_count = 0  # A + B + C + D = X + Y + Z + W
         interv_eq_count = 0  # A + B + C
-        success_effective_count = 0  # A
-
-        source_high_eq_count = 0
+        strict_success_count = 0  # A
+        interv_in_source_count = 0
+        interv_eq_in_source_count = 0 # X
+        interv_ne_in_source_count = 0 # Z
 
         count = 0
-        for k, v in experiments.items():
+
+        input_to_intervention_dict = defaultdict(set)
+
+        for k, v in tqdm(experiments.items()):
             low, high = k
 
             if len(low.intervention.values) > 0 and len(
                     high.intervention.values) > 0:
                 interv_count += 1
-                low_base_output, low_interv_output = self.low_model.intervene(
-                    low)
-                high_base_output, high_interv_output = self.high_model.intervene(
-                    high)
+                # low_base_output, low_interv_output = self.low_model.intervene(low)
+                high_base_output, high_interv_output = self.high_model.intervene(high)
 
-                interv_source_input = self.get_original_input(low)
-                interv_source_output = self.low_model.compute(interv_source_input)
+                base_input_str = serialize(low.base["input"])
 
-                res_interv_outputs_eq = v.item()
-                base_eq = (low_base_output == high_base_output).item()
-                interv_eq = (low_interv_output == high_interv_output).item()
-                low_effect_eq = (low_base_output == low_interv_output).item()
+                source_tensor_input = self.get_original_input(low)["input"]
+                source_input_str = serialize(source_tensor_input)
+                source_graph_input = GraphInput({"input": source_tensor_input})
+                input_to_intervention_dict[base_input_str].add(source_input_str)
+                # source_low_output = self.low_model.compute(source_input)
+
+                source_high_node = self.high_model.get_result(self.high_node, source_graph_input)
+                interv_high_node = high.intervention[self.high_node]
+
+                # res_interv_outputs_eq = v.item()
+
+                interv_in_source = torch.all(source_high_node == interv_high_node).item()
+                if interv_in_source: interv_in_source_count += 1
+
+                # source_high_eq = (source_low_output == high_interv_output).item()
+                # if source_high_eq: source_high_eq_count += 1
+
+                # base_eq = (low_base_output == high_base_output).item()
+                interv_eq = v.item()
+                # interv_eq = (low_interv_output == high_interv_output).item()
+                # low_effect_eq = (low_base_output == low_interv_output).item()
                 high_effect_eq = (high_base_output == high_interv_output).item()
-                source_high_eq = (interv_source_output == high_interv_output).item()
-
-                if source_high_eq: source_high_eq_count += 1
 
                 if not high_effect_eq:
                     effective_count += 1
                     if interv_eq:
                         interv_eq_count += 1
-                        if not low_effect_eq and base_eq:
-                            success_effective_count += 1
 
             count += 1
 
         effective_ratio = effective_count / interv_count if interv_count != 0 else 0
         interv_eq_rate = interv_eq_count / effective_count if effective_count != 0 else 0
-        success_effective_rate = success_effective_count / effective_count if effective_count != 0 else 0
-        source_high_eq_rate = source_high_eq_count / interv_count if interv_count != 0 else 0
+        strict_success_rate = strict_success_count / effective_count if effective_count != 0 else 0
+        interv_in_source_rate = interv_in_source_count / interv_count if interv_count != 0 else 0
+        # source_high_eq_rate = source_high_eq_count / interv_count if interv_count != 0 else 0
+        unique_intervs = {k: len(v) for k, v in input_to_intervention_dict.items()}
+        unique_interv_count = sum(v for v in unique_intervs.values())
+        print(f"Num of different base inputs: {len(input_to_intervention_dict)}")
+        # print(f"Num of diff interv for each input:\n{list(unique_intervs.values())}")
+        print(f"Total num of unique intervs for each input = {unique_interv_count}/{interv_count}")
+        print(f"Interv in source rate: {interv_in_source_count}/{interv_count}={interv_in_source_rate * 100:.3f}%")
         print(f"Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
         print(f"interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
-        print(f"success_effective_rate: {success_effective_count}/{effective_count}={success_effective_rate * 100:.3f}%")
-        print(f"source_high_eq_rate: {source_high_eq_count}/{interv_count}={source_high_eq_rate*100:.3f}%")
-
-        return {
-            "interv_count": interv_count,
-            "effective_ratio": effective_ratio,
-            "interv_eq_rate": interv_eq_rate,
-            "success_effective_rate": success_effective_rate
-        }
-
+        print(f"strict_success_rate: {strict_success_count}/{effective_count}={strict_success_rate * 100:.3f}%")
+        # return {
+        #     "interv_count": interv_count,
+        #     "effective_ratio": effective_ratio,
+        #     "interv_eq_rate": interv_eq_rate,
+        #     "success_effective_rate": success_effective_rate,
+        #     "in_source_given_eq_rate": in_source_given_eq_rate,
+        #     "eq_given_in_source_rate": eq_given_in_source_rate
+        # }
+        return {}
 
         #
         # |---------------|-------------------------|----------|
@@ -172,14 +207,50 @@ class Analysis:
         #     arr = torch.tensor(arr)
         #     print(f"\nName: {name} Arr: {arr.shape}")
 
+class InterchangeAnalysis(Experiment):
+    def experiment(self, opts: Dict) -> Dict:
+        if "save_path" not in opts \
+                or opts["save_path"] is None \
+                or not os.path.exists(opts["save_path"]):
+            raise ValueError("Cannot find saved data for expt {opts['id']}")
 
+        module, _ = load_model(LSTMModule, opts["model_path"],
+                               device=torch.device("cpu"))
+        module.eval()
+        data = torch.load(opts["data_path"], map_location=torch.device("cpu"))
+
+        abstraction = json.loads(opts["abstraction"])
+
+        high_intermediate_node = abstraction[0]
+        low_intermediate_nodes = abstraction[1]
+
+        base_compgraph = MQNLI_LSTM_CompGraph(module)
+        low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
+                                               low_intermediate_nodes)
+        high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
+
+        a = ExploratoryAnalysis(opts["save_path"], opts["abstraction"], high_model,
+                                low_model)
+        return a.analyze()
 
 def main():
-    pickle_file = "../experiment_data/res-200-Oct11-212216-obj_adj.pkl"
-    # analysis = Analysis(pickle_file)
-    # analysis.analyze()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", required=True)
+    parser.add_argument("--model_path", required=True)
+    parser.add_argument("--save_path", required=True)
+    parser.add_argument("--abstraction", type=str)
+    parser.add_argument("--num_inputs", type=int)
+
+    parser.add_argument("--id", type=int)
+    parser.add_argument("--db_path", type=str)
+
+    args = parser.parse_args()
+
+    e = InterchangeAnalysis(finished_status=None)
+    e.run(vars(args))
 
     """
+    pickle_file = "../experiment_data/res-200-Oct11-212216-obj_adj.pkl"
     "experiment_data/res-200-Oct11-212216-obj_adj.pkl"
     found 40200 experiments
     found 200 entries in realizations_to_inputs

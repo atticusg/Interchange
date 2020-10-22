@@ -68,11 +68,10 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
                 ready_status=ready_status, started_status=started_status)
 
 
-def analyze(db_path, n, detach, metascript, log_dir, ready_status, started_status):
+def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, started_status):
     expt_opts = ["data_path", "model_path", "save_path", "abstraction",
                  "num_inputs"]
     manager = ExperimentManager(db_path, expt_opts)
-    script = "python expt_interchange_analysis.py"
 
     if metascript and os.path.exists(metascript):
         with open(metascript, "r") as f:
@@ -136,6 +135,7 @@ def main():
 
     analyze_parser = subparsers.add_parser("analyze")
     analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
+    analyze_parser.add_argument("-i", "--script", type=str, default="python expt_interchange_analysis.py")
     analyze_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)

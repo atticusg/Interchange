@@ -22,7 +22,7 @@ from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGra
 
 from experiment import Experiment
 from experiment import db_utils as db
-from analysis import Analysis
+from expt_interchange_analysis import Analysis
 
 from typing import List, Dict, Tuple
 
