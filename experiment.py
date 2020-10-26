@@ -78,7 +78,7 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, metascript_batch=True,
+                metascript=metascript, metascript_batch=False,
                 metascript_log_dir=log_dir,
                 ready_status=ready_status, started_status=started_status)
 

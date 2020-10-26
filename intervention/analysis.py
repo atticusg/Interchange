@@ -1,9 +1,10 @@
 import networkx as nx
 import copy
 import numpy as np
+from intervention.utils import serialize
 
 def get_input(intervention):
-    return tuple({(k, tuple(intervention.base.values[k])) for k in intervention.base.values})
+    return tuple({(k, serialize(intervention.base.values[k])) for k in intervention.base.values})
 
 def construct_graph(low_model, high_model, mapping, result, realizations_to_inputs, high_node_name, high_root_name):
     G = nx.Graph()
@@ -28,7 +29,7 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
         for key in mapping[high_node_name]:
             low_node = key
         index = mapping[high_node_name][low_node]
-        string_array = low_model.get_result(low_node,low_intervention)[index].tostring()
+        string_array = serialize(low_model.get_result(low_node,low_intervention)[index])
         input2 = get_input(realizations_to_inputs[(string_array, high_node_name)])
         if input2 not in inputs_seen:
             G.add_node(total_id)

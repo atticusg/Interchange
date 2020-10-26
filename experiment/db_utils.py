@@ -121,7 +121,9 @@ def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None
         cur = conn.cursor()
         cur.execute(cmd)
         rows = cur.fetchall()
-
+        col_names = [d[0] for d in cur.description]
+    if not cols:
+        cols = col_names
     res = [{col_name: value for col_name, value in zip(cols, row)}
            for row in rows]
     return res
