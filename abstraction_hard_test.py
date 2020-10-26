@@ -2,6 +2,7 @@ from intervention import ComputationGraph, GraphNode, GraphInput, Intervention, 
 from intervention.abstraction import create_possible_mappings, find_abstractions
 import numpy as np
 from sklearn.neural_network import MLPClassifier
+from intervention.analysis import construct_graph, find_clusters
 
 class BooleanLogicProgram(ComputationGraph):
     def __init__(self):
@@ -172,6 +173,7 @@ for _ in range(150):
         result, realizations_to_inputs = temp
         fail = False
         verify_mapping(mapping, result, inputs, low_model)
+        construct_graph(low_model,high_model, mapping, result, realizations_to_inputs, "bool_intermediate", "root")
         for interventions in result:
             low_intervention, high_intervention = interventions
             verify_intervention(mapping,low_intervention, high_intervention, result[interventions], W, b, W2, b2)

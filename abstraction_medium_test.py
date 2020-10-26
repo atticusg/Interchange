@@ -1,6 +1,7 @@
 from intervention import ComputationGraph, GraphNode, GraphInput, Intervention, Location
 from intervention.abstraction import create_possible_mappings, find_abstractions
 import numpy as np
+from intervention.analysis import construct_graph, find_cliques
 
 class BooleanLogicProgram(ComputationGraph):
     def __init__(self):
@@ -149,6 +150,10 @@ for temp,mapping in find_abstractions(low_model, high_model, inputs,total_high_i
     meme +=1
     fail = False
     verify_mapping(mapping, result, inputs, low_model)
+    G, causal_edges = construct_graph(low_model,high_model, mapping, result, realizations_to_inputs, "bool_intermediate", "root")
+    cliques = find_cliques(G, causal_edges, 5)
+    print("cliques:", cliques)
+    x = input()
     for interventions in result:
         low_intervention, high_intervention = interventions
         print(mapping)
