@@ -80,4 +80,12 @@ def find_cliques(G, causal_edges, alpha):
             new_clique.add(node)
             original_G.remove_node(node)
         cliques.append(new_clique)
-    return cliques
+    final_result = []
+    for clique in cliques:
+        seen = False
+        for node in copy.copy(clique):
+            for node2 in clique:
+                if ((node, node2) in causal_edges or (node2, node) in causal_edges) and not seen:
+                    final_result.append(clique)
+                    seen = True
+    return final_result
