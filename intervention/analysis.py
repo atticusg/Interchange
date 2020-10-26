@@ -3,7 +3,7 @@ import copy
 import numpy as np
 
 def get_input(intervention):
-    return tuple({(k, tuple(intervention.base.values[k])) for k in intervention.base.values})
+    return tuple(sorted([(k, serialize(intervention.base.values[k])) for k in intervention.base.values]))
 
 def construct_graph(low_model, high_model, mapping, result, realizations_to_inputs, high_node_name, high_root_name):
     G = nx.Graph()
