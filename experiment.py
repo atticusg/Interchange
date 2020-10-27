@@ -70,7 +70,7 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
 
 def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, started_status):
     expt_opts = ["data_path", "model_path", "save_path", "abstraction",
-                 "num_inputs"]
+                 "num_inputs", "res_save_dir"]
     manager = ExperimentManager(db_path, expt_opts)
 
     if metascript and os.path.exists(metascript):
@@ -78,7 +78,7 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, metascript_batch=True,
+                metascript=metascript, metascript_batch=False,
                 metascript_log_dir=log_dir,
                 ready_status=ready_status, started_status=started_status)
 

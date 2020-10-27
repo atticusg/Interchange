@@ -57,8 +57,10 @@ class Analysis:
         effective_count = 0  # A + B
         interv_eq_count = 0  # A
 
-        for k, v in experiments.items():
+        for count, (k, v) in enumerate(experiments.items()):
             low, high = k
+            if count % 10000 == 0:
+                print(f"processed {count}/{len(experiments)} examples")
 
             if len(low.intervention.values) > 0 and len(
                     high.intervention.values) > 0:
@@ -121,6 +123,7 @@ def main():
     parser.add_argument("--save_path", required=True)
     parser.add_argument("--abstraction", type=str)
     parser.add_argument("--num_inputs", type=int)
+    parser.add_argument("--res_save_dir", type=str)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
