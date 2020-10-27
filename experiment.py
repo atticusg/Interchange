@@ -1,4 +1,6 @@
+from experiment import db_utils as db
 from experiment import ExperimentManager
+
 from datasets.mqnli import MQNLIData
 from train import load_model
 from modeling.lstm import LSTMModule
@@ -82,6 +84,35 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
                 metascript_log_dir=log_dir,
                 ready_status=ready_status, started_status=started_status)
 
+def add_graph(db_path, ids, alphas, add_all):
+    db.add_cols(db_path, "results", {"graph_alpha": 1})
+    if ids:
+        for id in ids:
+            dup_ids = db.duplicate_rows(db_path, "results", id, len(alphas))
+            for i, a in zip(dup_ids, alphas):
+                db.update(db_path, "results", {"graph_alpha": a, "status": 3}, id=i)
+    if add_all:
+        assert len(alphas) == 1
+        rows = db.select(db_path, "results", cols=["id"], cond_dict={"status": 2})
+        for row in rows:
+            id = row["id"]
+            db.update(db_path, "results", {"graph_alpha": alphas[0], "status": 3}, id=id)
+
+
+
+def analyze_graph(db_path, script, n, detach, metascript, log_dir):
+    expt_opts = ["data_path", "model_path", "res_save_dir", "save_path", "abstraction", "graph_alpha"]
+    manager = ExperimentManager(db_path, expt_opts)
+
+    if metascript and os.path.exists(metascript):
+        with open(metascript, "r") as f:
+            metascript = f.read().strip()
+
+    manager.run(launch_script=script, n=n, detach=detach,
+                metascript=metascript, metascript_batch=False,
+                metascript_log_dir=log_dir,
+                ready_status=3, started_status=-3)
+
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
     manager = ExperimentManager(db_path, EXPT_OPTS)
@@ -122,6 +153,11 @@ def main():
     add_parser.add_argument("-o", "--res_dir", type=str, required=True, help="Directory to save stored results")
     add_parser.add_argument("-n", "--num_inputs", type=int, nargs="+")
 
+    add_graph_parser = subparsers.add_parser("add_graph")
+    add_graph_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
+    add_graph_parser.add_argument("-i", "--ids", type=int, nargs="+")
+    add_graph_parser.add_argument("-a", "--alphas", type=int, nargs="+")
+
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
     run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
@@ -142,6 +178,14 @@ def main():
     analyze_parser.add_argument("-l", "--log_dir", type=str)
     analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
     analyze_parser.add_argument("-s", "--started_status", type=int, default=None)
+
+    analyze_graph_parser = subparsers.add_parser("analyze_graph")
+    analyze_graph_parser.add_argument("-d", "--db_path", type=str, required=True)
+    analyze_graph_parser.add_argument("-i", "--script", type=str, default="python expt_graph.py")
+    analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
+    analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
+    analyze_graph_parser.add_argument("-m", "--metascript", type=str, default=None)
+    analyze_graph_parser.add_argument("-l", "--log_dir", type=str)
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")

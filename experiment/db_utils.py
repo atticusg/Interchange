@@ -69,6 +69,34 @@ def add_cols(db_file, table_name, res_dict):
             cmd_str = f'ALTER TABLE {table_name} ADD COLUMN {col_name} {type_str};'
             c.execute(cmd_str)
 
+def duplicate_rows(db_file, table_name, id, n):
+    assert n >= 1
+    ids = [id]
+    if n <= 1:
+        return ids
+    conn = db_connect(db_file)
+
+    with conn:
+        c = conn.cursor()
+        c.execute(f"SELECT * FROM {table_name} LIMIT 1;")
+        existing_cols = [d[0] for d in c.description if d[0] != "id"]
+        cols_string = ','.join(existing_cols)
+        cmd = f"INSERT INTO {table_name} ({cols_string}) SELECT {cols_string} FROM {table_name} WHERE id = {id};"
+
+        for _ in range(n-1):
+            c.execute(cmd)
+            ids.append(c.lastrowid)
+
+    return ids
+
+def delete_rows(db_file, table_name, ids):
+    conn = db_connect(db_file)
+    with conn:
+        c = conn.cursor()
+        for i in ids:
+            cmd = f"DELETE FROM {table_name} WHERE id = {i};"
+            c.execute(cmd)
+
 
 def update(db_path, table_name, insert_dict, id=None):
     if not insert_dict:
@@ -121,7 +149,9 @@ def select(db_path, table_name, cols=None, cond_dict=None, like=None, limit=None
         cur = conn.cursor()
         cur.execute(cmd)
         rows = cur.fetchall()
-
+        col_names = [d[0] for d in cur.description]
+    if not cols:
+        cols = col_names
     res = [{col_name: value for col_name, value in zip(cols, row)}
            for row in rows]
     return res
