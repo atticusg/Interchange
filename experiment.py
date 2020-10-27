@@ -86,17 +86,18 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
 
 def add_graph(db_path, ids, alphas, all):
     db.add_cols(db_path, "results", {"graph_alpha": 1})
-    if ids:
-        for id in ids:
-            dup_ids = db.duplicate_rows(db_path, "results", id, len(alphas))
-            for i, a in zip(dup_ids, alphas):
-                db.update(db_path, "results", {"graph_alpha": a, "status": 3}, id=i)
     if all:
         assert len(alphas) == 1
         rows = db.select(db_path, "results", cols=["id"], cond_dict={"status": 2})
         for row in rows:
             id = row["id"]
             db.update(db_path, "results", {"graph_alpha": alphas[0], "status": 3}, id=id)
+
+    elif ids:
+        for id in ids:
+            dup_ids = db.duplicate_rows(db_path, "results", id, len(alphas))
+            for i, a in zip(dup_ids, alphas):
+                db.update(db_path, "results", {"graph_alpha": a, "status": 3}, id=i)
 
 
 
@@ -155,7 +156,7 @@ def main():
 
     add_graph_parser = subparsers.add_parser("add_graph")
     add_graph_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
-    add_graph_parser.add_argument("-i", "--ids", type=int, nargs="+")
+    add_graph_parser.add_argument("-i", "--ids", type=int, nargs="*")
     add_graph_parser.add_argument("-a", "--alphas", type=int, nargs="+")
     add_graph_parser.add_argument("--all", action="store_true")
 
