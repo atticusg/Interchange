@@ -17,8 +17,12 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
     causal_edges = set()
     count = 0
     for interventions in result:
-        count +=1
         low_intervention, high_intervention = interventions
+
+        if len(low_intervention.intervention.values) == 0 or len(
+                high_intervention.intervention.values) == 0:
+            continue
+        count += 1
         input = get_input(low_intervention)
         if input not in inputs_seen:
             G.add_node(total_id)
@@ -30,7 +34,9 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
         for key in mapping[high_node_name]:
             low_node = key
         index = mapping[high_node_name][low_node]
-        string_array = serialize(low_model.get_result(low_node,low_intervention)[index])
+        # string_array = serialize(low_model.get_result(low_node,low_intervention)[index])
+        # print("low intervention", low_intervention.intervention)
+        string_array = serialize(low_intervention.intervention[low_node])
         input2 = get_input(realizations_to_inputs[(string_array, high_node_name)])
         if input2 not in inputs_seen:
             G.add_node(total_id)

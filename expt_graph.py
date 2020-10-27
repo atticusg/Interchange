@@ -1,7 +1,10 @@
+import os
 import pickle
 import json
 import argparse
 import torch
+
+from datetime import datetime
 
 from experiment import Experiment
 from train import load_model
@@ -12,8 +15,13 @@ from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 
+def analyze_results(G, causal_edges, input_to_id, cliques):
+    max_clique_size = max(len(c) for c in cliques)
+    avg_clique_size = sum(len(c) for c in cliques) / len(cliques) if len(cliques) > 0 else 0
+    return {"max_clique_size": max_clique_size, "avg_clique_size": avg_clique_size}
+
 class GraphExperiment(Experiment):
-    def experiment(self, opts):
+    def get_results(self, opts):
         module, _ = load_model(LSTMModule, opts["model_path"],
                                device=torch.device("cpu"))
         module.eval()
@@ -24,28 +32,83 @@ class GraphExperiment(Experiment):
         low_intermediate_nodes = abstraction[1]
         high_intermediate_nodes = [high_intermediate_node]
 
+        print("Loading low level model and data")
         base_compgraph = MQNLI_LSTM_CompGraph(module)
         low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
                                                low_intermediate_nodes)
         high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
+        with open(opts["save_path"], "rb") as f:
+            graph_data = pickle.load(f)
+            (result, realizations_to_inputs), mapping = graph_data[0]
+
+        print("Mapping", mapping)
+        print("Constructing graph")
+
+        # print("Example of key in realizations_to_inputs", list(realizations_to_inputs.keys())[0])
+        G, causal_edges, input_to_id = construct_graph(
+            low_model=low_model,
+            high_model=high_model,
+            mapping=mapping,
+            result=result,
+            realizations_to_inputs=realizations_to_inputs,
+            high_node_name=high_intermediate_node,
+            high_root_name="root"
+        )
+
+        print("Finding cliques")
+        cliques = find_cliques(G, causal_edges, opts["graph_alpha"])
+        print(len(cliques))
+        return G, causal_edges, input_to_id, cliques
+
+    def save_results(self, opts, G, causal_edges, input_to_id, cliques):
+        res = {
+            "alpha": opts["graph_alpha"],
+            "graph": G,
+            "causal_edges": causal_edges,
+            "input_to_id": input_to_id,
+            "cliques": cliques
+        }
+        abstraction = json.loads(opts["abstraction"])
+        high_intermediate_node = abstraction[0]
+        time_str = datetime.now().strftime("%m%d-%H%M%S")
+        if 'id' in opts:
+            res_file_name = f"graph-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
+        else:
+            res_file_name = f"graph-{high_intermediate_node}-{time_str}.pkl"
+        graph_save_path = os.path.join(opts["res_save_dir"], res_file_name)
+
+        with open(graph_save_path, "wb") as f:
+            pickle.dump(res, f)
+        print("Saved graph analysis data to", graph_save_path)
+        return graph_save_path
+
+
+    def experiment(self, opts):
+        G, causal_edges, input_to_id, cliques = self.get_results(opts)
+        graph_save_path = self.save_results(opts, G, causal_edges, input_to_id, cliques)
+        res_dict = {"graph_save_path": graph_save_path}
+        res_dict.update(analyze_results(G, causal_edges, input_to_id, cliques))
+        return res_dict
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", required=True)
-    parser.add_argument("--model_path", required=True)
-    parser.add_argument("--save_path", required=True)
+    parser.add_argument("--graph_alpha", type=int, required=True)
+    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--model_path", type=str, required=True)
+    parser.add_argument("--save_path", type=str, required=True)
+    parser.add_argument("--res_save_dir", type=str, required=True)
     parser.add_argument("--abstraction", type=str)
-    parser.add_argument("--num_inputs", type=int)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
 
     args = parser.parse_args()
 
-    e = GraphExperiment(finished_status=3)
+    e = GraphExperiment(finished_status=4)
     e.run(vars(args))
+
 
 if __name__ == "__main__":
     main()
