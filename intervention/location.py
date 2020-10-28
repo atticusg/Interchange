@@ -35,3 +35,7 @@ class Location:
     def str_to_slice(cls, s):
         return slice(
             *map(lambda x: int(x.strip()) if x.strip() else None, s.split(':')))
+
+    @classmethod
+    def slice_to_str(cls, s):
+        return ':'.join(x if x != "None" else "" for x in str(s).strip("slice").strip("()").split(", "))

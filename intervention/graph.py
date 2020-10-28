@@ -148,8 +148,6 @@ class ComputationGraph:
         """
         raise NotImplementedError
 
-
-
     def intervene(self, intervention, store_cache=True):
         """
         Run intervention on computation graph.

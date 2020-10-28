@@ -16,11 +16,52 @@ from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGra
 
 
 def analyze_results(G, causal_edges, input_to_id, cliques):
+    if len(cliques) == 0:
+        res_dict = {"max_clique_size": 0,
+                    "avg_clique_size": 0,
+                    "sum_clique_size": 0,
+                    "clique_count": 0}
+        return res_dict
     max_clique_size = max(len(c) for c in cliques)
     avg_clique_size = sum(len(c) for c in cliques) / len(cliques) if len(cliques) > 0 else 0
-    return {"max_clique_size": max_clique_size, "avg_clique_size": avg_clique_size}
+    num_nodes_in_cliques = sum(len(c) for c in cliques)
+    res_dict = {"max_clique_size": max_clique_size,
+                "avg_clique_size": avg_clique_size,
+                "sum_clique_size": num_nodes_in_cliques,
+                "clique_count": len(cliques)}
+    return res_dict
+
+def save_results(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
+    res = {
+        "alpha": graph_alpha,
+        "graph": G,
+        "causal_edges": causal_edges,
+        "input_to_id": input_to_id,
+        "cliques": cliques
+    }
+    time_str = datetime.now().strftime("%m%d-%H%M%S")
+    if id:
+        res_file_name = f"graph-id{id}-{time_str}.pkl"
+    else:
+        res_file_name = f"graph-{time_str}.pkl"
+    graph_save_path = os.path.join(res_save_dir, res_file_name)
+
+    with open(graph_save_path, "wb") as f:
+        pickle.dump(res, f)
+    print("Saved graph analysis data to", graph_save_path)
+    return graph_save_path
 
 class GraphExperiment(Experiment):
+    def experiment(self, opts):
+        G, causal_edges, input_to_id, cliques = self.get_results(opts)
+        graph_save_path = save_results(G, causal_edges, input_to_id, cliques,
+                                       opts["graph_alpha"],
+                                       opts["res_save_dir"],
+                                       opts.get("id", None))
+        res_dict = {"graph_save_path": graph_save_path}
+        res_dict.update(analyze_results(G, causal_edges, input_to_id, cliques))
+        return res_dict
+
     def get_results(self, opts):
         module, _ = load_model(LSTMModule, opts["model_path"],
                                device=torch.device("cpu"))
@@ -61,35 +102,7 @@ class GraphExperiment(Experiment):
         print(len(cliques))
         return G, causal_edges, input_to_id, cliques
 
-    def save_results(self, opts, G, causal_edges, input_to_id, cliques):
-        res = {
-            "alpha": opts["graph_alpha"],
-            "graph": G,
-            "causal_edges": causal_edges,
-            "input_to_id": input_to_id,
-            "cliques": cliques
-        }
-        abstraction = json.loads(opts["abstraction"])
-        high_intermediate_node = abstraction[0]
-        time_str = datetime.now().strftime("%m%d-%H%M%S")
-        if 'id' in opts:
-            res_file_name = f"graph-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
-        else:
-            res_file_name = f"graph-{high_intermediate_node}-{time_str}.pkl"
-        graph_save_path = os.path.join(opts["res_save_dir"], res_file_name)
 
-        with open(graph_save_path, "wb") as f:
-            pickle.dump(res, f)
-        print("Saved graph analysis data to", graph_save_path)
-        return graph_save_path
-
-
-    def experiment(self, opts):
-        G, causal_edges, input_to_id, cliques = self.get_results(opts)
-        graph_save_path = self.save_results(opts, G, causal_edges, input_to_id, cliques)
-        res_dict = {"graph_save_path": graph_save_path}
-        res_dict.update(analyze_results(G, causal_edges, input_to_id, cliques))
-        return res_dict
 
 
 def main():
