@@ -1,3 +1,9 @@
+import os
+import argparse
+import torch
+
+from datetime import datetime
+
 from experiment import db_utils as db
 from experiment import ExperimentManager
 
@@ -5,10 +11,6 @@ from datasets.mqnli import MQNLIData
 from train import load_model
 from modeling.lstm import LSTMModule
 
-from datetime import datetime
-import argparse
-import torch
-import os
 
 EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction", "num_inputs"]
 DEFAULT_SCRIPT = "python expt_interchange.py"
@@ -130,6 +132,12 @@ def query(db_path, id=None, status=None, abstraction=None, limit=None):
         print(row)
         print("-------")
 
+def update_status(db_path, ids, id_range, status):
+    if id_range:
+        ids = list(range(id_range[0], id_range[1] + 1))
+    for i in ids:
+        db.update(db_path, "results", {"status": status}, id=i)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -196,6 +204,12 @@ def main():
     query_parser.add_argument("-s", "--status", type=int)
     query_parser.add_argument("-a", "--abstraction", type=str)
     query_parser.add_argument("-n", "--limit", type=int)
+
+    update_parser = subparsers.add_parser("update_status")
+    update_parser.add_argument("-d", "--db_path", type=str, required=True)
+    update_parser.add_argument("-i", "--ids", type=int, nargs="*")
+    update_parser.add_argument("-r", "--id_range", type=int, nargs=2)
+    update_parser.add_argument("-s", "--status", type=int, required=True)
 
     kwargs = vars(parser.parse_args())
     globals()[kwargs.pop("subparser")](**kwargs)
