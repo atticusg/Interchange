@@ -174,7 +174,7 @@ def main():
 
     analyze_parser = subparsers.add_parser("analyze")
     analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
-    analyze_parser.add_argument("-i", "--script", type=str, default="python expt_viz_cliques.py")
+    analyze_parser.add_argument("-i", "--script", type=str, default="python expt_interchange_analysis.py")
     analyze_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
@@ -184,7 +184,7 @@ def main():
 
     analyze_graph_parser = subparsers.add_parser("analyze_graph")
     analyze_graph_parser.add_argument("-d", "--db_path", type=str, required=True)
-    analyze_graph_parser.add_argument("-i", "--script", type=str, default="python expt_interchange_analysis.py")
+    analyze_graph_parser.add_argument("-i", "--script", type=str, default="python expt_viz_cliques.py")
     analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
     analyze_graph_parser.add_argument("-m", "--metascript", type=str, default=None)
