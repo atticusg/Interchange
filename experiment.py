@@ -102,7 +102,8 @@ def add_graph(db_path, ids, alphas, all):
 
 
 def analyze_graph(db_path, script, n, detach, metascript, log_dir):
-    expt_opts = ["data_path", "model_path", "res_save_dir", "save_path", "abstraction", "graph_alpha"]
+    expt_opts = ["data_path", "graph_save_paths", "mappings", "res_save_dir",
+                 "abstraction"]
     manager = ExperimentManager(db_path, expt_opts)
 
     if metascript and os.path.exists(metascript):
@@ -112,7 +113,7 @@ def analyze_graph(db_path, script, n, detach, metascript, log_dir):
     manager.run(launch_script=script, n=n, detach=detach,
                 metascript=metascript, metascript_batch=False,
                 metascript_log_dir=log_dir,
-                ready_status=3, started_status=-3)
+                ready_status=2, started_status=-2)
 
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
@@ -173,7 +174,7 @@ def main():
 
     analyze_parser = subparsers.add_parser("analyze")
     analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
-    analyze_parser.add_argument("-i", "--script", type=str, default="python expt_interchange_analysis.py")
+    analyze_parser.add_argument("-i", "--script", type=str, default="python expt_viz_cliques.py")
     analyze_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)

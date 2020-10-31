@@ -103,8 +103,6 @@ class GraphExperiment(Experiment):
         return G, causal_edges, input_to_id, cliques
 
 
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--graph_alpha", type=int, required=True)
