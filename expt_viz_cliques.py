@@ -32,7 +32,7 @@ class VisualizeCliques(Experiment):
             visualize_save_paths.append(visualize_save_path)
 
         print(visualize_save_paths)
-        return {"visualize_save_paths", json.dumps(visualize_save_paths)}
+        return {"visualize_save_paths": json.dumps(visualize_save_paths)}
 
     def get_str_from_input(self, x):
         serialized_tensor = x[0][1]
