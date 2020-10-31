@@ -59,6 +59,8 @@ class VisualizeCliques(Experiment):
         id_to_graph_input = {i: GraphInput({"input": torch.tensor(x[0][1])}) for x, i in input_to_id.items()}
 
         cliques = sorted(cliques, reverse=True, key=lambda c: len(c))
+        if len(cliques) == 0:
+            return "N/A"
 
         with open(viz_save_path, "w") as f:
             fieldnames = ["clique", "input", "high_node_value", "root_value"] + positions
