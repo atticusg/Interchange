@@ -41,7 +41,14 @@ class VisualizeCliques(Experiment):
         return input_toks
 
     def visualize_value(self, value):
-        return json.dumps([int_to_rln[x] for x in value])
+        assert isinstance(value, torch.Tensor)
+        if value.dim() == 1:
+            return json.dumps([int_to_rln[x] for x in value])
+        elif value.dim() == 2 and 1 in value.shape:
+            value = value.squeeze()
+            return json.dumps([int_to_rln[x] for x in value])
+        else:
+            raise NotImplementedError
 
     def visualize(self, opts, mapping, graph_res_path):
         print("mapping", mapping)
@@ -63,7 +70,7 @@ class VisualizeCliques(Experiment):
             return "N/A"
 
         with open(viz_save_path, "w") as f:
-            fieldnames = ["clique", "input", "high_node_value", "root_value"] + positions
+            fieldnames = ["clique", "high_node_value", "root_value"] + positions
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for i, c in enumerate(cliques):
