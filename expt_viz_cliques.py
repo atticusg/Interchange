@@ -158,7 +158,7 @@ def main():
 
     args = parser.parse_args()
 
-    e = VisualizeCliques(finished_status=3)
+    e = VisualizeCliques(finished_status=4)
     e.run(vars(args))
 
 if __name__ == "__main__":

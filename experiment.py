@@ -103,7 +103,7 @@ def add_graph(db_path, ids, alphas, all):
 
 
 
-def analyze_graph(db_path, script, n, detach, metascript, log_dir):
+def analyze_graph(db_path, script, n, detach, metascript, log_dir, ready_status, started_status):
     expt_opts = ["data_path", "graph_save_paths", "mappings", "res_save_dir",
                  "abstraction"]
     manager = ExperimentManager(db_path, expt_opts)
@@ -115,7 +115,7 @@ def analyze_graph(db_path, script, n, detach, metascript, log_dir):
     manager.run(launch_script=script, n=n, detach=detach,
                 metascript=metascript, metascript_batch=False,
                 metascript_log_dir=log_dir,
-                ready_status=2, started_status=-2)
+                ready_status=ready_status, started_status=started_status)
 
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
@@ -197,6 +197,8 @@ def main():
     analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
     analyze_graph_parser.add_argument("-m", "--metascript", type=str, default=None)
     analyze_graph_parser.add_argument("-l", "--log_dir", type=str)
+    analyze_graph_parser.add_argument("-r", "--ready_status", type=int, default=0)
+    analyze_graph_parser.add_argument("-s", "--started_status", type=int, default=None)
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
