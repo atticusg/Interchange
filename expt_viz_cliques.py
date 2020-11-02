@@ -46,6 +46,7 @@ def get_causal_edge_ratio(graph_res):
                 if (parent, child) in causal_edges:
                     curr_causal_edegs += 1
         total_edges_in_cliques += curr_num_edges
+        total_causal_edges += curr_causal_edegs
         if clique_i == 0:
             edges_in_max_clique = curr_num_edges
             causal_edges_in_max_clique = curr_causal_edegs
