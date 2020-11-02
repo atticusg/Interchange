@@ -34,20 +34,25 @@ def get_causal_edge_ratio(graph_res):
 
     total_edges_in_cliques = 0
     total_causal_edges = 0
-    for clique in cliques:
+    edges_in_max_clique = 0
+    causal_edges_in_max_clique = 0
+    for clique_i, clique in enumerate(cliques):
         nodes = list(clique)
         curr_num_edges = len(nodes) * (len(nodes) - 1)
+        curr_causal_edegs = 0
         for i, parent in enumerate(nodes):
             for j, child in enumerate(nodes):
                 if i == j: continue
                 if (parent, child) in causal_edges:
-                    total_causal_edges += 1
-
+                    curr_causal_edegs += 1
         total_edges_in_cliques += curr_num_edges
+        if clique_i == 0:
+            edges_in_max_clique = curr_num_edges
+            causal_edges_in_max_clique = curr_causal_edegs
 
     causal_edge_ratio = total_causal_edges / total_edges_in_cliques if total_edges_in_cliques != 0 else 0
     print(f"causal edges/total = {total_causal_edges}/{total_edges_in_cliques} = {causal_edge_ratio * 100:.2f}")
-    return total_causal_edges, total_edges_in_cliques
+    return total_causal_edges, total_edges_in_cliques, causal_edges_in_max_clique, edges_in_max_clique
 
 
 class VisualizeCliques(Experiment):
@@ -62,18 +67,22 @@ class VisualizeCliques(Experiment):
         self.high_model = MQNLI_Logic_CompGraph(self.data, [self.high_node])
 
         causal_edge_ratios = []
+        max_clique_causal_edge_ratios = []
         if VISUALIZE:
             visualize_save_paths = []
         for mapping, graph_save_path in zip(mappings, graph_save_paths):
             with open(graph_save_path, "rb") as f:
                 graph_res = pickle.load(f)
-            total_causal_edges, total_edges_in_cliques = get_causal_edge_ratio(graph_res)
+            total_causal_edges, total_edges_in_cliques, causal_edges_in_max_clique, edges_in_max_clique = get_causal_edge_ratio(graph_res)
             causal_edge_ratio = total_causal_edges / total_edges_in_cliques if total_edges_in_cliques != 0 else 0
+            max_clique_causal_edge_ratio = causal_edges_in_max_clique / edges_in_max_clique if edges_in_max_clique != 0 else 0
             causal_edge_ratios.append(causal_edge_ratio)
+            max_clique_causal_edge_ratios.append(max_clique_causal_edge_ratio)
             if VISUALIZE:
                 visualize_save_paths.append(self.visualize(opts, mapping, graph_res))
 
-        res_dict = {"causal_edge_ratios": json.dumps(causal_edge_ratios)}
+        res_dict = {"causal_edge_ratios": json.dumps(causal_edge_ratios),
+                    "max_clique_calusal_edge_ratios": json.dump(max_clique_causal_edge_ratios)}
         if VISUALIZE:
             res_dict["visualize_save_paths"] = json.dumps(visualize_save_paths)
         return res_dict
