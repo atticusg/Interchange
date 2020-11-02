@@ -15,6 +15,41 @@ int_to_rln = ["indep", "equiv", "entail", "rev_entail", "contradict", "alter", "
 positions = ["p_subj_q", "p_subj_adj", "p_subj_n", "p_neg", "p_adv", "p_v", "p_obj_q", "p_obj_adj", "p_obj_n",
              "h_subj_q", "h_subj_adj", "h_subj_n", "h_neg", "h_adv", "h_v", "h_obj_q", "h_obj_adj", "h_obj_n"]
 
+VISUALIZE = False
+
+def get_causal_edge_ratio(graph_res):
+    causal_edges = graph_res["causal_edges"]
+    cliques = graph_res["cliques"]
+    cliques = sorted(cliques, reverse=True, key=lambda c: len(c))
+
+    # total_edges = 0
+    # num_bidirectional = 0
+    #
+    # for parent, child in causal_edges:
+    #     total_edges += 1
+    #     if (child, parent) in causal_edges:
+    #         num_bidirectional += 1
+    #
+    # print(f"num bidirectional/total = {num_bidirectional}/{total_edges} = {num_bidirectional/total_edges:.2f}")
+
+    total_edges_in_cliques = 0
+    total_causal_edges = 0
+    for clique in cliques:
+        nodes = list(clique)
+        curr_num_edges = len(nodes) * (len(nodes) - 1)
+        for i, parent in enumerate(nodes):
+            for j, child in enumerate(nodes):
+                if i == j: continue
+                if (parent, child) in causal_edges:
+                    total_causal_edges += 1
+
+        total_edges_in_cliques += curr_num_edges
+
+    causal_edge_ratio = total_causal_edges / total_edges_in_cliques if total_edges_in_cliques != 0 else 0
+    print(f"causal edges/total = {total_causal_edges}/{total_edges_in_cliques} = {causal_edge_ratio * 100:.2f}")
+    return total_causal_edges, total_edges_in_cliques
+
+
 class VisualizeCliques(Experiment):
     def experiment(self, opts):
         self.data = torch.load(opts["data_path"])
@@ -26,13 +61,22 @@ class VisualizeCliques(Experiment):
 
         self.high_model = MQNLI_Logic_CompGraph(self.data, [self.high_node])
 
-        visualize_save_paths = []
+        causal_edge_ratios = []
+        if VISUALIZE:
+            visualize_save_paths = []
         for mapping, graph_save_path in zip(mappings, graph_save_paths):
-            visualize_save_path = self.visualize(opts, mapping, graph_save_path)
-            visualize_save_paths.append(visualize_save_path)
+            with open(graph_save_path, "rb") as f:
+                graph_res = pickle.load(f)
+            total_causal_edges, total_edges_in_cliques = get_causal_edge_ratio(graph_res)
+            causal_edge_ratio = total_causal_edges / total_edges_in_cliques if total_edges_in_cliques != 0 else 0
+            causal_edge_ratios.append(causal_edge_ratio)
+            if VISUALIZE:
+                visualize_save_paths.append(self.visualize(opts, mapping, graph_res))
 
-        print(visualize_save_paths)
-        return {"visualize_save_paths": json.dumps(visualize_save_paths)}
+        res_dict = {"causal_edge_ratios": json.dumps(causal_edge_ratios)}
+        if VISUALIZE:
+            res_dict["visualize_save_paths"] = json.dumps(visualize_save_paths)
+        return res_dict
 
     def get_str_from_input(self, x):
         serialized_tensor = x[0][1]
@@ -50,13 +94,9 @@ class VisualizeCliques(Experiment):
         else:
             raise NotImplementedError
 
-    def visualize(self, opts, mapping, graph_res_path):
+    def visualize(self, opts, mapping, graph_res):
         print("mapping", mapping)
-        print("graph_res_path", graph_res_path)
         viz_save_path = self.get_save_path(opts, mapping)
-
-        with open(graph_res_path, "rb") as f:
-            graph_res = pickle.load(f)
 
         graph = graph_res["graph"]
         causal_edges = graph_res["causal_edges"]

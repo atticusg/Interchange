@@ -25,11 +25,17 @@ def analyze_results(G, causal_edges, input_to_id, cliques):
     max_clique_size = max(len(c) for c in cliques)
     avg_clique_size = sum(len(c) for c in cliques) / len(cliques) if len(cliques) > 0 else 0
     num_nodes_in_cliques = sum(len(c) for c in cliques)
+    # find percentage of causal edges
+
+
+
     res_dict = {"max_clique_size": max_clique_size,
                 "avg_clique_size": avg_clique_size,
                 "sum_clique_size": num_nodes_in_cliques,
                 "clique_count": len(cliques)}
     return res_dict
+
+
 
 def save_results(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
     res = {
