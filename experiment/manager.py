@@ -85,9 +85,9 @@ class ExperimentManager:
         like_dict = {}
         if abstraction:
             like_dict["abstraction"] = f"%{abstraction}%"
+        print("cols", cols)
         return db.select(self.db_path, TABLE_NAME, cols=cols,
                          cond_dict=cond_dict, like=like_dict, limit=limit)
-
 
     def get_script(self, opts, launch_script):
         script_args = [launch_script]

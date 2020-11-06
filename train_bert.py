@@ -89,11 +89,10 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
                 ready_status=ready_status, started_status=started_status)
 
 
-def query(db_path, id=None, status=None, abstraction=None, limit=None):
+def query(db_path, id=None, status=None, limit=None):
     manager = ExperimentManager(db_path)
     cols = ["id", "status", "batch_size", "lr", "model_save_path"]
-    rows = manager.query(cols=cols, status=status, abstraction=abstraction,
-                         id=id, limit=limit)
+    rows = manager.query(cols=cols, status=status, id=id, limit=limit)
     if len(rows) == 0:
         return "No data found"
     s = ", ".join(col for col in cols)
