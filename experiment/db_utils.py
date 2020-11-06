@@ -24,6 +24,7 @@ def get_col_names(db_path, table_name):
 type2str = {float: 'real', int: 'integer', list: 'text', str: 'text',
             bool: 'bool', tuple: 'text', dict: 'text'}
 
+
 def create_table(db_path, table_name, default_opts):
     conn = db_connect(db_path)
     cmd = create_cmd(table_name, default_opts)

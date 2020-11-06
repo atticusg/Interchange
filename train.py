@@ -1,7 +1,7 @@
 # train.py
-
+import os
 import time
-
+from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -12,39 +12,42 @@ import datasets
 class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
                  max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
-                 patient_epochs=20, use_collate=True, batch_first=True, model_save_path=None,
-                 verbose=True):
+                 patient_epochs=20, use_collate=True, batch_first=True,
+                 model_save_path=None, model_save_dir=None,
+                 verbose=True, opts={}):
         self.data = data
         self.model = model
-
         self.device = model.device
-        self.batch_size = batch_size
-        self.eval_batch_size = eval_batch_size
-        self.lr = lr
-        self.weight_norm = weight_norm
-        self.max_epochs = max_epochs
-        self.run_steps = run_steps
-        self.evals_per_epoch = evals_per_epoch
-        self.patient_epochs = patient_epochs
-        self.model_save_path = model_save_path
-        self.batch_first = batch_first
-        self.verbose = verbose
-        self.use_collate = use_collate
 
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=lr,
-                                          weight_decay=weight_norm)
-        if use_collate:
-            self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
-            self.dataloader = DataLoader(data.train, batch_size=batch_size,
+        self.batch_size = opts.get("batch_size", batch_size)
+        self.eval_batch_size = opts.get("eval_batch_size", eval_batch_size)
+        self.lr = opts.get("lr", lr)
+        self.weight_norm = opts.get("weight_norm",weight_norm)
+        self.max_epochs = opts.get("max_epochs", max_epochs)
+        self.run_steps = opts.get("run_steps", run_steps)
+        self.evals_per_epoch = opts.get("evals_per_epoch", evals_per_epoch)
+        self.patient_epochs = opts.get("patient_epochs", patient_epochs)
+        self.model_save_path = opts.get("model_save_path", model_save_path)
+        self.model_save_dir = opts.get("model_save_dir", model_save_dir)
+        self.batch_first = opts.get("batch_first", batch_first)
+        self.verbose = opts.get("verbose", verbose)
+        self.use_collate = opts.get("use_collate", use_collate)
+
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr,
+                                          weight_decay=self.weight_norm)
+
+        if self.use_collate:
+            self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=self.batch_first)
+            self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True, collate_fn=self.collate_fn)
         else:
-            self.dataloader = DataLoader(data.train, batch_size=batch_size,
+            self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True)
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
         # setup for early stopping
-        self.eval_steps = (data.train.num_examples // batch_size) // evals_per_epoch
-        self.patient_threshold = patient_epochs * evals_per_epoch * self.eval_steps
+        self.eval_steps = (data.train.num_examples // self.batch_size) // self.evals_per_epoch
+        self.patient_threshold = self.patient_epochs * self.evals_per_epoch * self.eval_steps
 
     def config(self):
         return {
@@ -68,6 +71,17 @@ class Trainer:
         best_dev_acc = 0.
         steps_without_increase = 0
         best_model_checkpoint = {}
+        model_save_path = None
+
+        if self.model_save_path or self.model_save_dir:
+            train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
+            model_save_path = self.model_save_path
+            if self.model_save_dir:
+                if model_save_path.endswith(".pt"):
+                    model_save_path = model_save_path[:-len(".pt")]
+                model_save_path = os.path.join(self.model_save_dir,
+                                         f"{model_save_path}_{train_start_time_str}.pt")
+
 
         train_start_time = time.time()
         if self.verbose:
@@ -116,9 +130,9 @@ class Trainer:
                             'train_config': self.config(),
                             'model_config': self.model.config(),
                         }
-                        if self.model_save_path:
-                            torch.save(best_model_checkpoint,
-                                       self.model_save_path)
+                        if model_save_path:
+                            torch.save(best_model_checkpoint, model_save_path)
+
                         if self.verbose:
                             print("Now at epoch %d, step %d, loss %.4f, "
                                   "got accuracy of %.4f, BETTER"
@@ -156,9 +170,9 @@ class Trainer:
             print("Best model was obtained after {} epochs, in {} seconds"
                   .format(epoch + 1, best_model_duration))
             if self.model_save_path:
-                print("Best model saved in {}".format(self.model_save_path))
+                print("Best model saved in {}".format(model_save_path))
 
-        return best_model_checkpoint
+        return best_model_checkpoint, model_save_path
 
 
 def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, batch_first=False):

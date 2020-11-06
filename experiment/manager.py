@@ -7,7 +7,7 @@ import tempfile
 import time
 
 from datetime import datetime
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 TABLE_NAME = "results"
 
@@ -35,10 +35,12 @@ class Experiment:
 
 
 class ExperimentManager:
-    def __init__(self, db_path: str, expt_opts: Union[Dict, List]):
+    def __init__(self, db_path: str, expt_opts: Optional[Union[Dict, List]]=None):
         self.db_path = db_path
 
         if not os.path.exists(db_path):
+            if not expt_opts:
+                raise ValueError("Must provide experiment opts when initializing experiment!")
             print("Creating new database for experiment manager")
             assert isinstance(expt_opts, dict)
             self.expt_opts = list(expt_opts.keys())
@@ -48,12 +50,16 @@ class ExperimentManager:
             db.create_table(db_path, TABLE_NAME, opts)
         else:
             print("Using existing database for experiment manager")
-            if isinstance(expt_opts, Dict):
-                self.expt_opts = list(expt_opts.keys())
-            elif isinstance(expt_opts, List):
+            # if isinstance(expt_opts, Dict):
+            #     self.expt_opts = list(expt_opts.keys())
+            # elif isinstance(expt_opts, List):
+            #     self.expt_opts = expt_opts
+            # else:
+            #     raise ValueError
+            if expt_opts:
                 self.expt_opts = expt_opts
             else:
-                raise ValueError
+                self.expt_opts = list(db.get_col_names(db_path, TABLE_NAME))
 
     def insert(self, opts):
         "insert a new experiment"

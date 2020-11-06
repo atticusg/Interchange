@@ -19,7 +19,10 @@ class PretrainedBertModule(nn.Module):
 
         self.task = task
         self.output_classes = output_classes
-        self.device = device if device else torch.device("cpu")
+        if isinstance(device, str):
+            self.device = torch.device(device)
+        else:
+            self.device = device if device else torch.device("cpu")
 
         self.bert = BertModel.from_pretrained(pretrained_bert_type)
         self.bert.resize_token_embeddings(len(self.tokenizer))
