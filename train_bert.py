@@ -34,7 +34,8 @@ DEFAULT_OPTS = {
     'lr': 0.,
     'weight_norm': 0.,
     'model_save_path': "pretrained_bert", #name of model
-    'res_save_dir': "mqnli_models/bert/"
+    'res_save_dir': "mqnli_models/bert/",
+    "log_path": ""
 }
 
 def preprocess(train, dev, test, data_path):
