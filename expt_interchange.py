@@ -124,7 +124,7 @@ class InterchangeExperiment(Experiment):
         for i, input_tuple in enumerate(dataloader):
             if i == num_inputs: break
 
-            input_value = input_tuple[0].to(module.device)
+            input_value = input_tuple[-2].to(module.device)
             base_input = Intervention({"input": input_value}, {})
             inputs.append(base_input)
 

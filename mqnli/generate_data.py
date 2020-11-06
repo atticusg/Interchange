@@ -580,7 +580,8 @@ def create_corpus(size):
     filename="1gendata"
     data, _, _ = process_data(1.0)
     print("generating balanced data")
-    examples = generate_balanced_data("simple_solutions", "boolean_solutions", size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
+    examples = generate_balanced_data("simple_solutions", "boolean_solutions",
+                                      size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
     save_data(examples, filename)
 
     for ratio in [0,0.0625, 0.125, 0.25, 0.5, 0.75]:

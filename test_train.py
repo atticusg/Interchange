@@ -1,8 +1,10 @@
 import pytest
+import torch
 
 from train import *
 from datasets.sentiment import SentimentData
-from datasets.mqnli import MQNLIData
+from datasets.mqnli import MQNLIData, MQNLIBertData
+from modeling.pretrained_bert import PretrainedBertModule
 from modeling.lstm import LSTMModule, LSTMSelfAttnModule
 from modeling.transformer import TransformerModule
 from modeling.cbow import CBOWModule
@@ -38,6 +40,20 @@ def mqnli_data():
     return MQNLIData("mqnli_data/mqnli.train.txt",
                      "mqnli_data/mqnli.dev.txt",
                      "mqnli_data/mqnli.test.txt",)
+
+@pytest.fixture
+def mqnli_bert_data():
+    return MQNLIBertData("mqnli_data/mqnli.train.txt",
+                         "mqnli_data/mqnli.dev.txt",
+                         "mqnli_data/mqnli.test.txt",
+                         "mqnli_data/bert-remapping.txt")
+
+@pytest.fixture
+def mqnli_bert_mini_data():
+    return MQNLIBertData("mqnli_data/mini.train.txt",
+                         "mqnli_data/mini.dev.txt",
+                         "mqnli_data/mini.test.txt",
+                         "mqnli_data/bert-remapping.txt")
 
 save_path_1 = "sentiment_models/test_lstm.pt"
 save_path_2 = "sentiment_models/test_train_lstm.pt"
@@ -369,4 +385,24 @@ def test_train_lstm_mqnli_mini_sep(mqnli_mini_sep_data):
 
     model = LSTMModule(**model_config).to(torch.device("cuda"))
     trainer = Trainer(mqnli_mini_sep_data, model, **train_config)
+    trainer.train()
+
+def test_train_transformer_mqnli(mqnli_bert_data):
+    model_config = {
+        "tokenizer_vocab_path": "mqnli_data/bert-vocab.txt",
+        'device': torch.device("cuda")
+    }
+    train_config = {
+        'use_collate': False,
+        'batch_size': 16,
+        'max_epochs': 50,
+        'evals_per_epoch': 2,
+        'patient_epochs': 400,
+        'lr': 3e-5,
+        'weight_norm': 0,
+        'model_save_path': "mqnli_models/bert_test.pt"
+    }
+
+    model = PretrainedBertModule(**model_config).to(torch.device("cuda"))
+    trainer = Trainer(mqnli_bert_data, model, **train_config)
     trainer.train()

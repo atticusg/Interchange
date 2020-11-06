@@ -11,14 +11,15 @@ import datasets
 
 class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
-                 max_epochs=100, run_steps=-1, evals_per_epoch=5,
-                 patient_epochs=20, batch_first=True, model_save_path=None,
+                 max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
+                 patient_epochs=20, use_collate=True, batch_first=True, model_save_path=None,
                  verbose=True):
         self.data = data
         self.model = model
 
         self.device = model.device
         self.batch_size = batch_size
+        self.eval_batch_size = eval_batch_size
         self.lr = lr
         self.weight_norm = weight_norm
         self.max_epochs = max_epochs
@@ -28,12 +29,17 @@ class Trainer:
         self.model_save_path = model_save_path
         self.batch_first = batch_first
         self.verbose = verbose
+        self.use_collate = use_collate
 
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr,
                                           weight_decay=weight_norm)
-        self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
-        self.dataloader = DataLoader(data.train, batch_size=batch_size,
-                                     shuffle=True, collate_fn=self.collate_fn)
+        if use_collate:
+            self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
+            self.dataloader = DataLoader(data.train, batch_size=batch_size,
+                                         shuffle=True, collate_fn=self.collate_fn)
+        else:
+            self.dataloader = DataLoader(data.train, batch_size=batch_size,
+                                         shuffle=True)
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
         # setup for early stopping
@@ -43,8 +49,10 @@ class Trainer:
     def config(self):
         return {
             "batch_size": self.batch_size,
+            "eval_batch_size": self.eval_batch_size,
             "lr": self.lr,
             "weight_norm": self.weight_norm,
+            "use_collate": self.use_collate,
             "batch_first": self.batch_first,
             "max_epochs": self.max_epochs,
             "run_steps": self.run_steps,
@@ -72,8 +80,9 @@ class Trainer:
             for step, input_tuple in enumerate(self.dataloader):
                 self.model.train()
                 self.model.zero_grad()
+
                 input_tuple = [x.to(self.device) for x in input_tuple]
-                labels = input_tuple[1]
+                labels = input_tuple[-1]
 
                 logits = self.model(input_tuple)
 
@@ -87,6 +96,8 @@ class Trainer:
 
                 if step % self.eval_steps == 0:
                     corr, total = evaluate_and_predict(self.data.dev, self.model,
+                                                       eval_batch_size=self.eval_batch_size,
+                                                       use_collate=self.use_collate,
                                                        batch_first=self.batch_first)
                     acc = corr / total
 
@@ -150,22 +161,25 @@ class Trainer:
         return best_model_checkpoint
 
 
-def evaluate_and_predict(dataset, model, batch_first=False, get_pred=False):
+def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, batch_first=False):
     model.eval()
     with torch.no_grad():
         total_preds = 0
         correct_preds = 0
         # preds_and_labels = []
-        batch_size = 100
+        batch_size = eval_batch_size
 
-        collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
-        dataloader = DataLoader(dataset, batch_size=batch_size,
-                                shuffle=False, collate_fn=collate_fn)
+        if use_collate:
+            collate_fn = lambda batch: datasets.my_collate(batch, batch_first=batch_first)
+            dataloader = DataLoader(dataset, batch_size=batch_size,
+                                    shuffle=False, collate_fn=collate_fn)
+        else:
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
         # bad_sentences = []
 
         for tuple in dataloader:
             tuple = [x.to(model.device) for x in tuple]
-            y_batch = tuple[1]
+            y_batch = tuple[-1]
 
             logits = model(tuple)
             pred = torch.argmax(logits, dim=1)
@@ -218,3 +232,5 @@ def load_model(model_class, save_path, device=None):
     else:
         model = model.to(device)
     return model, checkpoint
+
+

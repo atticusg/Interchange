@@ -16,5 +16,3 @@ def write_pickle(d, f):
 
 def read_pickle(f):
     return torch.load(f)
-
-
