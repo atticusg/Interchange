@@ -13,7 +13,7 @@ class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
                  max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
                  patient_epochs=20, use_collate=True, batch_first=True,
-                 model_save_path=None, model_save_dir=None,
+                 model_save_path=None, res_save_dir=None,
                  verbose=True, opts={}):
         self.data = data
         self.model = model
@@ -28,7 +28,7 @@ class Trainer:
         self.evals_per_epoch = opts.get("evals_per_epoch", evals_per_epoch)
         self.patient_epochs = opts.get("patient_epochs", patient_epochs)
         self.model_save_path = opts.get("model_save_path", model_save_path)
-        self.model_save_dir = opts.get("model_save_dir", model_save_dir)
+        self.res_save_dir = opts.get("res_save_dir", res_save_dir)
         self.batch_first = opts.get("batch_first", batch_first)
         self.verbose = opts.get("verbose", verbose)
         self.use_collate = opts.get("use_collate", use_collate)
@@ -73,13 +73,13 @@ class Trainer:
         best_model_checkpoint = {}
         model_save_path = None
 
-        if self.model_save_path or self.model_save_dir:
+        if self.model_save_path or self.res_save_dir:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
             model_save_path = self.model_save_path
-            if self.model_save_dir:
+            if self.res_save_dir:
                 if model_save_path.endswith(".pt"):
                     model_save_path = model_save_path[:-len(".pt")]
-                model_save_path = os.path.join(self.model_save_dir,
+                model_save_path = os.path.join(self.res_save_dir,
                                          f"{model_save_path}_{train_start_time_str}.pt")
 
 
