@@ -149,7 +149,6 @@ def main():
     query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
     query_parser.add_argument("-i", "--id", type=int)
     query_parser.add_argument("-s", "--status", type=int)
-    query_parser.add_argument("-a", "--abstraction", type=str)
     query_parser.add_argument("-n", "--limit", type=int)
 
     update_parser = subparsers.add_parser("update_status")
