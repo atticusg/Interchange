@@ -406,3 +406,7 @@ def test_train_transformer_mqnli(mqnli_bert_data):
     model = PretrainedBertModule(**model_config).to(torch.device("cuda"))
     trainer = Trainer(mqnli_bert_data, model, **train_config)
     trainer.train()
+
+def test_load_bert():
+    save_path = "mqnli_models/bert/retrained_ber_1106_150804.pt"
+    model = load_model(PretrainedBertModule, save_path)

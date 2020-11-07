@@ -73,6 +73,9 @@ class Trainer:
         best_model_checkpoint = {}
         model_save_path = None
 
+        print("using configs---")
+        print(self.config())
+
         if self.model_save_path or self.res_save_dir:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
             model_save_path = self.model_save_path
