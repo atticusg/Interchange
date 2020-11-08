@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 
 import datasets
+from typing import Dict
 
 from transformers import get_linear_schedule_with_warmup, \
     get_constant_schedule_with_warmup
@@ -283,13 +284,15 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, b
         return correct_preds, total_preds
 
 
-def load_model(model_class, save_path, device=None):
+def load_model(model_class, save_path, device=None, opts: Dict=None):
     if device:
         checkpoint = torch.load(save_path, map_location=device)
     else:
         checkpoint = torch.load(save_path)
     assert 'model_config' in checkpoint
     model_config = checkpoint['model_config']
+    if opts:
+        model_config.update(opts)
     model = model_class(**model_config)
     model.load_state_dict(checkpoint['model_state_dict'])
     if device is None:

@@ -200,7 +200,8 @@ class MQNLIBertData(MQNLIData):
 
 class MQNLIBertDataset(Dataset):
     def __init__(self, file_name: str, vocab_remapping: Dict[str,str],
-                 word_to_id: Dict[str, int], tokenizer: BertTokenizer):
+                 word_to_id: Dict[str, int], tokenizer: BertTokenizer,
+                 type="basic"):
         print("--- Loading sentences from " + file_name)
         self.vocab_remapping = vocab_remapping
         self.tokenizer = tokenizer
@@ -221,8 +222,10 @@ class MQNLIBertDataset(Dataset):
                 label = label_dict[example["gold_label"]]
 
                 # attention mask useful for short outputs
-                p_toks, unshifted_p_toks, p_attn_mask = self.remap_and_shift(example, is_p=True)
-                h_toks, unshifted_h_toks, h_attn_mask = self.remap_and_shift(example, is_p=False)
+                p_toks, unshifted_p_toks, p_attn_mask = \
+                    self.remap_and_shift(example, is_p=True)
+                h_toks, unshifted_h_toks, h_attn_mask = \
+                    self.remap_and_shift(example, is_p=False)
 
                 # convert string form tokens into BERT tokens
                 bert_toks = self.tokenize(p_toks, h_toks)
@@ -278,6 +281,8 @@ class MQNLIBertDataset(Dataset):
         return self.num_examples
 
     def __getitem__(self, i):
+        """Returns tuple: (input_ids, token_type_ids, attention_masks,
+            raw_original_x, label) """
         sample = (torch.tensor(self.raw_bert_x[i], dtype=torch.long),
                   torch.tensor([0]*14 + [1]*13, dtype=torch.long),
                   torch.tensor(self.attention_masks[i], dtype=torch.float),
