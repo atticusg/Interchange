@@ -41,7 +41,7 @@ DEFAULT_OPTS = {
     "patient_epochs": 400,
 
     'model_save_path': "pretrained_bert", #name of model
-    'res_save_dir': "mqnli_models/bert/",
+    'res_save_dir': "",
     "log_path": ""
 }
 
