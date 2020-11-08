@@ -112,11 +112,11 @@ class ExperimentManager:
             if not os.path.exists(save_dir):
                 print("Creating directory to save results:", save_dir)
                 os.makedirs(save_dir)
+            time_str = datetime.now().strftime("%m%d-%H%M%S")
 
             if metascript.startswith("nlprun"):
                 # manage logging output for nlprun
                 assert "-o" not in metascript
-                time_str = datetime.now().strftime("%m%d-%H%M%S")
                 log_path = os.path.join(save_dir, f"{time_str}.log")
                 metascript += f" -o {log_path} "
                 update_dict["log_path"] = log_path
@@ -129,7 +129,7 @@ class ExperimentManager:
 
         if metascript:
             # save script to a file, and use this script file for metascript
-            script_file_path = os.path.join(save_dir, "script.sh")
+            script_file_path = os.path.join(save_dir, f"script_{time_str}.sh")
             with open(script_file_path, "w") as f:
                 f.write(script)
 
