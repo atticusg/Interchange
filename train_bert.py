@@ -120,7 +120,7 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
 
 def query(db_path, id=None, status=None, limit=None):
     manager = ExperimentManager(db_path)
-    cols = ["id", "status", "batch_size", "lr", "model_save_path"]
+    cols = ["id", "status", "batch_size", "lr", "res_save_dir", "model_save_path"]
     rows = manager.query(cols=cols, status=status, id=id, limit=limit)
     if len(rows) == 0:
         return "No data found"
