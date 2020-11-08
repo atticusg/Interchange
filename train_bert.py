@@ -58,13 +58,14 @@ def add_one(db_path):
     manager = ExperimentManager(db_path)
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
 
-def add_grid_search(db_path, repeat, save_res_dir):
+def add_grid_search(db_path, repeat, res_save_dir):
     manager = ExperimentManager(db_path)
     grid_dict = {"batch_size": [32],
                  "lr": [2e-5, 5e-5],
-                 "max_epochs": [4,8,12],
+                 "max_epochs": [4,8,20],
                  "lr_scheduler_type": ["linear"],
-                 "lr_warmup_ratio": [0.5]}
+                 "lr_warmup_ratio": [0.5],
+                 "evals_per_epoch": 8}
     var_opt_names = list(grid_dict.keys())
     var_opt_values = list(v if isinstance(v, list) else list(v) for v in grid_dict.values())
 
@@ -76,7 +77,7 @@ def add_grid_search(db_path, repeat, save_res_dir):
         for _ in range(repeat):
             id = manager.insert(update_dict)
             time_str = datetime.now().strftime("%m%d-%H%M%S")
-            res_save_dir = os.path.join(save_res_dir, f"expt-{id}-{time_str}")
+            res_save_dir = os.path.join(res_save_dir, f"expt-{id}-{time_str}")
             manager.update({"res_save_dir": res_save_dir}, id)
             print("----inserted example into database:", update_dict)
 
@@ -156,7 +157,8 @@ def main():
 
     add_gs_parser = subparsers.add_parser("add_grid_search")
     add_gs_parser.add_argument("-d", "--db_path", type=str, required=True, help="Experiment database path")
-    add_gs_parser.add_argument("-r", "--repeat", type=int, default=1, help="Repeat each grid search config for ")
+    add_gs_parser.add_argument("-r", "--repeat", type=int, default=1, help="Repeat each grid search config for number of times")
+    add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True, help="Directory to save stored results")
     
     # add_parser = subparsers.add_parser("add")
     # add_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
