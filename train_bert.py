@@ -77,8 +77,8 @@ def add_grid_search(db_path, repeat, res_save_dir):
         for _ in range(repeat):
             id = manager.insert(update_dict)
             time_str = datetime.now().strftime("%m%d-%H%M%S")
-            res_save_dir = os.path.join(res_save_dir, f"expt-{id}-{time_str}")
-            manager.update({"res_save_dir": res_save_dir}, id)
+            curr_save_dir = os.path.join(res_save_dir, f"expt-{id}-{time_str}")
+            manager.update({"res_save_dir": curr_save_dir}, id)
             print("----inserted example into database:", update_dict)
 
     # if model_type == "lstm":
