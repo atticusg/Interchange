@@ -387,24 +387,31 @@ def test_train_lstm_mqnli_mini_sep(mqnli_mini_sep_data):
     trainer = Trainer(mqnli_mini_sep_data, model, **train_config)
     trainer.train()
 
-def test_train_transformer_mqnli(mqnli_bert_data):
+def test_train_transformer_mqnli(mqnli_bert_mini_data):
     model_config = {
         "tokenizer_vocab_path": "mqnli_data/bert-vocab.txt",
         'device': torch.device("cuda")
     }
     train_config = {
+        'batch_size': 8,
+        'eval_batch_size': 64,
         'use_collate': False,
-        'batch_size': 16,
-        'max_epochs': 50,
-        'evals_per_epoch': 2,
-        'patient_epochs': 400,
+
+        'optimizer_type': 'adamw',
         'lr': 3e-5,
-        'weight_norm': 0,
+        'lr_scheduler_type': 'linear',
+        'lr_warmup_ratio': 0.5,
+        'weight_norm': 0.01,
+
+        'max_epochs': 5,
+        'evals_per_epoch': 5,
+        'patient_epochs': 400,
+
         'model_save_path': "mqnli_models/bert_test.pt"
     }
 
     model = PretrainedBertModule(**model_config).to(torch.device("cuda"))
-    trainer = Trainer(mqnli_bert_data, model, **train_config)
+    trainer = Trainer(mqnli_bert_mini_data, model, **train_config)
     trainer.train()
 
 def test_load_bert():

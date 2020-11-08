@@ -1,4 +1,5 @@
 # train.py
+import math
 import os
 import time
 from datetime import datetime
@@ -8,11 +9,23 @@ import torch.nn as nn
 
 import datasets
 
+from transformers import get_linear_schedule_with_warmup, \
+    get_constant_schedule_with_warmup
+
+
+def print_stats(epoch, step, loss, acc, better=True, lr=None):
+    if lr:
+        print(f"Now at epoch {epoch}, step {step}, lr {lr:.4}, loss {loss:.4}, "
+              f"got accuracy of {acc:.2%}{', BETTER' if better else ''}")
+    else:
+        print(f"Now at epoch {epoch}, step {step}, loss {loss:.4}, "
+              f"got accuracy of {acc:.2%}{', BETTER' if better else ''}")
 
 class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
                  max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
-                 patient_epochs=20, use_collate=True, batch_first=True,
+                 patient_epochs=20, lr_scheduler_type="None", lr_warmup_ratio=0.05, optimizer_type="adam",
+                 use_collate=True, batch_first=True,
                  model_save_path=None, res_save_dir=None,
                  verbose=True, opts={}):
         self.data = data
@@ -21,20 +34,47 @@ class Trainer:
 
         self.batch_size = opts.get("batch_size", batch_size)
         self.eval_batch_size = opts.get("eval_batch_size", eval_batch_size)
+        self.use_collate = opts.get("use_collate", use_collate)
+        self.batch_first = opts.get("batch_first", batch_first)
+
+        self.optimizer_type = opts.get("optimizer_type", optimizer_type)
         self.lr = opts.get("lr", lr)
-        self.weight_norm = opts.get("weight_norm",weight_norm)
+        self.lr_scheduler_type = opts.get("lr_scheduler_type", lr_scheduler_type)
+        self.lr_warmup_ratio = opts.get("lr_warmup_ratio", lr_warmup_ratio)
+        self.weight_norm = opts.get("weight_norm", weight_norm)
+
         self.max_epochs = opts.get("max_epochs", max_epochs)
         self.run_steps = opts.get("run_steps", run_steps)
         self.evals_per_epoch = opts.get("evals_per_epoch", evals_per_epoch)
         self.patient_epochs = opts.get("patient_epochs", patient_epochs)
+
+        self.verbose = opts.get("verbose", verbose)
         self.model_save_path = opts.get("model_save_path", model_save_path)
         self.res_save_dir = opts.get("res_save_dir", res_save_dir)
-        self.batch_first = opts.get("batch_first", batch_first)
-        self.verbose = opts.get("verbose", verbose)
-        self.use_collate = opts.get("use_collate", use_collate)
 
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr,
-                                          weight_decay=self.weight_norm)
+        if self.optimizer_type == "adam":
+            self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr,
+                                              weight_decay=self.weight_norm)
+        elif self.optimizer_type == "adamw":
+            self.optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr,
+                                               weight_decay=self.weight_norm)
+        else:
+            raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
+
+        self.scheduler = None
+        if self.lr_scheduler_type:
+            steps_per_epoch = math.ceil(data.train.num_examples / self.batch_size)
+            num_warmup_steps = math.floor(self.lr_warmup_ratio * steps_per_epoch)
+            total_steps = steps_per_epoch * self.max_epochs
+            if self.lr_scheduler_type == "linear":
+                self.scheduler = get_linear_schedule_with_warmup(
+                    self.optimizer, num_warmup_steps, total_steps)
+            elif self.lr_warmup_ratio == "constant":
+                self.scheduler = get_constant_schedule_with_warmup(
+                    self.optimizer, num_warmup_steps)
+            else:
+                raise ValueError(f"Unsupported lr scheduler type: {self.lr_scheduler_type}")
+
 
         if self.use_collate:
             self.collate_fn = lambda batch: datasets.my_collate(batch, batch_first=self.batch_first)
@@ -46,21 +86,27 @@ class Trainer:
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
         # setup for early stopping
-        self.eval_steps = (data.train.num_examples // self.batch_size) // self.evals_per_epoch
+        self.eval_steps = math.ceil(data.train.num_examples / self.batch_size) // self.evals_per_epoch
         self.patient_threshold = self.patient_epochs * self.evals_per_epoch * self.eval_steps
 
     def config(self):
         return {
             "batch_size": self.batch_size,
             "eval_batch_size": self.eval_batch_size,
-            "lr": self.lr,
-            "weight_norm": self.weight_norm,
             "use_collate": self.use_collate,
             "batch_first": self.batch_first,
+
+            "optimizer_type": self.optimizer_type,
+            "lr": self.lr,
+            "lr_scheduler_type": self.lr_scheduler_type,
+            "lr_warmup_ratio": self.lr_warmup_ratio,
+            "weight_norm": self.weight_norm,
+
             "max_epochs": self.max_epochs,
             "run_steps": self.run_steps,
             "evals_per_epoch": self.evals_per_epoch,
             "patient_epochs": self.patient_epochs,
+
             "model_save_path": self.model_save_path,
             "verbose": self.verbose
         }
@@ -107,6 +153,10 @@ class Trainer:
                 loss.backward()
 
                 self.optimizer.step()
+
+                if self.scheduler:
+                    self.scheduler.step()
+
                 if self.run_steps > 0 and step == self.run_steps - 1:
                     early_stopping = True
                     break
@@ -137,14 +187,14 @@ class Trainer:
                             torch.save(best_model_checkpoint, model_save_path)
 
                         if self.verbose:
-                            print("Now at epoch %d, step %d, loss %.4f, "
-                                  "got accuracy of %.4f, BETTER"
-                                  % (epoch, step, float(loss), acc))
+                            print_stats(epoch, step, loss.item(), acc,
+                                lr=self.scheduler.get_lr()[0] if self.scheduler else None)
+
                     else:
                         if self.verbose:
-                            print("Now at epoch %d, step %d, loss %.4f, "
-                                  "got accuracy of %.4f"
-                                  % (epoch, step, float(loss), acc))
+                            print_stats(epoch, step, loss.item(), acc, better=False,
+                                lr=self.scheduler.get_lr()[0] if self.scheduler else None)
+
                         steps_without_increase += self.eval_steps
                         if steps_without_increase >= self.patient_threshold:
                             print('Ran', steps_without_increase,
@@ -168,12 +218,10 @@ class Trainer:
             # checkpoint = torch.load(save_path)
             # best_model.load_state_dict(checkpoint['model_state_dict'])
             # corr, total, _ = evaluate_and_predict(mydataset.dev, best_model)
-            print("Finished training. Total time is {}. Got final acc of {}"
-                  .format(train_duration, best_dev_acc))
-            print("Best model was obtained after {} epochs, in {} seconds"
-                  .format(epoch + 1, best_model_duration))
+            print(f"Finished training. Total time is {train_duration:.1}s. Got final acc of {best_dev_acc:.2%}")
+            print(f"Best model was obtained after {epoch + 1} epochs, in {best_model_duration:.1} seconds")
             if self.model_save_path:
-                print("Best model saved in {}".format(model_save_path))
+                print(f"Best model saved in {model_save_path}")
 
         return best_model_checkpoint, model_save_path
 

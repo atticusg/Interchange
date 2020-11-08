@@ -2,8 +2,7 @@ import os
 import argparse
 import torch
 
-from datetime import datetime
-
+from itertools import product
 from experiment import db_utils as db
 from experiment import ExperimentManager
 
@@ -23,16 +22,23 @@ DEFAULT_OPTS = {
     "data_path": "",
     "tokenizer_vocab_path": VOCAB_PATH,
     "device": "cuda",
+
+    "batch_size": 32,
     "use_collate": False,
     "batch_first": True,
-    "batch_size": 16,
-    "max_epochs": 50,
+    "eval_batch_size": 64,
+
+    "optimizer_type": "adamw",
+    "lr": 0.,
+    "lr_scheduler_type": "",
+    "lr_warmup_ratio": 0.,
+    "weight_norm": 0.,
+
+    "max_epochs": 5,
     "run_steps": -1,
     "evals_per_epoch": 2,
-    "eval_batch_size": 64,
-    'patient_epochs': 400,
-    'lr': 0.,
-    'weight_norm': 0.,
+    "patient_epochs": 400,
+
     'model_save_path': "pretrained_bert", #name of model
     'res_save_dir': "mqnli_models/bert/",
     "log_path": ""
@@ -51,8 +57,25 @@ def add_one(db_path):
     manager = ExperimentManager(db_path)
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
 
-def add(db_path):
+def add_grid_search(db_path, repeat):
     manager = ExperimentManager(db_path)
+    grid_dict = {"batch_size": [32],
+                 "lr": [2e-5, 5e-5],
+                 "max_epochs": [4,8],
+                 "lr_scheduler_type": ["linear"],
+                 "lr_warmup_ratio": [0.5]}
+    var_opt_names = list(grid_dict.keys())
+    var_opt_values = list(v if isinstance(v, list) else list(v) for v in grid_dict.values())
+
+    # treat elements in list as separate args to fxn
+    for tup in product(*var_opt_values):
+        update_dict = {}
+        for name, val in zip(var_opt_names, tup):
+            update_dict[name] = val
+        for _ in range(repeat):
+            manager.insert(update_dict)
+            print("----inserted example into database:", update_dict)
+
     # if model_type == "lstm":
     #     manager = ExperimentManager(db_path, EXPT_OPTS)
     #     module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
@@ -125,7 +148,11 @@ def main():
     setup_parser.add_argument("-i", "--data_path", type=str, help="Path to pickled dataset")
 
     add_one_parser = subparsers.add_parser("add_one")
-    add_one_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
+    add_one_parser.add_argument("-d", "--db_path", type=str, required=True, help="Experiment database path")
+
+    add_gs_parser = subparsers.add_parser("add_grid_search")
+    add_gs_parser.add_argument("-d", "--db_path", type=str, required=True, help="Experiment database path")
+    add_gs_parser.add_argument("-r", "--repeat", type=int, default=1, help="Repeat each grid search config for ")
     
     # add_parser = subparsers.add_parser("add")
     # add_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
