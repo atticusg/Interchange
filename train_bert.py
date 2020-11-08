@@ -1,6 +1,7 @@
 import os
 import argparse
 import torch
+from datetime import datetime
 
 from itertools import product
 from experiment import db_utils as db
@@ -57,11 +58,11 @@ def add_one(db_path):
     manager = ExperimentManager(db_path)
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
 
-def add_grid_search(db_path, repeat):
+def add_grid_search(db_path, repeat, save_res_dir):
     manager = ExperimentManager(db_path)
     grid_dict = {"batch_size": [32],
                  "lr": [2e-5, 5e-5],
-                 "max_epochs": [4,8],
+                 "max_epochs": [4,8,12],
                  "lr_scheduler_type": ["linear"],
                  "lr_warmup_ratio": [0.5]}
     var_opt_names = list(grid_dict.keys())
@@ -73,7 +74,10 @@ def add_grid_search(db_path, repeat):
         for name, val in zip(var_opt_names, tup):
             update_dict[name] = val
         for _ in range(repeat):
-            manager.insert(update_dict)
+            id = manager.insert(update_dict)
+            time_str = datetime.now().strftime("%m%d-%H%M%S")
+            res_save_dir = os.path.join(save_res_dir, f"expt-{id}-{time_str}")
+            manager.update({"res_save_dir": res_save_dir}, id)
             print("----inserted example into database:", update_dict)
 
     # if model_type == "lstm":
