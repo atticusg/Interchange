@@ -56,7 +56,7 @@ def test_bert_compgraph_batch_match(mqnli_data, mqnli_bert_model, mqnli_bert_com
             input_tuple = [x.to(model.device) for x in input_tuple]
 
             graph_input = GraphInput({"input": (input_tuple,)})
-            graph_pred = graph.compute(graph_input, store_cache=True)
+            graph_pred = graph.compute(graph_input, store_cache=False)
 
             logits = model(input_tuple)
             model_pred = torch.argmax(logits, dim=1)
