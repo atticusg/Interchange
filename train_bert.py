@@ -65,7 +65,7 @@ def add_grid_search(db_path, repeat, res_save_dir):
                  "max_epochs": [4,8,20],
                  "lr_scheduler_type": ["linear"],
                  "lr_warmup_ratio": [0.5],
-                 "evals_per_epoch": 8}
+                 "evals_per_epoch": [8]}
     var_opt_names = list(grid_dict.keys())
     var_opt_values = list(v if isinstance(v, list) else list(v) for v in grid_dict.values())
 
