@@ -9,10 +9,10 @@ from experiment import ExperimentManager
 
 from datasets.mqnli import MQNLIData
 from train import load_model
-from modeling.lstm import LSTMModule
+from modeling import get_module_class_by_name
 
 
-EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction", "num_inputs"]
+EXPT_OPTS = ["data_path", "model_type", "model_path", "res_save_dir", "abstraction", "num_inputs" , "graph_alpha"]
 DEFAULT_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
@@ -30,28 +30,38 @@ def setup(db_path, model_path, data_path):
         "log_path": "",
         "res_save_dir": "",
         "abstraction": "",
-        "num_inputs": 20
+        "num_inputs": 20,
+        "graph_alpha": 100,
+        "model_type": "",
     }
     manager = ExperimentManager(db_path, default_opts)
 
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
+    model_class = get_module_class_by_name(model_type)
+
+    manager = ExperimentManager(db_path, EXPT_OPTS)
+    device = torch.device("cpu" if model_type == "lstm" else "cuda")
+    module, _ = load_model(model_class, model_path, device=device)
+
     if model_type == "lstm":
-        manager = ExperimentManager(db_path, EXPT_OPTS)
-        module, _ = load_model(LSTMModule, model_path, device=torch.device("cpu"))
         num_layers = module.num_lstm_layers
-        time_str = datetime.now().strftime("%m%d-%H%M%S")
-        for high_node in HIGH_NODES:
-            for layer in range(num_layers):
-                for n in num_inputs:
-                    abstraction = f'["{high_node}",["lstm_{layer}"]]'
-                    id = manager.insert({"abstraction": abstraction,
-                                        "num_inputs": n})
-                    res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
-                    manager.update({"model_path": model_path,
-                                    "res_save_dir": res_save_dir}, id)
-    else:
-        raise ValueError(f"Unsupported model type: {model_type}")
+        layer_name = "lstm"
+    elif model_type == "bert":
+        num_layers = len(module.bert.encoder.layer) - 1
+        layer_name = "bert_layer"
+
+    time_str = datetime.now().strftime("%m%d-%H%M%S")
+    for high_node in HIGH_NODES:
+        for layer in range(num_layers):
+            for n in num_inputs:
+                abstraction = f'["{high_node}",["{layer_name}_{layer}"]]'
+                id = manager.insert({"abstraction": abstraction,
+                                     "num_inputs": n,
+                                     "model_type": model_type})
+                res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
+                manager.update({"model_path": model_path,
+                                "res_save_dir": res_save_dir}, id)
 
 
 def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log_dir,

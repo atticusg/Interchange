@@ -8,8 +8,7 @@ from transformers import BertModel
 class PretrainedBertModule(nn.Module):
     def __init__(self, tokenizer_vocab_path: str="",
                  pretrained_bert_type: str="bert-base-uncased",
-                 task: str="mqnli", output_classes: int=3,
-                 device=None):
+                 task: str="mqnli", output_classes: int=3):
         super(PretrainedBertModule, self).__init__()
         if not tokenizer_vocab_path:
             raise ValueError("Must provide tokenizer vocabulary!")
@@ -19,10 +18,6 @@ class PretrainedBertModule(nn.Module):
 
         self.task = task
         self.output_classes = output_classes
-        if isinstance(device, str):
-            self.device = torch.device(device)
-        else:
-            self.device = device if device else torch.device("cpu")
 
         self.bert = BertModel.from_pretrained(pretrained_bert_type)
         self.bert.resize_token_embeddings(len(self.tokenizer))
@@ -31,7 +26,6 @@ class PretrainedBertModule(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
         self.logits = nn.Linear(hidden_dim, output_classes)
-
 
     def config(self):
         return {

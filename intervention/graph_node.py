@@ -105,10 +105,10 @@ class GraphNode:
                 if len(self.children) == 0:
                     # leaf
                     values = inputs[self.name]
-                    if isinstance(values, list) or isinstance(values, tuple):
-                        result = self.forward(*values)
-                    else:
-                        result = self.forward(values)
+                    # if isinstance(values, list) or isinstance(values, tuple):
+                    #     result = self.forward(*values)
+                    # else:
+                    result = self.forward(values)
                 else:
                     # non-leaf node
                     children_res = []

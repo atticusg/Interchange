@@ -1,19 +1,22 @@
-from intervention.graph_input import GraphInput
-from intervention.intervention import Intervention
-from intervention.location import Location
+from intervention import GraphNode, GraphInput, Intervention, Location
 import itertools
+import torch
 
+from typing import Optional
 from collections import deque
 
 # TODO: add type hints
 
 class ComputationGraph:
-    def __init__(self, root):
+    def __init__(self, root: GraphNode, root_output_device: Optional[torch.device]=None):
         """
         Constructs a computation graph by traversing from a root
-        :param root:
+        :param root: Root node
+        :param output_device: (For models that run on pytorch) transfer final
+            root output to a given device
         """
         self.root = root
+        self.root_output_device = root_output_device
         self.nodes = {}
         self.results_cache = {}  # caches final results compute(), intervene()
         self.leaves = set()
@@ -134,6 +137,9 @@ class ComputationGraph:
                 result = self.root.compute(inputs)
         if store_cache:
             self.results_cache[inputs] = result
+
+        if isinstance(result, torch.Tensor) and self.root_output_device:
+            result = result.to(self.root_output_device)
         return result
 
     def _iterative_compute(self, inputs):
@@ -180,20 +186,26 @@ class ComputationGraph:
 
     def get_result(self, node_name, x):
         node = self.nodes[node_name]
+        res = None
+
         if isinstance(x, GraphInput):
             if x not in node.base_cache:
                 self.compute(x)
-            return node.base_cache[x]
+            res = node.base_cache[x]
         elif isinstance(x, Intervention):
             x.find_affected_nodes(self)
             if x.base not in node.base_cache or x not in node.interv_cache:
                 base_res = self.compute(x.base)
                 self.root.compute(x)
             if node.name not in x.affected_nodes:
-                return node.base_cache[x.base]
+                res = node.base_cache[x.base]
             else:
-                return node.interv_cache[x]
+                res = node.interv_cache[x]
         else:
             raise RuntimeError(
                 "get_result requires a GraphInput or Intervention "
                 "object!")
+
+        if isinstance(res, torch.Tensor) and self.root_output_device:
+            res = res.to(self.root_output_device)
+        return res

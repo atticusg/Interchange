@@ -30,6 +30,8 @@ def serialize(x):
             raise NotImplementedError(f"cannot serialize x with {len(x.shape)} dimensions")
     elif isinstance(x, np.ndarray):
         return x.tostring()
+    else:
+        raise ValueError(f"Does not support input type: {type(x)}")
 
 def deserialize(x: tuple):
     return torch.tensor(x)

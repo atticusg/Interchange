@@ -1,7 +1,8 @@
 from intervention import ComputationGraph
 from intervention import GraphNode
 
-from typing import Any, Dict, List, Callable, Set
+from typing import Any, Dict, List, Callable, Set, Optional
+import torch
 
 
 class AbstractableCompGraph(ComputationGraph):
@@ -9,7 +10,8 @@ class AbstractableCompGraph(ComputationGraph):
                  root_node_name: str,
                  abstract_nodes: List[str],
                  forward_functions: Dict[str, Callable],
-                 topological_order: List[str]=None):
+                 topological_order: List[str]=None,
+                 root_output_device: Optional[torch.device]=None):
         """ An abstractable compgraph structure.
 
         :param full_graph: A dict describing the structure of a computation
@@ -35,7 +37,8 @@ class AbstractableCompGraph(ComputationGraph):
         self.validate_full_graph()
 
         root = self.generate_abstract_graph(abstract_nodes)
-        super(AbstractableCompGraph, self).__init__(root)
+        super(AbstractableCompGraph, self).__init__(root,
+                                                    root_output_device=root_output_device)
 
 
     def validate_full_graph(self):
@@ -70,8 +73,7 @@ class AbstractableCompGraph(ComputationGraph):
         recursive_call(root)
         return ordering[::-1]
 
-    def generate_abstract_graph(self, abstract_nodes: List[str]) \
-            -> Dict[str, GraphNode]:
+    def generate_abstract_graph(self, abstract_nodes: List[str]) -> GraphNode:
         # rearrange nodes in reverse topological order
         relevant_nodes = self.get_node_names(abstract_nodes)
         relevant_node_set = set(relevant_nodes)

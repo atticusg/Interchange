@@ -215,7 +215,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
             for high_node, high_value in new_realizations: # H: just one pair for now
                 if high_node in new_high_intervention.intervention.values and new_high_intervention not in used_high_interventions:
                     # H: pick an intervention from total_high_interventions (there is only one intermediate high node so it's okay)
-                    realizations = get_potential_realizations( new_realizations, total_realizations, high_node, high_model, new_high_intervention)
+                    realizations = get_potential_realizations(new_realizations, total_realizations, high_node, high_model, new_high_intervention)
                     # H: realizations: (high_node, high_value) -> stringified_low_value
                     # H: realizations may be empty , because
                     for realization in realizations:
@@ -260,7 +260,7 @@ def find_abstractions(low_model, high_model, high_inputs, total_high_interventio
     :param fixed_assignments:This is a dictionary mappping from high level nodes to a dictionary mapping from low level nodes to Location objects.
         Typically, this will look something like: {x:{x:Location()[:]} for x in ["root", "leaf1",  "leaf2", "leaf3"]}
         Only input leaves and roots.
-    :param input_mapping: A function that maps low level leaf inputs to high level leaf inputs
+    :param input_mapping: A function that maps high level leaf inputs to low level leaf inputs
     :return:
         list(
             tuple(

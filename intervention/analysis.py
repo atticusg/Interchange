@@ -3,11 +3,12 @@ import copy
 import numpy as np
 from intervention.utils import serialize
 
-def get_input(intervention):
-    return tuple(sorted((k, serialize(intervention.base.values[k])) for k in intervention.base.values))
+def get_input(intervention, serialize_fxn=serialize):
+    return tuple(sorted((k, serialize_fxn(intervention.base.values[k])) for k in intervention.base.values))
 
 
-def construct_graph(low_model, high_model, mapping, result, realizations_to_inputs, high_node_name, high_root_name):
+def construct_graph(low_model, high_model, mapping, result, realizations_to_inputs,
+                    high_node_name, high_root_name, low_serialize_fxn=serialize):
     G = nx.Graph()
     input_to_id = dict()
     id_to_input = dict()
@@ -23,7 +24,7 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
                 high_intervention.intervention.values) == 0:
             continue
         count += 1
-        input = get_input(low_intervention)
+        input = get_input(low_intervention, low_serialize_fxn)
         if input not in inputs_seen:
             G.add_node(total_id)
             input_to_id[input] = total_id
@@ -33,11 +34,11 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
         low_node = None
         for key in mapping[high_node_name]:
             low_node = key
-        index = mapping[high_node_name][low_node]
+        # index = mapping[high_node_name][low_node]
         # string_array = serialize(low_model.get_result(low_node,low_intervention)[index])
         # print("low intervention", low_intervention.intervention)
         string_array = serialize(low_intervention.intervention[low_node])
-        input2 = get_input(realizations_to_inputs[(string_array, high_node_name)])
+        input2 = get_input(realizations_to_inputs[(string_array, high_node_name)], low_serialize_fxn)
         if input2 not in inputs_seen:
             G.add_node(total_id)
             input_to_id[input2] = total_id

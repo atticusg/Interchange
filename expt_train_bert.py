@@ -13,10 +13,9 @@ class TrainBertExperiment(Experiment):
     def experiment(self, opts: Dict):
         data = torch.load(opts["data_path"])
         model = PretrainedBertModule(
-            tokenizer_vocab_path=opts["tokenizer_vocab_path"],
-            device=opts["device"]
+            tokenizer_vocab_path=opts["tokenizer_vocab_path"]
         )
-        model = model.to(model.device)
+        model = model.to(torch.device("cuda"))
         trainer = Trainer(data, model, opts=opts)
         ckpt, model_save_path = trainer.train()
 

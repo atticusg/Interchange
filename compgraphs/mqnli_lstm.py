@@ -4,7 +4,7 @@ import re
 from intervention import ComputationGraph, GraphNode
 from compgraphs.abstractable import AbstractableCompGraph
 
-from typing import List, Any
+from typing import List, Any, Optional
 
 
 def generate_lstm_fxn(lstm_layer):
@@ -15,7 +15,7 @@ def generate_lstm_fxn(lstm_layer):
 
 
 class MQNLI_LSTM_CompGraph(ComputationGraph):
-    def __init__(self, lstm_model):
+    def __init__(self, lstm_model, root_output_device=None):
         if lstm_model.task != "mqnli":
             raise ValueError("The LSTM model must be for MQNLI!")
         self.model = lstm_model
@@ -125,12 +125,13 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
         @GraphNode(logits)
         def root(x):
             return torch.argmax(x, dim=1)
-        super(MQNLI_LSTM_CompGraph, self).__init__(root)
+        super(MQNLI_LSTM_CompGraph, self).__init__(root, root_output_device=root_output_device)
 
 
 class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
     def __init__(self, base_compgraph: MQNLI_LSTM_CompGraph,
-                 intermediate_nodes: List[str], interv_info: Any = None):
+                 intermediate_nodes: List[str], interv_info: Any = None,
+                 root_output_device: Optional[torch.device]=None):
         self.base = base_compgraph
         self.interv_info = interv_info
 
@@ -144,7 +145,8 @@ class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
             full_graph=full_graph,
             root_node_name="root",
             abstract_nodes=intermediate_nodes,
-            forward_functions=forward_functions
+            forward_functions=forward_functions,
+            root_output_device=root_output_device,
         )
 
     def get_indices(self, node: str):

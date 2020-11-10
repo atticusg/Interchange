@@ -12,9 +12,12 @@ from train import load_model
 from modeling.lstm import LSTMModule
 
 
-EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction", "num_inputs"]
+EXPT_OPTS = ["data_path", "model_path", "res_save_dir", "abstraction",
+             "num_inputs"]
 DEFAULT_SCRIPT = "python expt_train_bert.py"
-HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
+HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun",
+              "neg", "v_adv", "v_verb", "vp_q",
+              "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 REMAPPING_PATH="mqnli_data/bert-remapping.txt"
 VOCAB_PATH = "mqnli_data/bert-vocab.txt"
@@ -45,14 +48,14 @@ DEFAULT_OPTS = {
     "log_path": ""
 }
 
-def preprocess(train, dev, test, data_path):
-    data = MQNLIBertData(train, dev, test, REMAPPING_PATH)
+def preprocess(train, dev, test, data_path, variant):
+    data = MQNLIBertData(train, dev, test, REMAPPING_PATH, variant=variant)
     torch.save(data, data_path)
 
 def setup(db_path, data_path):
     default_opts = DEFAULT_OPTS.copy()
     default_opts["data_path"] = data_path
-    manager = ExperimentManager(db_path, default_opts)
+    ExperimentManager(db_path, default_opts)
 
 def add_one(db_path):
     manager = ExperimentManager(db_path)
@@ -67,7 +70,8 @@ def add_grid_search(db_path, repeat, res_save_dir):
                  "lr_warmup_ratio": [0.5],
                  "evals_per_epoch": [8]}
     var_opt_names = list(grid_dict.keys())
-    var_opt_values = list(v if isinstance(v, list) else list(v) for v in grid_dict.values())
+    var_opt_values = list(v if isinstance(v, list) else list(v) \
+                          for v in grid_dict.values())
 
     # treat elements in list as separate args to fxn
     for tup in product(*var_opt_values):
@@ -99,8 +103,8 @@ def add_grid_search(db_path, repeat, res_save_dir):
     #     raise ValueError(f"Unsupported model type: {model_type}")
 
 
-def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log_dir,
-        ready_status, started_status):
+def run(db_path, script, n, detach, metascript, metascript_batch,
+        metascript_log_dir, ready_status, started_status):
     expt_opts = list(DEFAULT_OPTS.keys())
     manager = ExperimentManager(db_path, expt_opts)
 
@@ -142,30 +146,34 @@ def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subparser")
 
-    compile_data_parser = subparsers.add_parser("preprocess")
-    compile_data_parser.add_argument("train", type=str, help="Train set")
-    compile_data_parser.add_argument("dev", type=str, help="Dev set")
-    compile_data_parser.add_argument("test", type=str, help="Test set")
-    compile_data_parser.add_argument("-o", "--data_path", type=str, help="Destination", required=True)
+    preprocess_parser = subparsers.add_parser("preprocess")
+    preprocess_parser.add_argument("train", type=str, help="Train set")
+    preprocess_parser.add_argument("dev", type=str, help="Dev set")
+    preprocess_parser.add_argument("test", type=str, help="Test set")
+    preprocess_parser.add_argument("-o", "--data_path", type=str,
+                                   help="Destination", required=True)
+    preprocess_parser.add_argument("-v", "--variant", type=str, default="basic",
+                                   help="Type of bert realignment variant")
 
     setup_parser = subparsers.add_parser("setup")
-    setup_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
-    setup_parser.add_argument("-i", "--data_path", type=str, help="Path to pickled dataset")
+    setup_parser.add_argument("-d", "--db_path", type=str,
+                              help="Experiment database path")
+    setup_parser.add_argument("-i", "--data_path", type=str,
+                              help="Path to pickled dataset")
 
     add_one_parser = subparsers.add_parser("add_one")
-    add_one_parser.add_argument("-d", "--db_path", type=str, required=True, help="Experiment database path")
+    add_one_parser.add_argument("-d", "--db_path", type=str, required=True,
+                                help="Experiment database path")
 
     add_gs_parser = subparsers.add_parser("add_grid_search")
-    add_gs_parser.add_argument("-d", "--db_path", type=str, required=True, help="Experiment database path")
-    add_gs_parser.add_argument("-r", "--repeat", type=int, default=1, help="Repeat each grid search config for number of times")
-    add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True, help="Directory to save stored results")
-    
-    # add_parser = subparsers.add_parser("add")
-    # add_parser.add_argument("-d", "--db_path", type=str, required=True, help="Pickled dataset file")
-    # add_parser.add_argument("-t", "--model_type", type=str, required=True, help="Model type, currently only supports lstm")
-    # add_parser.add_argument("-m", "--model_path", type=str, required=True, help="Trained torch.nn.module")
-    # add_parser.add_argument("-o", "--res_dir", type=str, required=True, help="Directory to save stored results")
-    # add_parser.add_argument("-n", "--num_inputs", type=int, nargs="+")
+    add_gs_parser.add_argument("-d", "--db_path", type=str, required=True,
+                               help="Experiment database path")
+    add_gs_parser.add_argument("-r", "--repeat", type=int, default=1,
+                               help="Repeat each grid search config for number "
+                                    "of times")
+    add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True,
+                               help="Directory to save stored results")
+
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
@@ -179,7 +187,8 @@ def main():
     run_parser.add_argument("-s", "--started_status", type=int, default=None)
 
     query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("-d", "--db_path", type=str, help="Experiment database path")
+    query_parser.add_argument("-d", "--db_path", type=str,
+                              help="Experiment database path")
     query_parser.add_argument("-i", "--id", type=int)
     query_parser.add_argument("-s", "--status", type=int)
     query_parser.add_argument("-n", "--limit", type=int)

@@ -4,6 +4,7 @@ import torch
 import argparse
 import pickle
 
+from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 
 from experiment import Experiment
@@ -11,14 +12,13 @@ from expt_graph import analyze_results, save_results
 
 from intervention import Intervention, GraphInput
 from intervention.analysis import construct_graph, find_cliques
-from intervention.utils import serialize
+from intervention.utils import serialize, deserialize
 from intervention.location import Location
 
 from train import load_model
 from modeling.lstm import LSTMModule
 from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
-
 
 from typing import Dict
 
@@ -35,9 +35,19 @@ def stringify_mapping(m):
         res[high] = low_dict
     return res
 
+# for getting base results of bert model
+class ListDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+    def __getitem__(self, item):
+        return self.data[item]
+    def __len__(self):
+        return len(self.data)
+
 class Analysis:
     def __init__(self, data, abstraction_str, high_model, low_model,
-                 graph_alpha, res_save_dir, expt_id=None):
+                 graph_alpha, res_save_dir, low_model_type="lstm",
+                 hi2lo_dict=None, expt_id=None, low_model_device="cuda"):
         if isinstance(data, str):
             with open(data, "rb") as f:
                 data = pickle.load(f)
@@ -48,25 +58,45 @@ class Analysis:
         self.low_node = abstraction[1][0]
         self.high_model = high_model
         self.low_model = low_model
+        self.low_model_type = low_model_type
         self.graph_alpha = graph_alpha
         self.res_save_dir = res_save_dir
+        self.low_model_device = torch.device(low_model_device)
         self.expt_id = expt_id
+        self.serialize_lo = serialize if low_model_type == "lstm" else \
+            lambda x : serialize(x[0].squeeze())
+        self.hi2lo, self.lo2hi = self.setup_mappings(hi2lo_dict)
 
     # def get_original_input(self, low_interv: Intervention) -> GraphInput:
     #     interv_tensor = low_interv.intervention[self.low_node]
     #     k = (serialize(interv_tensor), self.high_node)
     #     return self.realizations_to_inputs[k].base
 
-    def analyze(self):
-        res_dict = defaultdict(list)
-        for (results, realizations_to_inputs), mapping in self.data:
-            res = self.analyze_one_experiment(results, realizations_to_inputs, mapping)
-            for key, value in res.items():
-                res_dict[key+'s'].append(value)
+    def setup_mappings(self, hi2lo_dict):
+        if self.low_model_type == "lstm":
+            return lambda x: x, lambda x: x
+        elif self.low_model_type == "bert":
+            self._hi2lo_dict = hi2lo_dict
+            hi2lo = lambda hi: self._hi2lo_dict[serialize(hi)]
+            self._lo2hi_dict = {serialize(lo[0]): deserialize(hi)
+                                for hi, lo in hi2lo_dict.items()}
+            lo2hi = lambda lo: self._lo2hi_dict[self.serialize_lo(lo)]
+            return hi2lo, lo2hi
+        else:
+            raise NotImplementedError(f"Does not support low model type {self.low_model_type}")
 
-        for key in res_dict.keys():
-            str_list = json.dumps(res_dict[key])
-            res_dict[key] = str_list
+
+    def analyze(self):
+        with torch.no_grad():
+            res_dict = defaultdict(list)
+            for (results, realizations_to_inputs), mapping in self.data:
+                res = self.analyze_one_experiment(results, realizations_to_inputs, mapping)
+                for key, value in res.items():
+                    res_dict[key+'s'].append(value)
+
+            for key in res_dict.keys():
+                str_list = json.dumps(res_dict[key])
+                res_dict[key] = str_list
         return dict(res_dict)
 
     def analyze_one_experiment(self, results, realizations_to_inputs, mapping):
@@ -75,6 +105,7 @@ class Analysis:
         res_dict.update(self.analyze_counts(results, mapping))
         res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
         return res_dict
+
 
     def analyze_counts(self, results, mapping):
         """
@@ -97,9 +128,8 @@ class Analysis:
         interv_eq_count = 0  # A + B
         strict_success_count = 0 # A
 
-        input_set = set(serialize(low.base["input"]) for low, _ in results.keys())
-
-        low_base_outputs = self.get_base_outputs(input_set, self.low_model)
+        low_base_outputs = self.get_low_base_outputs(results, self.low_model,
+                                                     self.low_model_type)
 
         for count, (k, v) in enumerate(results.items()):
             low, high = k
@@ -112,7 +142,7 @@ class Analysis:
             interv_count += 1
             high_base_output, high_interv_output = self.high_model.intervene(
                 high)
-            low_base_output = low_base_outputs[serialize(low.base["input"])]
+            low_base_output = low_base_outputs[self.serialize_lo(low.base["input"])]
 
             interv_eq = v.item()
             base_eq = (low_base_output == high_base_output.item())
@@ -142,17 +172,31 @@ class Analysis:
 
         return res_dict
 
-    def get_base_outputs(self, low_inputs, model):
-        low_inputs = list(low_inputs)
-        batch_size = 32
+    def get_low_base_outputs(self, results, model, model_type):
         low_base_outputs = {}
-        for i in range(0, len(low_inputs), batch_size):
-            batch = low_inputs[i:i+batch_size]
-            tensor_batch = torch.cat(tuple(torch.tensor(t) for t in low_inputs[i:i+batch_size]), dim=1)
-            graph_input = GraphInput({"input": tensor_batch})
-            output = model.compute(graph_input, store_cache=False)
-            for i, o in zip(batch, output):
-                low_base_outputs[i] = o.item()
+        if model_type == "lstm":
+            low_inputs = list(set(serialize(low.base["input"]) for low, _ in results.keys()))
+            batch_size = 32
+            for i in range(0, len(low_inputs), batch_size):
+                batch = low_inputs[i:i+batch_size]
+                tensor_batch = torch.cat(tuple(torch.tensor(t) for t in low_inputs[i:i+batch_size]), dim=1)
+                graph_input = GraphInput({"input": tensor_batch})
+                output = model.compute(graph_input, store_cache=False)
+                for i, o in zip(batch, output):
+                    low_base_outputs[i] = o.item()
+
+        elif model_type == "bert":
+            low_inputs = [tuple(low_interv.base["input"]) for low_interv, _ in results.keys()]
+            low_inputs_dataset = ListDataset(low_inputs)
+            dataloader = DataLoader(low_inputs_dataset, batch_size=32, shuffle=False)
+
+            for input_tuple in dataloader:
+                input_tuple = [x.to(self.low_model_device).view(-1,x.shape[-1]) for x in input_tuple]
+                graph_input = GraphInput({"input": input_tuple})
+                output = model.compute(graph_input, store_cache=False)
+                for i, o in zip(input_tuple[0], output):
+                    low_base_outputs[serialize(i)] = o.item()
+
         return low_base_outputs
 
     def analyze_graph(self, result, realizations_to_inputs, mapping):
@@ -164,7 +208,8 @@ class Analysis:
             result=result,
             realizations_to_inputs=realizations_to_inputs,
             high_node_name=self.high_node,
-            high_root_name="root"
+            high_root_name="root",
+            low_serialize_fxn=self.serialize_lo
         )
 
         print("  Finding cliques")
@@ -226,3 +271,25 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+"""
+res_dict = {'runtime': 5.930975675582886, 
+            'save_path': 'experiment_data/bert/test/res-idNone-subj_adj-1110-123000.pkl', 
+            'interv_counts': '[100, 100]', 
+            'effective_ratios': '[0.13, 0.13]', 
+            'interv_eq_rates': '[0.5384615384615384, 0.6923076923076923]', 
+            'strict_success_rates': '[0.5384615384615384, 0.6923076923076923]', 
+            'mappings': '[{"root": {"root": "::"}, "input": {"input": "::"}, "subj_adj": {"bert_layer_0": "(slice(None, None, None), 3, slice(None, None, None))"}}, {"root": {"root": "::"}, "input": {"input": "::"}, "subj_adj": {"bert_layer_0": "(slice(None, None, None), 16, slice(None, None, None))"}}]', 
+            'graph_save_paths': '["experiment_data/bert/test/graph-1110-123004.pkl", "experiment_data/bert/test/graph-1110-123004.pkl"]', 
+            'max_clique_sizes': '[1, 1]', 
+            'avg_clique_sizes': '[1.0, 1.0]', 
+            'sum_clique_sizes': '[1, 1]', 
+            'clique_counts': '[1, 1]'}
+"""
+
+mapping = [{"root": {"root": "::"},
+            "input": {"input": "::"},
+            "subj_adj": {"bert_layer_0": "(slice(None, None, None), 3, slice(None, None, None))"}},
+           {"root": {"root": "::"},
+            "input": {"input": "::"},
+            "subj_adj": {"bert_layer_0": "(slice(None, None, None), 16, slice(None, None, None))"}}]

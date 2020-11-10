@@ -1,9 +1,9 @@
 import torch
 import re
 
-from intervention import ComputationGraph, GraphNode
+from intervention import ComputationGraph, GraphNode, LOC
 from compgraphs.abstractable import AbstractableCompGraph
-from typing import List, Any
+from typing import List, Any, Optional
 
 def generate_bert_layer_fxn(layer_module, i):
     def _bert_layer_fxn(hidden_states, metainfo):
@@ -27,7 +27,7 @@ def generate_bert_layer_fxn(layer_module, i):
     return _bert_layer_fxn
 
 class MQNLI_Bert_CompGraph(ComputationGraph):
-    def __init__(self, bert_model):
+    def __init__(self, bert_model, root_output_device=None):
         if bert_model.task != "mqnli":
             raise ValueError("The model must be for MQNLI!")
 
@@ -81,12 +81,13 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
         def root(x):
             return torch.argmax(x, dim=1)
         
-        super(MQNLI_Bert_CompGraph, self).__init__(root)
+        super(MQNLI_Bert_CompGraph, self).__init__(root, root_output_device=root_output_device)
 
 
 class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
     def __init__(self, base_compgraph: MQNLI_Bert_CompGraph,
-                 intermediate_nodes: List[str], interv_info: Any = None):
+                 intermediate_nodes: List[str], interv_info: Any = None,
+                 root_output_device: Optional[torch.device]=None):
         self.base = base_compgraph
         self.interv_info = interv_info
 
@@ -100,12 +101,12 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
             full_graph=full_graph,
             root_node_name="root",
             abstract_nodes=intermediate_nodes,
-            forward_functions=forward_functions
+            forward_functions=forward_functions,
+            root_output_device=root_output_device
         )
 
     def get_indices(self, node: str):
-        raise NotImplementedError
-        # if re.match(r".*lstm_[0-9]*", node):
-        #     return self.interv_info["target_locs"]
-        # else:
-        #     return super().get_indices(node)
+        if re.match(r".*bert_layer_[0-9]*", node):
+            return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
+        else:
+            return super().get_indices(node)

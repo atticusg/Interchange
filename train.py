@@ -26,12 +26,12 @@ class Trainer:
     def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
                  max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
                  patient_epochs=20, lr_scheduler_type="None", lr_warmup_ratio=0.05, optimizer_type="adam",
-                 use_collate=True, batch_first=True,
+                 use_collate=True, batch_first=True, device="cuda",
                  model_save_path=None, res_save_dir=None,
                  verbose=True, opts={}):
         self.data = data
         self.model = model
-        self.device = model.device
+        self.device = torch.device(opts.get("device", device))
 
         self.batch_size = opts.get("batch_size", batch_size)
         self.eval_batch_size = opts.get("eval_batch_size", eval_batch_size)
@@ -166,7 +166,8 @@ class Trainer:
                     corr, total = evaluate_and_predict(self.data.dev, self.model,
                                                        eval_batch_size=self.eval_batch_size,
                                                        use_collate=self.use_collate,
-                                                       batch_first=self.batch_first)
+                                                       batch_first=self.batch_first,
+                                                       device=self.device)
                     acc = corr / total
 
                     if acc > best_dev_acc:
@@ -227,7 +228,9 @@ class Trainer:
         return best_model_checkpoint, model_save_path
 
 
-def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, batch_first=False):
+def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True,
+                         batch_first=False, device=None):
+    device = torch.device("cuda") if not device else device
     model.eval()
     with torch.no_grad():
         total_preds = 0
@@ -244,13 +247,13 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, b
         # bad_sentences = []
 
         for tuple in dataloader:
-            tuple = [x.to(model.device) for x in tuple]
+            tuple = [x.to(device) for x in tuple]
             y_batch = tuple[-1]
 
             logits = model(tuple)
             pred = torch.argmax(logits, dim=1)
 
-            pred = pred.to(model.device)
+            pred = pred.to(device)
 
             """
             if get_summary:
@@ -279,13 +282,12 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64, use_collate=True, b
             total_preds += y_batch.shape[0]
             correct_preds += correct_in_batch
 
-
         # bad_sentences = sorted(bad_sentences, key=lambda p: p[1], reverse=True)
         return correct_preds, total_preds
 
 
 def load_model(model_class, save_path, device=None, opts: Dict=None):
-    if device:
+    if device is not None:
         checkpoint = torch.load(save_path, map_location=device)
     else:
         checkpoint = torch.load(save_path)
@@ -295,10 +297,6 @@ def load_model(model_class, save_path, device=None, opts: Dict=None):
         model_config.update(opts)
     model = model_class(**model_config)
     model.load_state_dict(checkpoint['model_state_dict'])
-    if device is None:
-        model = model.to(model.device)
-    else:
-        model = model.to(device)
+    device = torch.device("cpu") if device is None else device
+    model.to(device)
     return model, checkpoint
-
-

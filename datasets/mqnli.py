@@ -1,9 +1,10 @@
 import torch
 import json
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from transformers import BertTokenizer
-from typing import Dict, List, Tuple
+from typing import Dict, List
+
 
 class MQNLIData:
     def __init__(self, train_file, dev_file, test_file, use_separator=False,
@@ -34,22 +35,22 @@ class MQNLIData:
         self.train = MQNLIDataset(train_file, self.word_to_id, self.id_to_word,
                                   max_info, for_transformer, store_text)
         train_ids = max_info["id"]
-        print("--- finished loading train set, saw %d unique tokens up to now" % train_ids)
+        print(f"--- loaded train set, {train_ids} unique tokens up to now")
 
         self.dev = MQNLIDataset(dev_file, self.word_to_id, self.id_to_word,
                                 max_info, for_transformer, store_text)
         dev_ids = max_info["id"]
-        print("--- finished loading dev set, saw %d unique tokens up to now" % dev_ids)
+        print(f"--- loaded dev set, {dev_ids} unique tokens up to now")
 
         self.test = MQNLIDataset(test_file, self.word_to_id, self.id_to_word,
                                  max_info, for_transformer, store_text)
         test_ids = max_info["id"]
-        print("--- finished loading test set, saw %d unique tokens up to now" % test_ids)
+        print(f"--- loaded test set, {test_ids} unique tokens up to now")
 
         self.vocab_size, self.max_sentence_len = max_info['id'], max_info[
             'sentence_len']
-        print("--- found {} unique words, max sentence len is {}".format(
-            self.vocab_size, self.max_sentence_len))
+        print(f"--- Got {self.vocab_size} unique words, "
+              f"max sentence len {self.max_sentence_len}")
 
     def decode(self, t, return_str=False):
         if return_str:
@@ -154,9 +155,15 @@ def load_remapping(file_name: str) -> Dict:
 class MQNLIBertData(MQNLIData):
     def __init__(self, train_file: str, dev_file: str, test_file: str,
                  vocab_remapping_file: str, tokenizer_type="bert-base-uncased",
-                 special_tokens=["emptystring"]):
+                 variant="basic"):
         self.tokenizer = BertTokenizer.from_pretrained(tokenizer_type)
         self.tokenizer_type = tokenizer_type
+        self.variant = variant
+
+        if variant == "basic":
+            special_tokens = ["emptystring"]
+        else:
+            raise NotImplementedError(f"Does not support data variant {variant}")
 
         self.special_tokens = special_tokens
         self.tokenizer.add_tokens(special_tokens)
@@ -169,15 +176,18 @@ class MQNLIBertData(MQNLIData):
 
         print("--- Loading Dataset ---")
         self.train = MQNLIBertDataset(train_file, self.vocab_remapping,
-                                      self.word_to_id, self.tokenizer)
+                                      self.word_to_id, self.tokenizer,
+                                      variant=variant)
         print(f"--- finished loading {len(self.train)} examples from train set")
 
         self.dev = MQNLIBertDataset(dev_file, self.vocab_remapping,
-                                    self.word_to_id, self.tokenizer)
+                                    self.word_to_id, self.tokenizer,
+                                    variant=variant)
         print(f"--- finished loading {len(self.dev)} examples from dev set")
 
         self.test = MQNLIBertDataset(test_file, self.vocab_remapping,
-                                     self.word_to_id, self.tokenizer)
+                                     self.word_to_id, self.tokenizer,
+                                     variant=variant)
         print(f"--- finished loading {len(self.test)} examples from test set")
 
     def get_id_word_dicts(self):
@@ -201,12 +211,13 @@ class MQNLIBertData(MQNLIData):
 class MQNLIBertDataset(Dataset):
     def __init__(self, file_name: str, vocab_remapping: Dict[str,str],
                  word_to_id: Dict[str, int], tokenizer: BertTokenizer,
-                 type="basic"):
+                 variant="basic"):
         print("--- Loading sentences from " + file_name)
         self.vocab_remapping = vocab_remapping
         self.tokenizer = tokenizer
         self.shifted_idxs = [1, 2, 3, 5, 6, 7, 9, 10, 11]
         self.word_to_id = word_to_id
+        self.variant = variant
 
         label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
 
@@ -229,17 +240,19 @@ class MQNLIBertDataset(Dataset):
 
                 # convert string form tokens into BERT tokens
                 bert_toks = self.tokenize(p_toks, h_toks)
-
+                orig_toks = unshifted_p_toks + unshifted_h_toks
+                attention_mask = [1.] + p_attn_mask + [1.] + h_attn_mask + [1.]
                 # assert all(t == tt for t, tt in zip(bert_toks, p["input_ids"]))
                 self.raw_bert_x.append(bert_toks)
-                self.raw_orig_x.append(unshifted_p_toks + [self.word_to_id["[SEP]"]] + unshifted_h_toks)
-                self.attention_masks.append([1] + p_attn_mask + [1] + h_attn_mask + [1])
+                self.raw_orig_x.append(orig_toks)
+                self.attention_masks.append(attention_mask)
                 self.raw_y.append(label)
                 count += 1
 
         self.num_examples = len(self.raw_bert_x)
 
-    def remap_and_shift(self, example: Dict, is_p: bool=True) -> (List[str], List[str], List[int]):
+    def remap_and_shift(self, example: Dict, is_p: bool=True) \
+            -> (List[str], List[str], List[int]):
         """ map words to other words that won't be split up by BERT, and shift
         them into new positions according to the following schema:
              0          1     2        3         4       5       6       7      8
@@ -248,34 +261,34 @@ class MQNLIBertDataset(Dataset):
             /     \                      |    \                    |    \
         [ not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
           0     1       2     3        4      5     6       7       8     9       10     11
-
-        :param s:
-        :return:
         """
         s = example["sentence1"].split() if is_p else example["sentence2"].split()
         remapped_words = [self.vocab_remapping.get(w.lower(), w) for w in s]
 
-        toks = ["emptystring"] * 12
-        for old_idx, new_idx in enumerate(self.shifted_idxs):
-            curr_tok = remapped_words[old_idx]
-            if old_idx in [0, 6] and curr_tok == "notevery":
-                toks[new_idx-1] = "not"
-                toks[new_idx] = "every"
-            elif old_idx == 3 and curr_tok == "doesnot":
-                toks[new_idx-1] = "does"
-                toks[new_idx] = "not"
-            else:
-                toks[new_idx] = curr_tok
+        if self.variant == "basic":
+            toks = ["emptystring"] * 12
+            for old_idx, new_idx in enumerate(self.shifted_idxs):
+                curr_tok = remapped_words[old_idx]
+                if old_idx in [0, 6] and curr_tok == "notevery":
+                    toks[new_idx-1] = "not"
+                    toks[new_idx] = "every"
+                elif old_idx == 3 and curr_tok == "doesnot":
+                    toks[new_idx-1] = "does"
+                    toks[new_idx] = "not"
+                else:
+                    toks[new_idx] = curr_tok
 
-        unshifted_toks = [self.word_to_id[w] for w in remapped_words]
-        attention_mask = [1. for _ in toks]
-        return toks, unshifted_toks, attention_mask
+            unshifted_toks = [self.word_to_id[w] for w in remapped_words]
+            attention_mask = [1. for _ in toks]
+            return toks, unshifted_toks, attention_mask
+        else:
+            raise NotImplementedError(f"Does not support tokenziation variant"
+                                      f"{self.variant}")
 
     def tokenize(self, p_toks: List[str], h_toks: List[str]):
         # do not use BertTokenizer's tokenize because it is very slow
         toks = ["[CLS]"] + p_toks + ["[SEP]"] + h_toks + ["[SEP]"]
         return [self.word_to_id[t] for t in toks]
-
 
     def __len__(self):
         return self.num_examples
@@ -283,12 +296,16 @@ class MQNLIBertDataset(Dataset):
     def __getitem__(self, i):
         """Returns tuple: (input_ids, token_type_ids, attention_masks,
             raw_original_x, label) """
-        sample = (torch.tensor(self.raw_bert_x[i], dtype=torch.long),
-                  torch.tensor([0]*14 + [1]*13, dtype=torch.long),
-                  torch.tensor(self.attention_masks[i], dtype=torch.float),
-                  torch.tensor(self.raw_orig_x[i], dtype=torch.long),
-                  self.raw_y[i])
-        return sample
+        if self.variant == "basic":
+            sample = (torch.tensor(self.raw_bert_x[i], dtype=torch.long),
+                      torch.tensor([0]*14 + [1]*13, dtype=torch.long),
+                      torch.tensor(self.attention_masks[i], dtype=torch.float),
+                      torch.tensor(self.raw_orig_x[i], dtype=torch.long),
+                      self.raw_y[i])
+            return sample
+        else:
+            raise NotImplementedError(f"Does not support tokenziation variant"
+                                      f"{self.variant}")
 
 
 def bert_trainer_collate(batch):
@@ -307,7 +324,7 @@ if __name__ == "__main__":
     dev_file = "../mqnli_data/mqnli.dev.txt"
     test_file = "../mqnli_data/mqnli.test.txt"
     vocab_remapping_file = "../mqnli_data/bert-remapping.txt"
-    pickle_file = "../mqnli_data/mqnli_bert_test1.pt"
+    pickle_file = "../mqnli_data/mqnli_bert.pt"
     tokenizer_vocab_file = "../mqnli_data/bert-vocab.pt"
 
     data = MQNLIBertData(train_file, dev_file, test_file, vocab_remapping_file)
@@ -332,3 +349,11 @@ if __name__ == "__main__":
     #     remapped_word = data1.vocab_remapping.get(orig_word.lower(), orig_word.lower())
     #     if remapped_word not in data1.word_to_id:
     #         print(f"Did not find word (orig) {orig_word} / (new) {remapped_word} in new dataset")
+
+
+def get_data_variant(data_object):
+    if isinstance(data_object, MQNLIBertData):
+        return "bert-" + getattr(data_object, "variant", "basic")
+    elif isinstance(data_object, MQNLIData):
+        return "lstm"
+
