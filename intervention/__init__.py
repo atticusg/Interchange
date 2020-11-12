@@ -4,5 +4,6 @@ from intervention.intervention import Intervention
 from intervention.graph_node import GraphNode
 from intervention.graph import ComputationGraph
 from intervention.constructor import CompGraphConstructor
+from intervention.abstraction_torch import find_abstractions as find_abstractions_torch
 
 LOC = Location()

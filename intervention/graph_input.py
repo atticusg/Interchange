@@ -8,13 +8,19 @@ class GraphInput:
     `GraphInput` objects are intended to be immutable, so that its hash value
     can have a one-to-one correspondence to the dict stored in it. """
 
-    def __init__(self, values, device=None):
-        if device:
-            assert all(
-                isinstance(t, torch.Tensor) for _, t in values.items())
-            self._values = {k: v.to(device) for k, v in values.items()}
-        else:
-            self._values = values
+    def __init__(self, values):
+        self._values = values
+        # self._all_tensors = len(values) > 0 and all(isinstance(v, torch.Tensor)
+        #                                             for v in values.values())
+        #
+        # # automatically get the device if all input values are tensors and on the same device
+        # self.device = None
+        # if self._all_tensors:
+        #     devices = set(v.device for v in self.values.values())
+        #     if len(devices) == 1:
+        #         self.device = devices.pop()
+        #     else:
+        #         raise RuntimeError("Currently does not support input values on multiple devices")
 
     @property
     def values(self):

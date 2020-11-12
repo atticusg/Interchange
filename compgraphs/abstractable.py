@@ -132,7 +132,7 @@ class AbstractableCompGraph(ComputationGraph):
     def generate_input_node(self, name: str) -> GraphNode:
         def _input_forward_fxn(x):
             return x
-        return GraphNode(name=name, forward=_input_forward_fxn)
+        return GraphNode(name=name, forward=_input_forward_fxn, cache_results=False)
 
     def generate_forward_function(self, abstracted_node: str,
                                   children: List[str]) -> Callable:

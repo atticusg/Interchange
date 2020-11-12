@@ -27,8 +27,6 @@ def analyze_results(G, causal_edges, input_to_id, cliques):
     num_nodes_in_cliques = sum(len(c) for c in cliques)
     # find percentage of causal edges
 
-
-
     res_dict = {"max_clique_size": max_clique_size,
                 "avg_clique_size": avg_clique_size,
                 "sum_clique_size": num_nodes_in_cliques,
@@ -45,17 +43,20 @@ def save_results(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_di
         "input_to_id": input_to_id,
         "cliques": cliques
     }
-    time_str = datetime.now().strftime("%m%d-%H%M%S")
-    if id:
-        res_file_name = f"graph-id{id}-{time_str}.pkl"
-    else:
-        res_file_name = f"graph-{time_str}.pkl"
-    graph_save_path = os.path.join(res_save_dir, res_file_name)
+    if res_save_dir:
+        time_str = datetime.now().strftime("%m%d-%H%M%S")
+        if id:
+            res_file_name = f"graph-id{id}-{time_str}.pkl"
+        else:
+            res_file_name = f"graph-{time_str}.pkl"
+        graph_save_path = os.path.join(res_save_dir, res_file_name)
 
-    with open(graph_save_path, "wb") as f:
-        pickle.dump(res, f)
-    print("Saved graph analysis data to", graph_save_path)
-    return graph_save_path
+        with open(graph_save_path, "wb") as f:
+            pickle.dump(res, f)
+        print("Saved graph analysis data to", graph_save_path)
+        return graph_save_path
+    else:
+        return ""
 
 class GraphExperiment(Experiment):
     def experiment(self, opts):

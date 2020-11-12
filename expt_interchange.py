@@ -1,29 +1,25 @@
-import time
-import torch
-import pickle
 import os
+import sys
+import argparse
+import pickle
 import json
 from datetime import datetime
-import argparse
+import time
 
-from intervention.abstraction_torch import find_abstractions
-from intervention.utils import serialize
-from intervention import Intervention, LOC
-
+import torch
 from torch.utils.data import DataLoader
-from datasets.utils import my_collate
-from datasets.mqnli import get_data_variant
+import torch.autograd.profiler as profiler
 
-from modeling import get_module_class_by_name
+import intervention
+import datasets
+import modeling
 from train import load_model
+import experiment
+from expt_interchange_analysis import Analysis
 
-from compgraphs import get_compgraph_class_by_name
-from compgraphs import get_abstr_compgraph_class_by_name
+import compgraphs
 from compgraphs import mqnli_logic as logic
 from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
-
-from experiment import Experiment
-from expt_interchange_analysis import Analysis
 
 from typing import List, Dict, Optional
 
@@ -54,9 +50,9 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
         for k, idxs in d.items():
             locs = []
             for idx in idxs:
-                locs.append(LOC[idx])
+                locs.append(intervention.LOC[idx])
                 if lstm_p_h_continuous:
-                    locs.append(LOC[10 + idx])
+                    locs.append(intervention.LOC[10 + idx])
             d[k] = locs
         return d[high_node_name]
 
@@ -81,7 +77,7 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
              "subj": [3, 4, 16, 17]}
         return d[high_node_name]
 
-class InterchangeExperiment(Experiment):
+class InterchangeExperiment(experiment.Experiment):
     def experiment(self, opts: Dict) -> Dict:
         res, duration, high_model, low_model, hi2lo_dict = self.get_results(opts)
         # pickle file
@@ -94,47 +90,52 @@ class InterchangeExperiment(Experiment):
         return res_dict
 
     def get_results(self, opts: Dict):
+        # load low level model
         model_type = opts.get("model_type", "lstm")
-        model_class = get_module_class_by_name(opts.get("model_type", "lstm"))
+        model_class = modeling.get_module_class_by_name(opts.get("model_type", "lstm"))
         device = torch.device("cuda")
         module, _ = load_model(model_class, opts["model_path"], device=device)
         module.eval()
 
+        # load data
         data = torch.load(opts["data_path"])
-        data_variant = get_data_variant(data)
+        data_variant = datasets.mqnli.get_data_variant(data)
 
+        # get intervention information based on model type and data variant
         abstraction = json.loads(opts["abstraction"])
         high_intermediate_node = abstraction[0]
         low_intermediate_nodes = abstraction[1]
         high_intermediate_nodes = [high_intermediate_node]
-
         p_h_continuous = False
         if model_type == "lstm":
             p_h_continuous = hasattr(module, "p_h_separator") \
                              and module.p_h_separator is not None
-
         interv_info = {
             "target_locs": get_target_locs(high_intermediate_node, data_variant,
                                            p_h_continuous)
         }
 
-        low_compgraph_class = get_compgraph_class_by_name(model_type)
-        low_abstr_compgraph_class = get_abstr_compgraph_class_by_name(model_type)
+        # set up models
+        low_compgraph_class = compgraphs.get_compgraph_class_by_name(model_type)
+        low_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name(model_type)
         low_base_compgraph = low_compgraph_class(module)
         low_model = low_abstr_compgraph_class(low_base_compgraph,
                                               low_intermediate_nodes,
                                               interv_info=interv_info,
                                               root_output_device=torch.device("cpu"))
+        low_model.set_cache_device(torch.device("cpu"))
         high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
+        # set up to get examples from dataset
         hi2lo_dict = {}
         if model_type == "lstm":
-            collate_fn = lambda batch: my_collate(batch, batch_first=False)
+            collate_fn = lambda batch: datasets.utils.my_collate(batch, batch_first=False)
             dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
                                     collate_fn=collate_fn)
         elif model_type == "bert":
             dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
 
+        # get examples from dataset
         low_inputs = []
         high_interventions = []
         num_inputs = opts["num_inputs"]
@@ -145,53 +146,93 @@ class InterchangeExperiment(Experiment):
             input_tuple = [x.to(device) for x in input_tuple]
             if model_type == "bert":
                 orig_input = orig_input.T
-                hi2lo_dict[serialize(orig_input)] = input_tuple
+                hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
 
-            low_inputs.append(Intervention({"input": orig_input}, {}))
+            low_inputs.append(intervention.Intervention({"input": orig_input}, {}))
 
             high_interventions += self.get_interventions(high_intermediate_node,
                                                          orig_input)
 
-        fixed_assignments = {x: {x: LOC[:]} for x in ["root", "input"]}
-
+        # setup for find_abstractions
+        fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
         if model_type == "lstm":
             input_mapping = lambda x: x  # identity function
         elif model_type == "bert":
-            input_mapping = lambda x: hi2lo_dict[serialize(x)]
-
+            input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
         unwanted_nodes = {"root", "input"}
 
+        # find abstractions
+
+        use_profiler = opts.get("use_profiler", False)
         start_time = time.time()
-        with torch.no_grad():
-            print("Finding abstractions")
-            res = find_abstractions(
-                low_model=low_model,
-                high_model=high_model,
-                high_inputs=low_inputs,
-                total_high_interventions=high_interventions,
-                fixed_assignments=fixed_assignments,
-                input_mapping=input_mapping,
-                unwanted_low_nodes=unwanted_nodes
-            )
+        if use_profiler:
+            # use profiler to check memory usage
+            print("Finding abstractions with profiler")
+
+            with profiler.profile(use_cuda=True, profile_memory=True, record_shapes=True) as prof:
+                with torch.no_grad():
+                    res = intervention.find_abstractions_torch(
+                        low_model=low_model,
+                        high_model=high_model,
+                        high_inputs=low_inputs,
+                        total_high_interventions=high_interventions,
+                        fixed_assignments=fixed_assignments,
+                        input_mapping=input_mapping,
+                        unwanted_low_nodes=unwanted_nodes
+                    )
+
+            profiler_log = opts.get("profiler_log", None)
+            log_f = open(profiler_log, "w") if profiler_log else sys.stdout
+            log_f.write("Profiler log for finding abstractions\n")
+            log_f.write("cpu_memory_usage\n")
+            log_f.write(prof.key_averages().table(sort_by="cpu_memory_usage",
+                                                  row_limit=10))
+            log_f.write("\ncuda_memory_usage\n")
+            log_f.write(prof.key_averages().table(sort_by="cuda_memory_usage",
+                                                  row_limit=10))
+            log_f.write("\ncpu_time\n")
+            log_f.write(prof.key_averages().table(sort_by="cpu_time",
+                                                  row_limit=10))
+            log_f.write("\ncuda_time\n")
+            log_f.write(prof.key_averages().table(sort_by="cuda_time",
+                                                  row_limit=10))
+            if profiler_log: log_f.close()
+        else:
+            with torch.no_grad():
+                print("Finding abstractions")
+                res = intervention.find_abstractions_torch(
+                    low_model=low_model,
+                    high_model=high_model,
+                    high_inputs=low_inputs,
+                    total_high_interventions=high_interventions,
+                    fixed_assignments=fixed_assignments,
+                    input_mapping=input_mapping,
+                    unwanted_low_nodes=unwanted_nodes
+                )
+
         duration = time.time() - start_time
         print(f"Finished finding abstractions, took {duration:.2f} s")
         return res, duration, high_model, low_model, hi2lo_dict
 
     def save_results(self, opts: Dict, res: List) -> str:
-        abstraction = json.loads(opts["abstraction"])
-        high_intermediate_node = abstraction[0]
-        save_dir = opts["res_save_dir"]
+        save_dir = opts.get("res_save_dir", None)
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        time_str = datetime.now().strftime("%m%d-%H%M%S")
-        res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
-        save_path = os.path.join(save_dir, res_file_name)
+        if save_dir:
+            abstraction = json.loads(opts["abstraction"])
+            high_intermediate_node = abstraction[0]
 
-        with open(save_path, "wb") as f:
-            pickle.dump(res, f)
 
-        return save_path
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            time_str = datetime.now().strftime("%m%d-%H%M%S")
+            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
+            save_path = os.path.join(save_dir, res_file_name)
+
+            with open(save_path, "wb") as f:
+                pickle.dump(res, f)
+            return save_path
+        else:
+            return ""
 
     def analyze_results(self, res: List, high_model, low_model, hi2lo_dict,
                         opts: Dict) -> Dict:
@@ -204,7 +245,7 @@ class InterchangeExperiment(Experiment):
         # return {}
 
     def get_interventions(self, high_node: str, base_input: torch.Tensor) \
-            -> List[Intervention]:
+            -> List[intervention.Intervention]:
         if high_node in {"subj_adj", "v_adv", "obj_adj"}:
             intervention_values = logic.intersective_projections
         elif high_node in {"subj_noun", "v_verb", "obj_noun"}:
@@ -228,8 +269,8 @@ class InterchangeExperiment(Experiment):
         else:
             raise ValueError(f"Invalid high-level node: {high_node}")
 
-        res = [Intervention({"input": base_input},
-                            {high_node: value.unsqueeze(0)})
+        res = [intervention.Intervention({"input": base_input},
+                                         {high_node: value.unsqueeze(0)})
                for value in intervention_values]
 
         return res
@@ -241,7 +282,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--model_path", required=True)
-    parser.add_argument("--res_save_dir", required=True)
+    parser.add_argument("--res_save_dir", type=str)
     parser.add_argument("--graph_alpha", type=int, default=100)
     parser.add_argument("--abstraction", type=str, default='["subj_adj",["bert_layer_0"]]')
     parser.add_argument("--num_inputs", type=int, default=50)
@@ -249,6 +290,8 @@ def main():
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
+    parser.add_argument("--use_profiler", action="store_true")
+    parser.add_argument("--profiler_log", type=str)
 
     args = parser.parse_args()
     e = InterchangeExperiment()
