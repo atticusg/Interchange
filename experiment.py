@@ -1,6 +1,5 @@
 import os
 import argparse
-import torch
 
 from datetime import datetime
 
@@ -18,6 +17,7 @@ HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 
 def preprocess(train, dev, test, data_path, no_separator=False, for_transformer=False):
+    import torch
     data = MQNLIData(train, dev, test, for_transformer=for_transformer,
                      use_separator=(not no_separator))
     torch.save(data, data_path)
@@ -39,6 +39,7 @@ def setup(db_path, model_path, data_path):
 
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
+    import torch
     model_class = get_module_class_by_name(model_type)
 
     manager = ExperimentManager(db_path, EXPT_OPTS)
@@ -66,7 +67,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
                                 "res_save_dir": res_save_dir}, id)
 
 
-def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log_dir,
+def run(db_path, script, n, detach, metascript, metascript_batch_size, metascript_log_dir,
         ready_status, started_status):
     manager = ExperimentManager(db_path, EXPT_OPTS)
 
@@ -79,7 +80,7 @@ def run(db_path, script, n, detach, metascript, metascript_batch, metascript_log
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, metascript_batch=metascript_batch,
+                metascript=metascript, metascript_batch_size=metascript_batch_size,
                 metascript_log_dir=metascript_log_dir,
                 ready_status=ready_status, started_status=started_status)
 
@@ -187,7 +188,7 @@ def main():
     run_parser.add_argument("-n", "--n", type=int, default=None)
     run_parser.add_argument("-x", "--detach", action="store_true")
     run_parser.add_argument("-m", "--metascript", type=str, default=None)
-    run_parser.add_argument("-b", "--metascript_batch", action="store_true")
+    run_parser.add_argument("-b", "--metascript_batch_size", type=int, default=0)
     run_parser.add_argument("-l", "--metascript_log_dir", type=str)
     run_parser.add_argument("-r", "--ready_status", type=int, default=0)
     run_parser.add_argument("-s", "--started_status", type=int, default=None)

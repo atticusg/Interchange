@@ -154,10 +154,11 @@ class ExperimentManager:
                 subprocess.run(cmds)
 
     def run(self, launch_script, n=None, detach=False, metascript=None,
-            metascript_batch=False, metascript_log_dir=None, ready_status=0,
+            metascript_batch_size=0, metascript_log_dir=None, ready_status=0,
             started_status=None):
-        if metascript and metascript_batch:
+        if metascript and metascript_batch_size:
             self.run_metascript_batch(launch_script, metascript, metascript_log_dir,
+                                      metascript_batch_size,
                                       n=n, detach=detach, ready_status=ready_status,
                                       started_status=started_status)
         else:
@@ -169,45 +170,50 @@ class ExperimentManager:
 
 
 
-    def run_metascript_batch(self, launch_script, metascript, log_dir, n=None,
+    def run_metascript_batch(self, launch_script, metascript, log_dir, batch_size, n=None,
                              detach=False, ready_status=1, started_status=None):
         """ Put a batch of scripts into one script file and run the whole batch
         with a given metascript """
-        expts = self.fetch(n, status=ready_status)
 
-        if not os.path.exists(log_dir):
-            print("Creating directory to save results:", log_dir)
-            os.makedirs(log_dir)
-
-        assert "-o" not in metascript
+        all_expts = self.fetch(n, status=ready_status)
         time_str = datetime.now().strftime("%m%d-%H%M%S")
-        log_path = os.path.join(log_dir, f"out-{time_str}.log")
-        metascript += f" -o {log_path} "
 
-        scripts = []
-        for opts in expts:
-            scripts.append(self.get_script(opts, launch_script))
-            if started_status is not None:
-                update_dict = {"status": started_status}
-                db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
+        for i in range(0, len(all_expts), batch_size):
+            expts = all_expts[i:batch_size]
+
+            if not os.path.exists(log_dir):
+                print("Creating directory to save results:", log_dir)
+                os.makedirs(log_dir)
+
+            assert "-o" not in metascript
+
+            log_path = os.path.join(log_dir, f"out-{time_str}-batch{i}.log")
+            metascript += f" -o {log_path} "
+
+            scripts = []
+            for opts in expts:
+                scripts.append(self.get_script(opts, launch_script))
+                if started_status is not None:
+                    update_dict = {"status": started_status}
+                    db.update(self.db_path, TABLE_NAME, update_dict, opts["id"])
 
 
-        script_file_path = os.path.join(log_dir, f"script-{time_str}.sh")
+            script_file_path = os.path.join(log_dir, f"script-{time_str}-batch{i}.sh")
 
-        with open(script_file_path, "w") as f:
-            for script in scripts:
-                f.write(script + "\n")
+            with open(script_file_path, "w") as f:
+                for script in scripts:
+                    f.write(script + "\n")
 
-        # make executable
-        st = os.stat(script_file_path)
-        os.chmod(script_file_path, st.st_mode | stat.S_IXUSR)
+            # make executable
+            st = os.stat(script_file_path)
+            os.chmod(script_file_path, st.st_mode | stat.S_IXUSR)
 
-        cmds = shlex.split(metascript)
-        cmds.append(script_file_path)
-        print(f"----running:\n{cmds}")
+            cmds = shlex.split(metascript)
+            cmds.append(script_file_path)
+            print(f"----running:\n{cmds}")
 
-        if detach:
-            subprocess.Popen(cmds, start_new_session=detach)
-        else:
-            subprocess.run(cmds)
+            if detach:
+                subprocess.Popen(cmds, start_new_session=detach)
+            else:
+                subprocess.run(cmds)
         # subprocess.Popen(cmds, start_new_session=True)
