@@ -109,8 +109,8 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                     "high_interv_res": [], "low_interv_res": []}
         count = 0
         for i, input_tuple in enumerate(intervention_dataloader):
-            if i % 5000 == 4999:
-                print(f"    > {i+1} / {num_inputs ** 2}")
+            if count % 5000 == 4999:
+                print(f"    > {count+1} / {num_inputs ** 2}")
             high_input = input_tuple[icd.idx_high_inputs]
             high_interv_value = input_tuple[icd.idx_high_hidden]
 
