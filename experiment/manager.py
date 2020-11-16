@@ -179,7 +179,7 @@ class ExperimentManager:
         time_str = datetime.now().strftime("%m%d-%H%M%S")
 
         for i in range(0, len(all_expts), batch_size):
-            expts = all_expts[i:batch_size]
+            expts = all_expts[i:i+batch_size]
 
             if not os.path.exists(log_dir):
                 print("Creating directory to save results:", log_dir)
@@ -187,8 +187,8 @@ class ExperimentManager:
 
             assert "-o" not in metascript
 
-            log_path = os.path.join(log_dir, f"out-{time_str}-batch{i}.log")
-            metascript += f" -o {log_path} "
+            curr_log_path = os.path.join(log_dir, f"out-{time_str}-batch{i}.log")
+            curr_metascript = metascript + f" -o {curr_log_path} "
 
             scripts = []
             for opts in expts:
@@ -208,7 +208,7 @@ class ExperimentManager:
             st = os.stat(script_file_path)
             os.chmod(script_file_path, st.st_mode | stat.S_IXUSR)
 
-            cmds = shlex.split(metascript)
+            cmds = shlex.split(curr_metascript)
             cmds.append(script_file_path)
             print(f"----running:\n{cmds}")
 
