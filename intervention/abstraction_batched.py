@@ -153,7 +153,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
             res_dict["high_base_res"].extend(high_base_res.tolist())
             res_dict["low_interv_res"].extend(low_interv_res.tolist())
             res_dict["high_interv_res"].extend(high_interv_res.tolist())
-            count += len(high_input)
+            count += len(input_tuple[icd.idx_base_i].tolist())
 
         res_dict["interchange_dataset"] = icd
         res_dict["mapping"] = mapping
