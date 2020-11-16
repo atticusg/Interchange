@@ -80,7 +80,6 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
 class InterchangeExperiment(experiment.Experiment):
     def experiment(self, opts: Dict) -> Dict:
         res, duration, high_model, low_model, hi2lo_dict = self.get_results(opts)
-        # pickle file
         save_path = self.save_results(opts, res)
         res_dict = {"runtime": duration, "save_path": save_path}
         analysis_res = self.analyze_results(res, high_model, low_model,
@@ -127,57 +126,42 @@ class InterchangeExperiment(experiment.Experiment):
         high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
         # set up to get examples from dataset
-        low_inputs, high_interventions, hi2lo_dict = \
-            self.prepare_inputs(data=data,
-                                num_inputs=opts["num_inputs"],
-                                model_type=model_type,
-                                high_intermediate_node=high_intermediate_node,
-                                device=device)
-
-        # setup for find_abstractions
-        fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
-        if model_type == "lstm":
-            input_mapping = lambda x: x  # identity function
-        elif model_type == "bert":
-            input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
-        unwanted_nodes = {"root", "input"}
-
-        # find abstractions
-        use_profiler = opts.get("use_profiler", False)
-        start_time = time.time()
-        if use_profiler:
-            # use profiler to check memory usage
-            print("Finding abstractions with profiler")
-
-            with profiler.profile(use_cuda=True, profile_memory=True, record_shapes=True) as prof:
-                with torch.no_grad():
-                    res = intervention.find_abstractions_torch(
-                        low_model=low_model,
-                        high_model=high_model,
-                        high_inputs=low_inputs,
-                        total_high_interventions=high_interventions,
-                        fixed_assignments=fixed_assignments,
-                        input_mapping=input_mapping,
-                        unwanted_low_nodes=unwanted_nodes
-                    )
-
-            profiler_log = opts.get("profiler_log", None)
-            log_f = open(profiler_log, "w") if profiler_log else sys.stdout
-            log_f.write("Profiler log for finding abstractions\n")
-            log_f.write("cpu_memory_usage\n")
-            log_f.write(prof.key_averages().table(sort_by="cpu_memory_usage",
-                                                  row_limit=10))
-            log_f.write("\ncuda_memory_usage\n")
-            log_f.write(prof.key_averages().table(sort_by="cuda_memory_usage",
-                                                  row_limit=10))
-            log_f.write("\ncpu_time\n")
-            log_f.write(prof.key_averages().table(sort_by="cpu_time",
-                                                  row_limit=10))
-            log_f.write("\ncuda_time\n")
-            log_f.write(prof.key_averages().table(sort_by="cuda_time",
-                                                  row_limit=10))
-            if profiler_log: log_f.close()
+        if opts.get("interchange_batch_size", 0):
+            # ------ Batched interchange experiment ------ #
+            start_time = time.time()
+            batch_results = intervention.abstraction_batched.find_abstractions_batch(
+                low_model=low_model,
+                high_model=high_model,
+                low_model_type="bert",
+                dataset=data.dev,
+                num_inputs=opts["num_inputs"],
+                batch_size=opts["interchange_batch_size"],
+                fixed_assignments={x: {x: intervention.LOC[:]} for x in
+                                   ["root", "input"]},
+                unwanted_low_nodes={"root", "input"}
+            )
+            duration = time.time() - start_time
+            print(f"Interchange experiment took {duration:.2f}s")
+            return batch_results, duration, high_model, low_model, None
         else:
+            # ------ Original interchange experiment ------ #
+            low_inputs, high_interventions, hi2lo_dict = \
+                self.prepare_inputs(data=data,
+                                    num_inputs=opts["num_inputs"],
+                                    model_type=model_type,
+                                    high_intermediate_node=high_intermediate_node,
+                                    device=device)
+
+            # setup for find_abstractions
+            fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
+            if model_type == "lstm":
+                input_mapping = lambda x: x  # identity function
+            elif model_type == "bert":
+                input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
+            unwanted_nodes = {"root", "input"}
+
+            # find abstractions
+            start_time = time.time()
             with torch.no_grad():
                 print("Finding abstractions")
                 res = intervention.find_abstractions_torch(
@@ -190,9 +174,9 @@ class InterchangeExperiment(experiment.Experiment):
                     unwanted_low_nodes=unwanted_nodes
                 )
 
-        duration = time.time() - start_time
-        print(f"Finished finding abstractions, took {duration:.2f} s")
-        return res, duration, high_model, low_model, hi2lo_dict
+            duration = time.time() - start_time
+            print(f"Finished finding abstractions, took {duration:.2f} s")
+            return res, duration, high_model, low_model, hi2lo_dict
 
     def prepare_inputs(self, data, num_inputs, model_type, high_intermediate_node, device):
         # set up to get examples from dataset
@@ -263,32 +247,28 @@ class InterchangeExperiment(experiment.Experiment):
             abstraction = json.loads(opts["abstraction"])
             high_intermediate_node = abstraction[0]
 
-
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             time_str = datetime.now().strftime("%m%d-%H%M%S")
-            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
-            save_path = os.path.join(save_dir, res_file_name)
+            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}"
 
-            with open(save_path, "wb") as f:
-                pickle.dump(res, f)
+            if opts.get("interchange_batch_size", 0):
+                res_file_name += ".pt"
+                save_path = os.path.join(save_dir, res_file_name)
+                torch.save(res, save_path)
+            else:
+                res_file_name += ".pkl"
+                save_path = os.path.join(save_dir, res_file_name)
+                with open(save_path, "wb") as f:
+                    pickle.dump(res, f)
             return save_path
         else:
             return ""
 
     def analyze_results(self, res: List, high_model, low_model, hi2lo_dict,
                         opts: Dict) -> Dict:
-        a = Analysis(res, opts["abstraction"], high_model, low_model,
-                     opts["graph_alpha"], opts["res_save_dir"],
-                     low_model_type=opts["model_type"],
-                     hi2lo_dict=hi2lo_dict,
-                     expt_id=opts["id"])
+        a = Analysis(res, high_model, low_model, hi2lo_dict=hi2lo_dict, opts=opts)
         return a.analyze()
-        # return {}
-
-
-
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -296,14 +276,13 @@ def main():
     parser.add_argument("--model_path", required=True)
     parser.add_argument("--res_save_dir", type=str)
     parser.add_argument("--graph_alpha", type=int, default=100)
-    parser.add_argument("--abstraction", type=str, default='["subj_adj",["bert_layer_0"]]')
+    parser.add_argument("--abstraction", type=str, default='["sentence_q", ["bert_layer_2"]]')
     parser.add_argument("--num_inputs", type=int, default=50)
     parser.add_argument("--model_type", type=str, default="lstm")
+    parser.add_argument("--interchange_batch_size", type=int, default=0)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
-    parser.add_argument("--use_profiler", action="store_true")
-    parser.add_argument("--profiler_log", type=str)
 
     args = parser.parse_args()
     e = InterchangeExperiment()

@@ -12,15 +12,15 @@ class InterchangeDataset(IterableDataset):
         super(InterchangeDataset, self).__init__()
         self.low_inputs = [[] for _ in range(low_input_tuple_len)]
         self.low_outputs = []
-        self.low_interv_values = []
+        self.low_hidden_values = []
         self.high_inputs = []
         self.high_outputs = []
-        self.high_interv_values = []
+        self.high_hidden_values = []
 
-        self.idx_low_interv = len(self.low_inputs)
+        self.idx_low_hidden = len(self.low_inputs)
         self.idx_low_outputs = len(self.low_inputs) + 1
         self.idx_high_inputs = len(self.low_inputs) + 2
-        self.idx_high_interv = len(self.low_inputs) + 3
+        self.idx_high_hidden = len(self.low_inputs) + 3
         self.idx_high_outputs = len(self.low_inputs) + 4
         self.idx_base_i = len(self.low_inputs) + 5
         self.idx_interv_i = len(self.low_inputs) + 6
@@ -36,18 +36,18 @@ class InterchangeDataset(IterableDataset):
         for i, x in enumerate(low_input_tuple):
             self.low_inputs[i].extend(x)
         self.low_outputs.extend(low_outputs)
-        self.low_interv_values.extend(low_hidden_values[self.low_hidden_loc].to(torch.device("cpu")))
+        self.low_hidden_values.extend(low_hidden_values[self.low_hidden_loc].to(torch.device("cpu")))
         self.high_inputs.extend(high_inputs)
         self.high_outputs.extend(high_outputs)
-        self.high_interv_values.extend(high_hidden_values)
+        self.high_hidden_values.extend(high_hidden_values)
 
     def get_intervention_tuple(self, base_i, interv_i):
         low_base_input = [x[base_i] for x in self.low_inputs]
-        low_interv_value = self.low_interv_values[interv_i]
+        low_interv_value = self.low_hidden_values[interv_i]
         low_base_output = self.low_outputs[base_i]
 
         high_base_input = self.high_inputs[base_i]
-        high_interv_value = self.high_interv_values[interv_i]
+        high_interv_value = self.high_hidden_values[interv_i]
         high_base_output = self.high_outputs[base_i]
 
         return tuple(low_base_input +
@@ -57,8 +57,6 @@ class InterchangeDataset(IterableDataset):
     def __iter__(self):
         for (base_i, interv_i) in product(range(self.num_examples), repeat=2):
             yield self.get_intervention_tuple(base_i, interv_i)
-
-
 
 
 def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
@@ -80,14 +78,11 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         low_node = list(relevant_mappings[high_node].keys())[0]
         low_loc = relevant_mappings[high_node][low_node]
 
+        print("    Getting base outputs")
         device = torch.device("cuda")
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-
         count = 0
-
         icd = intervention.abstraction_batched.InterchangeDataset(5, low_loc)
-
-        print("    Getting base outputs")
         for i, input_tuple in enumerate(dataloader):
             if count >= num_inputs: break
             high_base_key = [serialize(x) for x in input_tuple[-2]]
@@ -101,26 +96,23 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                 {"input": [x.to(device) for x in input_tuple]}, low_key)
             low_output = low_model.compute(low_input)
             low_hidden = low_model.get_result(low_node, low_input)
-
             icd.add_example(low_input_tuple=input_tuple,
                             low_outputs=low_output.tolist(),
                             low_hidden_values=low_hidden,
                             high_inputs=input_tuple[-2],
                             high_outputs=high_output.tolist(),
                             high_hidden_values=high_hidden)
-
             count += len(high_base_key)
-
-        res_dict = {"base_i": [], "interv_i": [],
-                    "high_base_res": [], "low_base_res": [],
-                    "high_interv_res": [], "low_interv_res": []}
 
         print("    Running interchange experiments")
         intervention_dataloader = DataLoader(icd, batch_size=16)
+        res_dict = {"base_i": [], "interv_i": [],
+                    "high_base_res": [], "low_base_res": [],
+                    "high_interv_res": [], "low_interv_res": []}
         count = 0
         for i, input_tuple in enumerate(intervention_dataloader):
             high_input = input_tuple[icd.idx_high_inputs]
-            high_interv_value = input_tuple[icd.idx_high_interv]
+            high_interv_value = input_tuple[icd.idx_high_hidden]
 
             high_base_key = [serialize(x) for x in high_input]
             high_base = intervention.GraphInput.batched(
@@ -136,7 +128,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                 high_model.intervene(high_intervention, store_cache=False)
 
             low_input = input_tuple[0]
-            low_interv_value = input_tuple[icd.idx_low_interv]
+            low_interv_value = input_tuple[icd.idx_low_hidden]
             low_base_key = [serialize(x) for x in low_input]
             low_base = intervention.GraphInput.batched(
                 {"input": [x.to(device) for x in input_tuple[:5]]}, low_base_key,
@@ -155,8 +147,8 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
             # assert torch.all(low_base_res.to(torch.device("cpu")) == input_tuple[icd.idx_low_outputs])
             # assert torch.all(high_base_res == input_tuple[icd.idx_high_outputs])
 
-            res_dict["base_i"].extend(input_tuple[icd.idx_base_i])
-            res_dict["interv_i"].extend(input_tuple[icd.idx_interv_i])
+            res_dict["base_i"].extend(input_tuple[icd.idx_base_i].tolist())
+            res_dict["interv_i"].extend(input_tuple[icd.idx_interv_i].tolist())
             res_dict["low_base_res"].extend(low_base_res.tolist())
             res_dict["high_base_res"].extend(high_base_res.tolist())
             res_dict["low_interv_res"].extend(low_interv_res.tolist())

@@ -15,7 +15,7 @@ from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 
-def analyze_results(G, causal_edges, input_to_id, cliques):
+def analyze_graph_results(G, causal_edges, input_to_id, cliques):
     if len(cliques) == 0:
         res_dict = {"max_clique_size": 0,
                     "avg_clique_size": 0,
@@ -34,8 +34,7 @@ def analyze_results(G, causal_edges, input_to_id, cliques):
     return res_dict
 
 
-
-def save_results(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
+def save_graph_analysis(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
     res = {
         "alpha": graph_alpha,
         "graph": G,
@@ -61,12 +60,12 @@ def save_results(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_di
 class GraphExperiment(Experiment):
     def experiment(self, opts):
         G, causal_edges, input_to_id, cliques = self.get_results(opts)
-        graph_save_path = save_results(G, causal_edges, input_to_id, cliques,
-                                       opts["graph_alpha"],
-                                       opts["res_save_dir"],
-                                       opts.get("id", None))
+        graph_save_path = save_graph_analysis(G, causal_edges, input_to_id, cliques,
+                                              opts["graph_alpha"],
+                                              opts["res_save_dir"],
+                                              opts.get("id", None))
         res_dict = {"graph_save_path": graph_save_path}
-        res_dict.update(analyze_results(G, causal_edges, input_to_id, cliques))
+        res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
         return res_dict
 
     def get_results(self, opts):

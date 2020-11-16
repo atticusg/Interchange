@@ -58,7 +58,8 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
                 abstraction = f'["{high_node}",["{layer_name}_{layer}"]]'
                 id = manager.insert({"abstraction": abstraction,
                                      "num_inputs": n,
-                                     "model_type": model_type})
+                                     "model_type": model_type,
+                                     "interchange_batch_size": 100})
                 res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
                 manager.update({"model_path": model_path,
                                 "res_save_dir": res_save_dir}, id)

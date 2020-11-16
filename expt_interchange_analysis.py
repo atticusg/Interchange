@@ -8,10 +8,10 @@ from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 
 from experiment import Experiment
-from expt_graph import analyze_results, save_results
+from expt_graph import analyze_graph_results, save_graph_analysis
 
 from intervention import Intervention, GraphInput
-from intervention.analysis import construct_graph, find_cliques
+from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
 from intervention.utils import serialize, deserialize
 from intervention.location import Location
 
@@ -45,27 +45,27 @@ class ListDataset(Dataset):
         return len(self.data)
 
 class Analysis:
-    def __init__(self, data, abstraction_str, high_model, low_model,
-                 graph_alpha, res_save_dir, low_model_type="lstm",
-                 hi2lo_dict=None, expt_id=None, low_model_device="cuda"):
+    def __init__(self, data, high_model, low_model, hi2lo_dict=None, opts=None):
         if isinstance(data, str):
             with open(data, "rb") as f:
                 data = pickle.load(f)
-        print(len(data))
         self.data = data
-        abstraction = json.loads(abstraction_str)
+        abstraction = json.loads(opts["abstraction"])
         self.high_node = abstraction[0]
         self.low_node = abstraction[1][0]
         self.high_model = high_model
         self.low_model = low_model
-        self.low_model_type = low_model_type
-        self.graph_alpha = graph_alpha
-        self.res_save_dir = res_save_dir
-        self.low_model_device = torch.device(low_model_device)
-        self.expt_id = expt_id
-        self.serialize_lo = serialize if low_model_type == "lstm" else \
-            lambda x : serialize(x[0].squeeze())
-        self.hi2lo, self.lo2hi = self.setup_mappings(hi2lo_dict)
+        self.low_model_type = opts.get("model_type", "lstm")
+        self.graph_alpha = opts.get("graph_alpha", 100)
+        self.res_save_dir = opts.get("res_save_dir", "")
+        self.batch_size = opts.get("interchange_batch_size", 0)
+        self.low_model_device = getattr(low_model, "device", torch.device("cuda"))
+        self.expt_id = opts.get("expt_id", 0)
+
+        if not self.batch_size:
+            self.serialize_lo = serialize if self.low_model_type == "lstm" else \
+                lambda x : serialize(x[0].squeeze())
+            self.hi2lo, self.lo2hi = self.setup_mappings(hi2lo_dict)
 
     # def get_original_input(self, low_interv: Intervention) -> GraphInput:
     #     interv_tensor = low_interv.intervention[self.low_node]
@@ -89,10 +89,21 @@ class Analysis:
     def analyze(self):
         with torch.no_grad():
             res_dict = defaultdict(list)
-            for (results, realizations_to_inputs), mapping in self.data:
-                res = self.analyze_one_experiment(results, realizations_to_inputs, mapping)
-                for key, value in res.items():
-                    res_dict[key+'s'].append(value)
+
+            if self.batch_size:
+                for i, data_dict in enumerate(self.data):
+                    mapping = data_dict["mapping"]
+                    print(f"--- Analyzing mapping ({i+1}/{len(self.data)}) {stringify_mapping(mapping)}")
+                    res = self.analyze_one_experiment(data_dict, None, mapping)
+                    for key, value in res.items():
+                        res_dict[key+'s'].append(value)
+            else:
+                for i, ((results, realizations_to_inputs), mapping) in enumerate(self.data):
+                    print(
+                        f"--- Analyzing mapping ({i + 1}/{len(self.data)}) {stringify_mapping(mapping)}")
+                    res = self.analyze_one_experiment(results, realizations_to_inputs, mapping)
+                    for key, value in res.items():
+                        res_dict[key+'s'].append(value)
 
             for key in res_dict.keys():
                 str_list = json.dumps(res_dict[key])
@@ -100,12 +111,10 @@ class Analysis:
         return dict(res_dict)
 
     def analyze_one_experiment(self, results, realizations_to_inputs, mapping):
-        print("--Analyzing mapping", stringify_mapping(mapping))
         res_dict = {}
         res_dict.update(self.analyze_counts(results, mapping))
         res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
         return res_dict
-
 
     def analyze_counts(self, results, mapping):
         """
@@ -128,39 +137,56 @@ class Analysis:
         interv_eq_count = 0  # A + B
         strict_success_count = 0 # A
 
-        low_base_outputs = self.get_low_base_outputs(results, self.low_model,
-                                                     self.low_model_type)
+        if isinstance(results, dict):
+            for base_i, interv_i, low_base_output, high_base_output, low_interv_output, high_interv_output \
+                    in zip(results["base_i"], results["interv_i"],
+                           results["low_base_res"], results["high_base_res"],
+                           results["low_interv_res"], results["high_interv_res"]):
+                interv_count += 1
 
-        for i, (k, v) in enumerate(results.items()):
-            low, high = k
-            if i % 10000 == 0:
-                print(f"  processed {i}/{len(results)} examples")
+                interv_eq = (low_interv_output == high_interv_output)
+                base_eq = (low_base_output == high_base_output)
+                high_effect_eq = (high_base_output == high_interv_output)
 
-            if len(low.intervention.values) == 0 or len(high.intervention.values) == 0:
-                continue
+                if not high_effect_eq:
+                    effective_count += 1
+                    if interv_eq:
+                        interv_eq_count += 1
+                        if base_eq:
+                            strict_success_count += 1
+        else:
+            low_base_outputs = self.get_low_base_outputs(results, self.low_model,
+                                                         self.low_model_type)
+            for i, (k, v) in enumerate(results.items()):
+                low, high = k
+                if i % 10000 == 0:
+                    print(f"    processed {i}/{len(results)} examples")
 
-            interv_count += 1
-            high_base_output, high_interv_output = self.high_model.intervene(
-                high)
-            low_base_output = low_base_outputs[self.serialize_lo(low.base["input"])]
+                if len(low.intervention.values) == 0 or len(high.intervention.values) == 0:
+                    continue
 
-            interv_eq = v.item()
-            base_eq = (low_base_output == high_base_output.item())
-            high_effect_eq = (high_base_output == high_interv_output).item()
+                interv_count += 1
+                high_base_output, high_interv_output = self.high_model.intervene(
+                    high)
+                low_base_output = low_base_outputs[self.serialize_lo(low.base["input"])]
 
-            if not high_effect_eq:
-                effective_count += 1
-                if interv_eq:
-                    interv_eq_count += 1
-                    if base_eq:
-                        strict_success_count += 1
+                interv_eq = v.item()
+                base_eq = (low_base_output == high_base_output.item())
+                high_effect_eq = (high_base_output == high_interv_output).item()
+
+                if not high_effect_eq:
+                    effective_count += 1
+                    if interv_eq:
+                        interv_eq_count += 1
+                        if base_eq:
+                            strict_success_count += 1
 
         effective_ratio = effective_count / interv_count if interv_count != 0 else 0
         interv_eq_rate = interv_eq_count / effective_count if effective_count != 0 else 0
         strict_success_rate = strict_success_count / effective_count if effective_count != 0 else 0
-        print(f"  Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
-        print(f"  interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
-        print(f"  strict_success_rate: {strict_success_count}/{effective_count}={strict_success_rate * 100:.3f}%")
+        print(f"    Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
+        print(f"    interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
+        print(f"    strict_success_rate: {strict_success_count}/{effective_count}={strict_success_rate * 100:.3f}%")
 
         res_dict = {
             "interv_count": interv_count,
@@ -200,25 +226,28 @@ class Analysis:
         return low_base_outputs
 
     def analyze_graph(self, result, realizations_to_inputs, mapping):
-        print("  Constructing graph")
-        G, causal_edges, input_to_id = construct_graph(
-            low_model=self.low_model,
-            high_model=self.high_model,
-            mapping=mapping,
-            result=result,
-            realizations_to_inputs=realizations_to_inputs,
-            high_node_name=self.high_node,
-            high_root_name="root",
-            low_serialize_fxn=self.serialize_lo
-        )
+        print("    Constructing graph")
+        if isinstance(result, dict) and realizations_to_inputs is None:
+            G, causal_edges, input_to_id = construct_graph_batch(result)
+        else:
+            G, causal_edges, input_to_id = construct_graph(
+                low_model=self.low_model,
+                high_model=self.high_model,
+                mapping=mapping,
+                result=result,
+                realizations_to_inputs=realizations_to_inputs,
+                high_node_name=self.high_node,
+                high_root_name="root",
+                low_serialize_fxn=self.serialize_lo
+            )
 
-        print("  Finding cliques")
+        print("    Finding cliques")
         cliques = find_cliques(G, causal_edges, self.graph_alpha)
-        graph_save_path = save_results(G, causal_edges, input_to_id, cliques,
-                                       self.graph_alpha, self.res_save_dir,
-                                       self.expt_id)
+        graph_save_path = save_graph_analysis(G, causal_edges, input_to_id, cliques,
+                                              self.graph_alpha, self.res_save_dir,
+                                              self.expt_id)
         res_dict = {"graph_save_path": graph_save_path}
-        res_dict.update(analyze_results(G, causal_edges, input_to_id, cliques))
+        res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
         return res_dict
 
 
@@ -244,8 +273,7 @@ class InterchangeAnalysis(Experiment):
                                                low_intermediate_nodes)
         high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
 
-        a = Analysis(opts["save_path"], opts["abstraction"], high_model, low_model,
-                     opts["graph_alpha"], opts["res_save_dir"], opts.get("id", None))
+        a = Analysis(opts["save_path"], high_model, low_model, opts=opts)
         res_dict = a.analyze()
         print(res_dict)
         return res_dict

@@ -127,6 +127,10 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
             return torch.argmax(x, dim=1)
         super(MQNLI_LSTM_CompGraph, self).__init__(root, root_output_device=root_output_device)
 
+    @property
+    def device(self):
+        return self.model.device
+
 
 class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
     def __init__(self, base_compgraph: MQNLI_LSTM_CompGraph,
@@ -148,6 +152,10 @@ class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
             forward_functions=forward_functions,
             root_output_device=root_output_device,
         )
+
+    @property
+    def device(self):
+        return self.base.device
 
     def get_indices(self, node: str):
         if re.match(r".*lstm_[0-9]*", node):

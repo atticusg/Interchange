@@ -59,6 +59,42 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
                 new_causal_edges.add((node,node2))
     return G, causal_edges, input_to_id
 
+def construct_graph_batch(data_dict):
+    G = nx.Graph()
+    inputs_seen = set()
+    edges = set()
+    total_id = data_dict["interchange_dataset"].num_examples
+    causal_edges = set()
+    count = 0
+
+    for base_i, interv_i, low_base_output, high_base_output, low_interv_output, high_interv_output \
+                    in zip(data_dict["base_i"], data_dict["interv_i"],
+                           data_dict["low_base_res"], data_dict["high_base_res"],
+                           data_dict["low_interv_res"], data_dict["high_interv_res"]):
+        count += 1
+        if base_i not in inputs_seen:
+            G.add_node(base_i)
+            inputs_seen.add(base_i)
+
+        if interv_i not in inputs_seen:
+            G.add_node(interv_i)
+            inputs_seen.add(interv_i)
+
+        if low_interv_output == high_interv_output:
+            edges.add((base_i, interv_i))
+            if high_interv_output != high_base_output:
+                causal_edges.add((base_i, interv_i))
+
+    new_causal_edges = set()
+    for node in range(total_id):
+        G.add_edge(node, node)
+        for node2 in range(total_id):
+            if (node, node2) in edges and (node2,node) in edges:
+                G.add_edge(node, node2)
+            if (node, node2) in causal_edges and (node2,node) in causal_edges:
+                new_causal_edges.add((node,node2))
+    return G, causal_edges, None
+
 def find_cliques(G, causal_edges, alpha):
     original_G = G
     cliques = []

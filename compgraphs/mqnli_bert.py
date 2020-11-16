@@ -83,6 +83,10 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
         
         super(MQNLI_Bert_CompGraph, self).__init__(root, root_output_device=root_output_device)
 
+    @property
+    def device(self):
+        return self.model.device
+
 
 class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
     def __init__(self, base_compgraph: MQNLI_Bert_CompGraph,
@@ -104,6 +108,10 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
             forward_functions=forward_functions,
             root_output_device=root_output_device
         )
+
+    @property
+    def device(self):
+        return self.base.device
 
     def get_indices(self, node: str):
         if re.match(r".*bert_layer_[0-9]*", node):

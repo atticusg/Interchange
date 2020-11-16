@@ -40,7 +40,6 @@ class AbstractableCompGraph(ComputationGraph):
         super(AbstractableCompGraph, self).__init__(root,
                                                     root_output_device=root_output_device)
 
-
     def validate_full_graph(self):
         # all nodes must be present in keys of full_graph dict
         nodes = set(n for _, nodes in self.full_graph.items() for n in nodes)

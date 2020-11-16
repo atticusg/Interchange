@@ -246,14 +246,14 @@ def get_dicts(icd):
     interv_key_to_idx = {}
     for i, (base_i, interv_i) in enumerate(product(range(icd.num_examples), repeat=2)):
         low_inputs = icd.low_inputs[0][base_i]
-        low_interv_values = icd.low_interv_values[interv_i]
+        low_interv_values = icd.low_hidden_values[interv_i]
         key = (serialize(low_inputs), serialize(low_interv_values))
         interv_key_to_idx[key] = i
 
     low_input_to_interv_value = {}
     for base_i in range(icd.num_examples):
         low_input_to_interv_value[serialize(icd.low_inputs[0][base_i])] \
-            = icd.low_interv_values[base_i]
+            = icd.low_hidden_values[base_i]
 
     return interv_key_to_idx, low_input_to_interv_value
 
@@ -292,8 +292,8 @@ def size_of_res_dict(d):
         if k == "interchange_dataset":
             icd = v
             subtotal = 0
-            for l in icd.low_inputs + [icd.low_interv_values, icd.low_outputs,
-                                       icd.high_interv_values, icd.high_inputs,
+            for l in icd.low_inputs + [icd.low_hidden_values, icd.low_outputs,
+                                       icd.high_hidden_values, icd.high_inputs,
                                        icd.high_outputs, ]:
                 subtotal += size_of_list_of_tensors(l)
         else:
