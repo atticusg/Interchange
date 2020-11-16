@@ -103,7 +103,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                             high_hidden_values=high_hidden)
 
         print("    Running interchange experiments")
-        intervention_dataloader = DataLoader(icd, batch_size=16)
+        intervention_dataloader = DataLoader(icd, batch_size=batch_size)
         res_dict = {"base_i": [], "interv_i": [],
                     "high_base_res": [], "low_base_res": [],
                     "high_interv_res": [], "low_interv_res": []}
