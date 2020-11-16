@@ -131,10 +131,10 @@ class Analysis:
         low_base_outputs = self.get_low_base_outputs(results, self.low_model,
                                                      self.low_model_type)
 
-        for count, (k, v) in enumerate(results.items()):
+        for i, (k, v) in enumerate(results.items()):
             low, high = k
-            if count % 10000 == 0:
-                print(f"  processed {count}/{len(results)} examples")
+            if i % 10000 == 0:
+                print(f"  processed {i}/{len(results)} examples")
 
             if len(low.intervention.values) == 0 or len(high.intervention.values) == 0:
                 continue
@@ -287,9 +287,9 @@ res_dict = {'runtime': 5.930975675582886,
             'clique_counts': '[1, 1]'}
 """
 
-mapping = [{"root": {"root": "::"},
-            "input": {"input": "::"},
-            "subj_adj": {"bert_layer_0": "(slice(None, None, None), 3, slice(None, None, None))"}},
-           {"root": {"root": "::"},
-            "input": {"input": "::"},
-            "subj_adj": {"bert_layer_0": "(slice(None, None, None), 16, slice(None, None, None))"}}]
+# mapping = [{"root": {"root": "::"},
+#             "input": {"input": "::"},
+#             "subj_adj": {"bert_layer_0": "(slice(None, None, None), 3, slice(None, None, None))"}},
+#            {"root": {"root": "::"},
+#             "input": {"input": "::"},
+#             "subj_adj": {"bert_layer_0": "(slice(None, None, None), 16, slice(None, None, None))"}}]

@@ -102,7 +102,7 @@ def get_value(high_model, high_node, high_intervention):
     return high_model.get_result(high_node, high_intervention)
 
 def create_new_realizations(low_model, high_model, high_node, mapping, low_intervention, high_intervention):
-    """H: Return a direct mapping between each high intermediate node values and low intermediate node value,
+    """H: Return a direct mapping between each high intermediate node value and low intermediate node value,
     given a pair of interventions"""
     new_realizations = dict()
     new_realizations_to_inputs = dict()

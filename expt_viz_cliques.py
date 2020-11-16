@@ -15,7 +15,7 @@ int_to_rln = ["indep", "equiv", "entail", "rev_entail", "contradict", "alter", "
 positions = ["p_subj_q", "p_subj_adj", "p_subj_n", "p_neg", "p_adv", "p_v", "p_obj_q", "p_obj_adj", "p_obj_n",
              "h_subj_q", "h_subj_adj", "h_subj_n", "h_neg", "h_adv", "h_v", "h_obj_q", "h_obj_adj", "h_obj_n"]
 
-VISUALIZE = False
+VISUALIZE = True
 
 def get_causal_edge_ratio(graph_res):
     causal_edges = graph_res["causal_edges"]

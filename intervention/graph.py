@@ -25,6 +25,8 @@ class ComputationGraph:
         self.cache_device = None
 
     def get_from_cache(self, inputs):
+        if inputs.batched: return None
+
         result = self.results_cache.get(inputs, None)
         if self.cache_device is not None and isinstance(result, torch.Tensor):
             output_device = self.result_output_device_dict[inputs]
@@ -33,6 +35,9 @@ class ComputationGraph:
         return result
 
     def save_to_cache(self, inputs, result):
+        if not inputs.cache_results or inputs.batched:
+            return
+
         result_for_cache = result
         if self.cache_device is not None and isinstance(result, torch.Tensor):
             if result.device != self.cache_device:
@@ -225,7 +230,6 @@ class ComputationGraph:
             #     self.compute(x)
             # res = node.base_cache[x]
         elif isinstance(x, Intervention):
-
             x.find_affected_nodes(self)
             if x.base not in node.base_cache or x not in node.interv_cache:
                 base_res = self.compute(x.base)

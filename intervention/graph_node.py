@@ -2,10 +2,12 @@ from intervention import Intervention, GraphInput
 from intervention.utils import copy_helper
 import torch
 
+from typing import Union, Callable, Dict
+
 # TODO: add type hints
 
 class GraphNode:
-    def __init__(self, *args, name=None, forward=None, cache_results=True):
+    def __init__(self, *args, name: str=None, forward: Callable=None, cache_results=True):
         """Construct a computation graph node, can be used as function decorator
 
         This constructor is invoked when `@GraphNode()` decorates a function.
@@ -14,17 +16,20 @@ class GraphNode:
         :param args: other GraphNode objects that are the children of this node
         :param name: the name of the node. If not given, this will be the name
             of the function that it decorates by default
-        :param forward:
+        :param forward: the name of the forward function
         """
         self.children = args
-        self.base_cache = {}  # stores results of non-intervened runs
-        self.interv_cache = {}  # stores results of intervened experiments
-
-        # keep track which devices the results are originally stored in
-        self.base_output_devices = {}
-        self.interv_output_devices = {}
-        self.name = name
         self.cache_results = cache_results
+        if self.cache_results:
+            self.base_cache = {}  # stores results of non-intervened runs
+            self.interv_cache = {}  # stores results of intervened experiments
+
+            # keep track which devices the results are originally stored in
+            self.base_output_devices = {}
+            self.interv_output_devices = {}
+
+
+        self.name = name
         if forward:
             self.forward = forward
             if name is None:
@@ -65,9 +70,9 @@ class GraphNode:
             self._children_dict = {c.name: c for c in self._children}
             return self._children_dict
 
-    def get_from_cache(self, inputs, from_interv):
-        if not self.cache_results:
-            return None
+    def get_from_cache(self, inputs: Union[GraphInput, Intervention],
+                       from_interv: bool):
+        if not self.cache_results: return None
 
         cache = self.interv_cache if from_interv else self.base_cache
         output_device_dict = self.interv_output_devices if from_interv \
@@ -75,30 +80,59 @@ class GraphNode:
         assert from_interv and isinstance(inputs, Intervention) or \
                (not from_interv) and isinstance(inputs, GraphInput)
 
-        result = cache.get(inputs, None)
+        if inputs.batched:
+            values = [cache.get(key, None) for key in inputs.keys]
+            if any(value is None for value in values):
+                return None
+            one_key, one_value = inputs.keys[0], values[0]
+            if isinstance(one_value, torch.Tensor):
+                result = torch.stack(values, dim=inputs.batch_dim)
+                if self.cache_device is not None:
+                    output_device = output_device_dict[one_key]
+                    if output_device != self.cache_device:
+                        return result.to(output_device)
+            else:
+                result = values
+        else:
+            result = cache.get(inputs, None)
 
-        if self.cache_device is not None and isinstance(result, torch.Tensor):
-            output_device = output_device_dict[inputs]
-            if output_device != self.cache_device:
-                return result.to(output_device)
+            if self.cache_device is not None and isinstance(result, torch.Tensor):
+                output_device = output_device_dict[inputs]
+                if output_device != self.cache_device:
+                    return result.to(output_device)
 
         return result
 
     def save_to_cache(self, inputs, result, to_interv):
-        if not self.cache_results:
-            raise RuntimeError(f"self.cache_results=False -- cannot save to cache for node {self.name}")
+        if not self.cache_results or not inputs.cache_results:
+            return
 
         cache = self.interv_cache if to_interv else self.base_cache
         output_device_dict = self.interv_output_devices if to_interv \
             else self.base_output_devices
 
-        result_for_cache = result
-        if self.cache_device is not None and isinstance(result, torch.Tensor):
-            if result.device != self.cache_device:
-                result_for_cache = result.to(self.cache_device)
-            output_device_dict[inputs] = result.device
-
-        cache[inputs] = result_for_cache
+        if inputs.batched:
+            result_for_cache = result
+            if self.cache_device is not None and isinstance(result, torch.Tensor):
+                if result.device != self.cache_device:
+                    result_for_cache = result.to(self.cache_device)
+                output_device_dict.update((key, result.device) for key in inputs.keys)
+            if inputs.batch_dim == 0:
+                cache.update((key, value) for key, value in
+                             zip(inputs.keys, result_for_cache))
+            elif isinstance(result_for_cache, torch.Tensor):
+                cache.update((key, value) for key, value in
+                    zip(inputs.keys, result_for_cache.split(1, dim=inputs.batch_dim)))
+            else:
+                raise RuntimeError(f"Does not support type {type(result_for_cache)} "
+                    f"during computation for batch_dim={inputs.batch_dim}")
+        else:
+            result_for_cache = result
+            if self.cache_device is not None and isinstance(result, torch.Tensor):
+                if result.device != self.cache_device:
+                    result_for_cache = result.to(self.cache_device)
+                output_device_dict[inputs] = result.device
+            cache[inputs] = result_for_cache
 
     def compute(self, inputs):
         """Compute the output of a node
@@ -117,11 +151,8 @@ class GraphNode:
                                    "a graph before intervening")
             is_affected = self.name in intervention.affected_nodes
 
-        # check cache first if calculation results exist in cache
-        # result = cache.get(intervention if is_affected else inputs, None)
-
         result = self.get_from_cache(intervention if is_affected else inputs,
-                                    is_affected)
+                                     is_affected)
 
         if result is not None:
             return result
@@ -131,9 +162,8 @@ class GraphNode:
                     # intervene a specific location in a vector/tensor
                     # result = self.base_cache.get(inputs, None)
                     if not self.cache_results:
-                        raise RuntimeError(f"Cannot intervene on node {self.name}"
-                                           "because its results are not cached")
-
+                        raise RuntimeError(f"Cannot intervene on node {self.name} "
+                                           f"because its results are not cached")
                     result = self.get_from_cache(inputs, from_interv=False)
                     if result is None:
                         raise RuntimeError(
@@ -167,9 +197,8 @@ class GraphNode:
                         children_res.append(child_res)
                     result = self.forward(*children_res)
 
-            if self.cache_results:
-                self.save_to_cache(intervention if is_affected else inputs,
-                                   result, is_affected)
+            self.save_to_cache(intervention if is_affected else inputs,
+                               result, is_affected)
 
             return result
 

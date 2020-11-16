@@ -1,5 +1,6 @@
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 from compgraphs.mqnli_bert import MQNLI_Bert_CompGraph, Abstr_MQNLI_Bert_CompGraph
+from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 
 _name_to_compgraph_class = {
     "lstm": MQNLI_LSTM_CompGraph,

@@ -323,7 +323,7 @@ class MQNLI_Logic_CompGraph(AbstractableCompGraph):
         return (p[IDX_N_S] == h[IDX_N_S]).type(torch.long)
 
     def subj_adj(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        # (9, batch_size), (9, batch_size) -> (2, batch_size)
+        # (9, batch_size), (9, batch_size) -> (batch_size, 2)
         return self._intersective_projection(p[IDX_A_S], h[IDX_A_S])
 
     def subj(self, a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:

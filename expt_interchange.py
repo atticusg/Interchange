@@ -127,31 +127,12 @@ class InterchangeExperiment(experiment.Experiment):
         high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
         # set up to get examples from dataset
-        hi2lo_dict = {}
-        if model_type == "lstm":
-            collate_fn = lambda batch: datasets.utils.my_collate(batch, batch_first=False)
-            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
-                                    collate_fn=collate_fn)
-        elif model_type == "bert":
-            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
-
-        # get examples from dataset
-        low_inputs = []
-        high_interventions = []
-        num_inputs = opts["num_inputs"]
-        print("Preparing inputs")
-        for i, input_tuple in enumerate(dataloader):
-            if i == num_inputs: break
-            orig_input = input_tuple[-2]
-            input_tuple = [x.to(device) for x in input_tuple]
-            if model_type == "bert":
-                orig_input = orig_input.T
-                hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
-
-            low_inputs.append(intervention.Intervention({"input": orig_input}, {}))
-
-            high_interventions += self.get_interventions(high_intermediate_node,
-                                                         orig_input)
+        low_inputs, high_interventions, hi2lo_dict = \
+            self.prepare_inputs(data=data,
+                                num_inputs=opts["num_inputs"],
+                                model_type=model_type,
+                                high_intermediate_node=high_intermediate_node,
+                                device=device)
 
         # setup for find_abstractions
         fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
@@ -162,7 +143,6 @@ class InterchangeExperiment(experiment.Experiment):
         unwanted_nodes = {"root", "input"}
 
         # find abstractions
-
         use_profiler = opts.get("use_profiler", False)
         start_time = time.time()
         if use_profiler:
@@ -214,35 +194,35 @@ class InterchangeExperiment(experiment.Experiment):
         print(f"Finished finding abstractions, took {duration:.2f} s")
         return res, duration, high_model, low_model, hi2lo_dict
 
-    def save_results(self, opts: Dict, res: List) -> str:
-        save_dir = opts.get("res_save_dir", None)
+    def prepare_inputs(self, data, num_inputs, model_type, high_intermediate_node, device):
+        # set up to get examples from dataset
+        hi2lo_dict = {}
+        if model_type == "lstm":
+            collate_fn = lambda batch: datasets.utils.my_collate(batch,
+                                                                 batch_first=False)
+            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
+                                    collate_fn=collate_fn)
+        elif model_type == "bert":
+            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
 
-        if save_dir:
-            abstraction = json.loads(opts["abstraction"])
-            high_intermediate_node = abstraction[0]
+        # get examples from dataset
+        low_inputs = []
+        high_interventions = []
+        print("Preparing inputs")
+        for i, input_tuple in enumerate(dataloader):
+            if i == num_inputs: break
+            orig_input = input_tuple[-2]
+            input_tuple = [x.to(device) for x in input_tuple]
+            if model_type == "bert":
+                orig_input = orig_input.T
+                hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
 
+            low_inputs.append(
+                intervention.Intervention({"input": orig_input}, {}))
 
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            time_str = datetime.now().strftime("%m%d-%H%M%S")
-            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
-            save_path = os.path.join(save_dir, res_file_name)
-
-            with open(save_path, "wb") as f:
-                pickle.dump(res, f)
-            return save_path
-        else:
-            return ""
-
-    def analyze_results(self, res: List, high_model, low_model, hi2lo_dict,
-                        opts: Dict) -> Dict:
-        a = Analysis(res, opts["abstraction"], high_model, low_model,
-                     opts["graph_alpha"], opts["res_save_dir"],
-                     low_model_type=opts["model_type"],
-                     hi2lo_dict=hi2lo_dict,
-                     expt_id=opts["id"])
-        return a.analyze()
-        # return {}
+            high_interventions += self.get_interventions(high_intermediate_node,
+                                                         orig_input)
+        return low_inputs, high_interventions, hi2lo_dict
 
     def get_interventions(self, high_node: str, base_input: torch.Tensor) \
             -> List[intervention.Intervention]:
@@ -274,6 +254,38 @@ class InterchangeExperiment(experiment.Experiment):
                for value in intervention_values]
 
         return res
+
+
+    def save_results(self, opts: Dict, res: List) -> str:
+        save_dir = opts.get("res_save_dir", None)
+
+        if save_dir:
+            abstraction = json.loads(opts["abstraction"])
+            high_intermediate_node = abstraction[0]
+
+
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            time_str = datetime.now().strftime("%m%d-%H%M%S")
+            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}.pkl"
+            save_path = os.path.join(save_dir, res_file_name)
+
+            with open(save_path, "wb") as f:
+                pickle.dump(res, f)
+            return save_path
+        else:
+            return ""
+
+    def analyze_results(self, res: List, high_model, low_model, hi2lo_dict,
+                        opts: Dict) -> Dict:
+        a = Analysis(res, opts["abstraction"], high_model, low_model,
+                     opts["graph_alpha"], opts["res_save_dir"],
+                     low_model_type=opts["model_type"],
+                     hi2lo_dict=hi2lo_dict,
+                     expt_id=opts["id"])
+        return a.analyze()
+        # return {}
+
 
 
 

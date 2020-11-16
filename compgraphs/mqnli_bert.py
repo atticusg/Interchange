@@ -109,4 +109,4 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
         if re.match(r".*bert_layer_[0-9]*", node):
             return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
         else:
-            return super().get_indices(node)
+            raise ValueError(f"Cannot get indices for node {node}")
