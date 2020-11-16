@@ -12,7 +12,7 @@ from train import load_model
 from modeling import get_module_class_by_name
 
 
-EXPT_OPTS = ["data_path", "model_type", "model_path", "res_save_dir", "abstraction", "num_inputs" , "graph_alpha"]
+EXPT_OPTS = ["data_path", "model_type", "model_path", "res_save_dir", "abstraction", "num_inputs" , "graph_alpha", "interchange_batch_size"]
 DEFAULT_SCRIPT = "python expt_interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb", "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
@@ -33,6 +33,7 @@ def setup(db_path, model_path, data_path):
         "num_inputs": 20,
         "graph_alpha": 100,
         "model_type": "",
+        "interchange_batch_size": 16,
     }
     manager = ExperimentManager(db_path, default_opts)
 
