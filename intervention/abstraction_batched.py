@@ -4,7 +4,7 @@ import intervention
 from intervention.utils import serialize
 from intervention.abstraction_torch import create_possible_mappings
 
-from torch.utils.data import IterableDataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product
 
 class InterchangeDataset(IterableDataset):
@@ -80,11 +80,10 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
 
         print("    Getting base outputs")
         device = torch.device("cuda")
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-        count = 0
+        subset = Subset(dataset, list(range(num_inputs)))
+        dataloader = DataLoader(subset, batch_size=batch_size, shuffle=False)
         icd = intervention.abstraction_batched.InterchangeDataset(5, low_loc)
         for i, input_tuple in enumerate(dataloader):
-            if count >= num_inputs: break
             high_base_key = [serialize(x) for x in input_tuple[-2]]
             high_input = intervention.GraphInput.batched(
                 {"input": input_tuple[-2].T}, high_base_key)
@@ -102,7 +101,6 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                             high_inputs=input_tuple[-2],
                             high_outputs=high_output.tolist(),
                             high_hidden_values=high_hidden)
-            count += len(high_base_key)
 
         print("    Running interchange experiments")
         intervention_dataloader = DataLoader(icd, batch_size=16)
@@ -111,7 +109,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                     "high_interv_res": [], "low_interv_res": []}
         count = 0
         for i, input_tuple in enumerate(intervention_dataloader):
-            if i % 10000 == 9999:
+            if i % 5000 == 4999:
                 print(f"    > {i+1} / {num_inputs ** 2}")
             high_input = input_tuple[icd.idx_high_inputs]
             high_interv_value = input_tuple[icd.idx_high_hidden]
