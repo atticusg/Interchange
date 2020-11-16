@@ -42,7 +42,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
     model_class = get_module_class_by_name(model_type)
 
     manager = ExperimentManager(db_path, EXPT_OPTS)
-    device = torch.device("cpu" if model_type == "lstm" else "cuda")
+    device = torch.device("cpu")
     module, _ = load_model(model_class, model_path, device=device)
 
     if model_type == "lstm":
