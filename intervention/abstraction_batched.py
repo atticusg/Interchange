@@ -110,7 +110,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         count = 0
         for i, input_tuple in enumerate(intervention_dataloader):
             if i % 100 == 0:
-                print(f"    > {i*batch_size} / {num_inputs ** 2}")
+                print(f"    > {count} / {num_inputs ** 2}")
             high_input = input_tuple[icd.idx_high_inputs]
             high_interv_value = input_tuple[icd.idx_high_hidden]
 
