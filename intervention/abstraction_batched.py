@@ -164,7 +164,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
 
 def find_abstractions_batch(low_model, high_model, low_model_type, dataset, num_inputs, batch_size,
                             fixed_assignments, unwanted_low_nodes=None):
-    print("creating possible mappings")
+    print("Creating possible mappings")
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments,
                                         unwanted_low_nodes)
 

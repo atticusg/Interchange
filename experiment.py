@@ -1,14 +1,7 @@
 import os
 import argparse
-
 from datetime import datetime
-
-from experiment import db_utils as db
 from experiment import ExperimentManager
-
-from datasets.mqnli import MQNLIData
-from train import load_model
-from modeling import get_module_class_by_name
 
 
 EXPT_OPTS = ["data_path", "model_type", "model_path", "res_save_dir", "abstraction", "num_inputs" , "graph_alpha", "interchange_batch_size"]
@@ -18,6 +11,7 @@ META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 
 def preprocess(train, dev, test, data_path, no_separator=False, for_transformer=False):
     import torch
+    from datasets.mqnli import MQNLIData
     data = MQNLIData(train, dev, test, for_transformer=for_transformer,
                      use_separator=(not no_separator))
     torch.save(data, data_path)
@@ -40,6 +34,9 @@ def setup(db_path, model_path, data_path):
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
     import torch
+    from train import load_model
+    from modeling import get_module_class_by_name
+
     model_class = get_module_class_by_name(model_type)
 
     manager = ExperimentManager(db_path, EXPT_OPTS)
@@ -100,6 +97,8 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
                 ready_status=ready_status, started_status=started_status)
 
 def add_graph(db_path, ids, alphas, all):
+    from experiment import db_utils as db
+
     db.add_cols(db_path, "results", {"graph_alpha": 1})
     if all:
         assert len(alphas) == 1
@@ -146,6 +145,7 @@ def query(db_path, id=None, status=None, abstraction=None, limit=None):
         print("-------")
 
 def update_status(db_path, ids, id_range, status):
+    from experiment import db_utils as db
     if id_range:
         ids = list(range(id_range[0], id_range[1] + 1))
     for i in ids:
