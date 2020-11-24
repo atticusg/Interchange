@@ -548,17 +548,17 @@ def generate_balanced_data(simple_filename, boolean_filename, simple_size,
         pcounts = [1] * len(pkeys)
     label_size = int(simple_size/3)
     examples = []
-    print("Generating entailment examples")
+    print("\nGenerating entailment examples")
     for i in tqdm(range(label_size)):
         encoding = json.loads(weighted_selection(ekeys, ecounts))
         premise, hypothesis = encoding_to_example(data,encoding)
         examples.append((premise.emptystring, "entailment", hypothesis.emptystring))
-    print("Generating contradiction examples")
+    print("\nGenerating contradiction examples")
     for i in tqdm(range(label_size)):
         encoding = json.loads(weighted_selection(ckeys, ccounts))
         premise, hypothesis = encoding_to_example(data,encoding)
         examples.append((premise.emptystring, "contradiction", hypothesis.emptystring))
-    print("Generating neutral examples")
+    print("\nGenerating neutral examples")
     for i in tqdm(range(label_size)):
         encoding = json.loads(weighted_selection(pkeys, pcounts))
         premise, hypothesis = encoding_to_example(data,encoding)
@@ -570,9 +570,11 @@ def generate_balanced_data(simple_filename, boolean_filename, simple_size,
     bool_pkeys = list(bool_p.keys())
     if keys_and_counts == None:
         keys_and_counts = sevenclass_simple_encodings(data,1, ekeys, ckeys, pkeys, ecounts, ccounts, pcounts)
-    print("Generating balanced boolean data")
+    print("\nGenerating balanced boolean data for entailment")
     examples += generate_balanced_boolean_data(bool_ekeys, "entailment", keys_and_counts, boolean_sampling, bool_label_size, data)
+    print("\nGenerating balanced boolean data for contradiction")
     examples += generate_balanced_boolean_data(bool_ckeys, "contradiction", keys_and_counts, boolean_sampling, bool_label_size, data)
+    print("\nGenerating balanced boolean data for neutral")
     examples += generate_balanced_boolean_data(bool_pkeys, "neutral", keys_and_counts, boolean_sampling, bool_label_size, data)
     random.shuffle(examples)
     return examples
