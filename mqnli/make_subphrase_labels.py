@@ -9,14 +9,14 @@ from tqdm import tqdm
 
 # copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
 
-data, _, _ = gd.process_data(1.0)
+
 def adjoin(words):
     result = ''
     for word in words:
         result += word + " "
     return result[:-1]
 
-def get_intermediate_labels(example: str):
+def get_intermediate_labels(example: str, data):
     example = json.loads(example)
     label = []
     for i in [1,2,4,5,7,8]:
@@ -87,7 +87,7 @@ def get_intermediate_labels(example: str):
     example["gold_label"] = label
     return example
 
-def generate_sublabels(ratio, save_dir):
+def generate_sublabels(ratio, save_dir, data):
     orig_train_file = os.path.join(save_dir, f"{ratio}gendata.train")
     with open(orig_train_file, "r") as f:
         examples = []
@@ -171,9 +171,12 @@ def generate_sublabels(ratio, save_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("save_dir")
+    parser.add_argument("data_path")
     args = parser.parse_args()
+
+    data, _, _ = gd.process_data(1.0, args.data_path)
 
     ratios = [0, 0.25]
     for ratio in ratios:
         print(f"\nGenerating subphrase labels for ratio {ratio}")
-        generate_sublabels(ratio, args.save_dir)
+        generate_sublabels(ratio, args.save_dir, data)
