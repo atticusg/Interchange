@@ -2,6 +2,7 @@ from mqnli.data_util import sentence
 from mqnli.data_util import parse_simple_sentence
 import mqnli.natural_logic_model as nlm
 import os
+import argparse
 import random
 import json
 import numpy as np
@@ -576,13 +577,12 @@ def generate_balanced_data(simple_filename, boolean_filename, simple_size,
     random.shuffle(examples)
     return examples
 
-def create_corpus(size):
-    filename="1gendata"
-    data, _, _ = process_data(1.0)
-    print("generating balanced data")
-    examples = generate_balanced_data("simple_solutions", "boolean_solutions",
-                                      size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
-    save_data(examples, filename)
+def create_corpus(size, save_dir):
+    # data, _, _ = process_data(1.0)
+    # print("generating balanced data")
+    # examples = generate_balanced_data("simple_solutions", "boolean_solutions",
+    #                                   size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
+    # save_data(examples, os.path.join(save_dir, "1gendata"))
 
     # 0 is hardest, 0.75 is easiest
     # ratios = [0, 0.0625, 0.125, 0.25, 0.5, 0.75]
@@ -596,7 +596,7 @@ def create_corpus(size):
                                           boolean_sampling = "level 0",
                                           restrictions = restrictions)
         tr = examples
-        save_data(examples, str(ratio) + "gendata.train")
+        save_data(examples, os.path.join(save_dir, f"{ratio}gendata.train"))
         premise = parse_simple_sentence(data,tr[0][0])[0]
         hypothesis = parse_simple_sentence(data,tr[0][2])[0]
         _, relations_seen = nlm.compute_simple_relation_gentest(premise, hypothesis)
@@ -609,10 +609,14 @@ def create_corpus(size):
             if len(relations_seen[k]) < 10:
                 print(relations_seen[k])
         examples = generate_balanced_data("simple_solutions", "boolean_solutions", 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
-        save_data(examples, str(ratio) +"gendata.val")
+        save_data(examples, os.path.join(save_dir, f"{ratio}gendata.val"))
         examples = generate_balanced_data("simple_solutions", "boolean_solutions", 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
-        save_data(examples, str(ratio) +"gendata.test")
+        save_data(examples, os.path.join(save_dir, f"{ratio}gendata.test"))
 
 
 if __name__ == "__main__":
-    create_corpus(570000)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("size", type=int)
+    parser.add_argument("save_dir", type=str)
+    args = parser.parse_args()
+    create_corpus(args.size, args.save_dir)
