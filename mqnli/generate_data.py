@@ -578,9 +578,11 @@ def generate_balanced_data(simple_filename, boolean_filename, simple_size,
     return examples
 
 def create_corpus(size, save_dir, data_path):
+    simple_solutions_path = os.path.join(data_path, "simple_solutions")
+    boolean_solutions_path = os.path.join(data_path, "boolean_solutions")
     # data, _, _ = process_data(1.0)
     # print("generating balanced data")
-    # examples = generate_balanced_data("simple_solutions", "boolean_solutions",
+    # examples = generate_balanced_data(simple_solutions_path, boolean_solutions_path,
     #                                   size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
     # save_data(examples, os.path.join(save_dir, "1gendata"))
 
@@ -591,7 +593,7 @@ def create_corpus(size, save_dir, data_path):
         print(f"--- Creating data for ratio {ratio}")
         data, _, _ = process_data(1.0, data_path)
         restrictions, inverse_restrictions = nlm.create_gen_split(ratio) # restrictions for training data, inverse_restrictions for dev and test
-        examples = generate_balanced_data("simple_solutions", "boolean_solutions",
+        examples = generate_balanced_data(simple_solutions_path, boolean_solutions_path,
                                           size, 0, data, simple_sampling = "level 2",
                                           boolean_sampling = "level 0",
                                           restrictions = restrictions)
@@ -608,9 +610,9 @@ def create_corpus(size, save_dir, data_path):
             print(k, len(relations_seen[k]))
             if len(relations_seen[k]) < 10:
                 print(relations_seen[k])
-        examples = generate_balanced_data("simple_solutions", "boolean_solutions", 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
+        examples = generate_balanced_data(simple_solutions_path, boolean_solutions_path, 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
         save_data(examples, os.path.join(save_dir, f"{ratio}gendata.val"))
-        examples = generate_balanced_data("simple_solutions", "boolean_solutions", 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
+        examples = generate_balanced_data(simple_solutions_path, boolean_solutions_path, 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
         save_data(examples, os.path.join(save_dir, f"{ratio}gendata.test"))
 
 
