@@ -584,9 +584,13 @@ def create_corpus(size):
                                       size, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0")
     save_data(examples, filename)
 
-    for ratio in [0,0.0625, 0.125, 0.25, 0.5, 0.75]:
+    # 0 is hardest, 0.75 is easiest
+    # ratios = [0, 0.0625, 0.125, 0.25, 0.5, 0.75]
+    ratios = [0, 0.25]
+    for ratio in ratios:
+        print(f"--- Creating data for ratio {ratio}")
         data, _, _ = process_data(1.0)
-        restrictions, inverse_restrictions = nlm.create_gen_split(ratio)
+        restrictions, inverse_restrictions = nlm.create_gen_split(ratio) # restrictions for training data, inverse_restrictions for dev and test
         examples = generate_balanced_data("simple_solutions", "boolean_solutions",
                                           size, 0, data, simple_sampling = "level 2",
                                           boolean_sampling = "level 0",
@@ -609,3 +613,6 @@ def create_corpus(size):
         examples = generate_balanced_data("simple_solutions", "boolean_solutions", 10000, 0, data, simple_sampling = "level 2", boolean_sampling = "level 0",restrictions = inverse_restrictions)
         save_data(examples, str(ratio) +"gendata.test")
 
+
+if __name__ == "__main__":
+    create_corpus(570000)

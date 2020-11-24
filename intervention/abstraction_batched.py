@@ -119,6 +119,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                 {"input": high_input.T}, high_base_key, cache_results=False)
             high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
                                zip(high_input, high_interv_value)]
+
             high_intervention = intervention.Intervention.batched(
                 high_base, high_interv_key,
                 intervention={high_node: high_interv_value}
@@ -135,6 +136,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                 cache_results=False)
             low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
                               zip(low_input, low_interv_value)]
+
             low_intervention = intervention.Intervention.batched(
                 low_base, low_interv_key,
                 intervention={low_node: low_interv_value.to(device)},
