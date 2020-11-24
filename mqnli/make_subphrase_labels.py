@@ -5,6 +5,7 @@ import argparse
 import natural_logic_model as nlm
 import data_util as du
 import generate_data as gd
+from tqdm import tqdm
 
 # copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
 
@@ -91,7 +92,7 @@ def generate_sublabels(ratio, save_dir):
     with open(orig_train_file, "r") as f:
         examples = []
         labels = []
-        for line in f.readlines():
+        for line in tqdm(f.readlines()):
             example = json.loads(line[:-1])
             label = []
             for i in [1,2,4,5,7,8]:
@@ -174,4 +175,5 @@ if __name__ == "__main__":
 
     ratios = [0, 0.25]
     for ratio in ratios:
+        print(f"\nGenerating subphrase labels for ratio {ratio}")
         generate_sublabels(ratio, args.save_dir)
