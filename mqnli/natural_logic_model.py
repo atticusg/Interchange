@@ -1,7 +1,6 @@
 import json
 import copy
 import random
-from mqnli.data_util import sentence
 
 # copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
 
