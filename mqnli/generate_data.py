@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 mqnli_data_path = "/home/hansonlu/intervention/Interchange/mqnli/data"
 
-def process_data(train_ratio):
+def process_data(train_ratio, data_path):
     #split the different parts of speech into train, validation, and test
     #determiners are not split
     train = dict()
@@ -21,7 +21,7 @@ def process_data(train_ratio):
     test = dict()
     categories = ["agents", "transitive_verbs", "things", "determiners", "adverbs", "subject_adjectives","object_adjectives"]
     for c in categories:
-        with open(os.path.join(mqnli_data_path, c + ".txt"),"r") as f:
+        with open(os.path.join(data_path, c + ".txt"),"r") as f:
             stuff = f.readlines()
             if c != "transitive_verbs":
                 stuff = [_.strip() for _ in stuff]
@@ -577,7 +577,7 @@ def generate_balanced_data(simple_filename, boolean_filename, simple_size,
     random.shuffle(examples)
     return examples
 
-def create_corpus(size, save_dir):
+def create_corpus(size, save_dir, data_path):
     # data, _, _ = process_data(1.0)
     # print("generating balanced data")
     # examples = generate_balanced_data("simple_solutions", "boolean_solutions",
@@ -589,7 +589,7 @@ def create_corpus(size, save_dir):
     ratios = [0, 0.25]
     for ratio in ratios:
         print(f"--- Creating data for ratio {ratio}")
-        data, _, _ = process_data(1.0)
+        data, _, _ = process_data(1.0, data_path)
         restrictions, inverse_restrictions = nlm.create_gen_split(ratio) # restrictions for training data, inverse_restrictions for dev and test
         examples = generate_balanced_data("simple_solutions", "boolean_solutions",
                                           size, 0, data, simple_sampling = "level 2",
@@ -618,5 +618,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("size", type=int)
     parser.add_argument("save_dir", type=str)
+    parser.add_argument("data_path", type=str)
     args = parser.parse_args()
-    create_corpus(args.size, args.save_dir)
+    create_corpus(args.size, args.save_dir, args.data_path)
