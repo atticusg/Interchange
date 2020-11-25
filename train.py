@@ -1,15 +1,8 @@
 import os
 import argparse
-import torch
-from datetime import datetime
 
-from itertools import product
 from experiment import db_utils as db
 from experiment import ExperimentManager
-
-from datasets.mqnli import MQNLIBertData, MQNLIData
-from trainer import load_model
-from modeling.lstm import LSTMModule
 
 DEFAULT_SCRIPT = "python expt_train_bert.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun",
@@ -46,6 +39,9 @@ DEFAULT_OPTS = {
 }
 
 def preprocess(model_type, train, dev, test, data_path, variant):
+    import torch
+    from datasets.mqnli import MQNLIBertData, MQNLIData
+
     if model_type == "bert":
         data = MQNLIBertData(train, dev, test, REMAPPING_PATH, variant=variant)
     elif model_type == "lstm":
@@ -66,6 +62,9 @@ def add_one(db_path):
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
 
 def add_grid_search(db_path, repeat, res_save_dir):
+    from datetime import datetime
+    from itertools import product
+
     manager = ExperimentManager(db_path)
 
     if "bert" in db_path:
