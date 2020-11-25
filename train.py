@@ -68,9 +68,9 @@ def add_grid_search(db_path, repeat, res_save_dir):
     manager = ExperimentManager(db_path)
 
     if "bert" in db_path:
-        grid_dict = {"batch_size": [3],
+        grid_dict = {"batch_size": [12],
                      "lr": [2e-5, 5e-5],
-                     "max_epochs": [4,8],
+                     "max_epochs": [3,4],
                      "lr_scheduler_type": ["linear"],
                      "lr_warmup_ratio": [0.25],
                      "evals_per_epoch": [8]}
