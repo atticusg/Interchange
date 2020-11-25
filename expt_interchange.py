@@ -13,7 +13,7 @@ import torch.autograd.profiler as profiler
 import intervention
 import datasets
 import modeling
-from train import load_model
+from trainer import load_model
 import experiment
 from expt_interchange_analysis import Analysis
 

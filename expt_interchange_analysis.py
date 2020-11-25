@@ -15,7 +15,7 @@ from intervention.analysis import construct_graph, construct_graph_batch, find_c
 from intervention.utils import serialize, deserialize
 from intervention.location import Location
 
-from train import load_model
+from trainer import load_model
 from modeling.lstm import LSTMModule
 from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph

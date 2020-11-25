@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 from typing import Dict, List
+from intervention import LOC
 
 
 class MQNLIData:
@@ -162,6 +163,8 @@ class MQNLIBertData(MQNLIData):
 
         if variant == "basic":
             special_tokens = ["emptystring"]
+        elif variant == "subphrase":
+            special_tokens = ["emptystring"]
         else:
             raise NotImplementedError(f"Does not support data variant {variant}")
 
@@ -182,12 +185,12 @@ class MQNLIBertData(MQNLIData):
 
         self.dev = MQNLIBertDataset(dev_file, self.vocab_remapping,
                                     self.word_to_id, self.tokenizer,
-                                    variant=variant)
+                                    variant="basic")
         print(f"--- finished loading {len(self.dev)} examples from dev set")
 
         self.test = MQNLIBertDataset(test_file, self.vocab_remapping,
                                      self.word_to_id, self.tokenizer,
-                                     variant=variant)
+                                     variant="basic")
         print(f"--- finished loading {len(self.test)} examples from test set")
 
     def get_id_word_dicts(self):
@@ -207,6 +210,14 @@ class MQNLIBertData(MQNLIData):
 
         return word_to_id, id_to_word
 
+subphrase_loc_mappings = [(0, 3), (0, 16), (1, 4), (1, 17), (2, 7), (2, 20),
+                          (3, 8), (3, 21), (4, 11), (4, 24), (5, 12), (5, 25),
+                          (6, LOC[3:5]), (6, LOC[16:18]),
+                          (7, LOC[7:9]), (7, LOC[20:22]),
+                          (8, LOC[11:13]), (8, LOC[24:26]),
+                          (9, LOC[7:13]), (9, LOC[20:26]),
+                          (10, LOC[5:13]), (10, LOC[18:26]), (11, LOC[:])]
+subphrase_loss_weighting = [1. / 6] * 6 + [1. / 3] * 3 + [0.8] * 2 + [1.]
 
 class MQNLIBertDataset(Dataset):
     def __init__(self, file_name: str, vocab_remapping: Dict[str,str],
@@ -219,7 +230,17 @@ class MQNLIBertDataset(Dataset):
         self.word_to_id = word_to_id
         self.variant = variant
 
-        label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
+        if variant == "basic":
+            label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
+        elif variant == "subphrase":
+            label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2,
+                          "independence": 3, "equivalence": 4, "entails": 5,
+                          "reverse entails": 6, "contradiction2": 7,
+                          "alternation": 8, "cover": 9,}
+            self.label_dict = label_dict
+            self.output_remapping = torch.tensor([0,1,1,0,2,2,0], dtype=torch.long)
+        else:
+            raise NotImplementedError(f"Does not support data variant {variant}")
 
         self.raw_bert_x = []
         self.raw_orig_x = []
@@ -230,7 +251,11 @@ class MQNLIBertDataset(Dataset):
             count = 0
             for line in f:
                 example = json.loads(line.strip())
-                label = label_dict[example["gold_label"]]
+
+                if variant == "basic":
+                    label = label_dict[example["gold_label"]]
+                else:
+                    label = [label_dict[l] for l in example["gold_label"]]
 
                 # attention mask useful for short outputs
                 p_toks, unshifted_p_toks, p_attn_mask = \
@@ -251,8 +276,7 @@ class MQNLIBertDataset(Dataset):
 
         self.num_examples = len(self.raw_bert_x)
 
-    def remap_and_shift(self, example: Dict, is_p: bool=True) \
-            -> (List[str], List[str], List[int]):
+    def remap_and_shift(self, example: Dict, is_p: bool=True) -> (List[str], List[str], List[int]):
         """ map words to other words that won't be split up by BERT, and shift
         them into new positions according to the following schema:
              0          1     2        3         4       5       6       7      8
@@ -265,7 +289,7 @@ class MQNLIBertDataset(Dataset):
         s = example["sentence1"].split() if is_p else example["sentence2"].split()
         remapped_words = [self.vocab_remapping.get(w.lower(), w) for w in s]
 
-        if self.variant == "basic":
+        if self.variant in ["basic", "subphrase"]:
             toks = ["emptystring"] * 12
             for old_idx, new_idx in enumerate(self.shifted_idxs):
                 curr_tok = remapped_words[old_idx]
@@ -293,6 +317,46 @@ class MQNLIBertDataset(Dataset):
     def __len__(self):
         return self.num_examples
 
+    def generate_subphrase_inputs(self, i: int) -> torch.Tensor:
+        """ Given a full sentence, generate examples containing subphrases
+
+            [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
+            0       1    2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
+        [0]       | <P> | <P>   | bad | <P>    | <P>  | ...
+        [1]       | <P> | ...   | <P> | singer | <P>  | ...
+        [2]       | <P> | ...                     ... | <P> | badly | <P>   | ...
+        [3]       | <P> | ...                           ... | <P>   | sings | <P> | ...
+        [4]       | <P> | ...                                                         <P> | good | <P>  |
+        [5]       | <P> | ...                                                         ... | <P>  | song |
+        [6]       | <P> | <P>   | bad | singer | <P>  | ...
+        [7]       | <P> | ...                     ... | <P> | badly | sings | <P> | ...
+        [8]       | <P> | ...                                                 ... |   <P> | good | song |
+        [9]       | <P> | ...                     ... | <P> | badly | sings | not | every | good | song |
+        [10]      | <P> | ...         | <P>    | does | not | badly | sings | not | every | good | song |
+        [11] <the whole sentence>
+        :param i: idx
+        :return: torch.Tensor
+        """
+        sentence = self.raw_bert_x[i]
+        res = torch.full((12, 27), self.word_to_id["[PAD]"], dtype=torch.long)
+        res[:,0] = self.word_to_id["[CLS]"]
+        res[:,13] = self.word_to_id["[SEP]"]
+        res[:,26] = self.word_to_id["[SEP]"]
+
+        for loc in subphrase_loc_mappings:
+            res[loc] = torch.tensor(sentence[loc[1]], dtype=torch.long)
+        return res
+
+    def generate_subphrase_attn_masks(self, i):
+        res = torch.full((12, 27), 0.0, dtype=torch.float)
+        res[:, 0] = 1.0
+        res[:, 13] = 1.0
+        res[:, 26] = 1.0
+
+        for loc in subphrase_loc_mappings:
+            res[loc] = 1.0
+        return res
+
     def __getitem__(self, i):
         """Returns tuple: (input_ids, token_type_ids, attention_masks,
             raw_original_x, label) """
@@ -303,10 +367,27 @@ class MQNLIBertDataset(Dataset):
                       torch.tensor(self.raw_orig_x[i], dtype=torch.long),
                       self.raw_y[i])
             return sample
+        elif self.variant == "subphrase":
+            sample = (self.generate_subphrase_inputs(i),
+                      torch.tensor([[0]*14 + [1]*13]*12, dtype=torch.long),
+                      self.generate_subphrase_attn_masks(i),
+                      torch.tensor(subphrase_loss_weighting, dtype=torch.float),
+                      torch.tensor(self.raw_orig_x[i], dtype=torch.long),
+                      torch.tensor(self.raw_y[i], dtype=torch.long))
+            return sample
         else:
             raise NotImplementedError(f"Does not support tokenziation variant"
                                       f"{self.variant}")
 
+
+def bert_subsequence_collate(batch):
+    input_ids = torch.cat([x[0] for x in batch])
+    token_type_ids = torch.cat([x[1] for x in batch])
+    attention_mask = torch.cat([x[2] for x in batch])
+    loss_weighting = torch.cat([x[-3] for x in batch])
+    raw_original_x = torch.stack([x[-2] for x in batch])
+    labels = torch.cat([x[-1] for x in batch])
+    return (input_ids, token_type_ids, attention_mask, loss_weighting, raw_original_x, labels)
 
 def bert_trainer_collate(batch):
     input_ids = torch.stack([x[0] for x in batch])

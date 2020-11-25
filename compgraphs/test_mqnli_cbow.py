@@ -1,6 +1,6 @@
 from compgraphs.mqnli_cbow import MQNLI_CBOW_CompGraph
 from intervention import GraphInput
-from train import load_model
+from trainer import load_model
 from modeling.cbow import CBOWModule
 from datasets.utils import my_collate
 from datasets.mqnli import MQNLIData

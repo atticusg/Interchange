@@ -34,7 +34,7 @@ def setup(db_path, model_path, data_path):
 
 def add(db_path, model_type, model_path, res_dir, num_inputs):
     import torch
-    from train import load_model
+    from trainer import load_model
     from modeling import get_module_class_by_name
 
     model_class = get_module_class_by_name(model_type)

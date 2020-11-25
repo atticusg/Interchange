@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from train import *
+from trainer import *
 from datasets.sentiment import SentimentData
 from datasets.mqnli import MQNLIData, MQNLIBertData
 from modeling.pretrained_bert import PretrainedBertModule

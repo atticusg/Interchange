@@ -1,6 +1,6 @@
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 from intervention import GraphInput
-from train import load_model
+from trainer import load_model
 from modeling.lstm import LSTMModule
 from datasets.utils import my_collate
 from datasets.mqnli import MQNLIData

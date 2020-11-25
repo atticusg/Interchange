@@ -7,7 +7,7 @@ import torch
 from datetime import datetime
 
 from experiment import Experiment
-from train import load_model
+from trainer import load_model
 from modeling.lstm import LSTMModule
 
 from intervention.analysis import construct_graph, find_cliques

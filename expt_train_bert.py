@@ -1,9 +1,9 @@
 import torch
 import argparse
 
-from train_bert import DEFAULT_OPTS
+from train import DEFAULT_OPTS
 from modeling.pretrained_bert import PretrainedBertModule
-from train import Trainer
+from trainer import Trainer
 from experiment import Experiment
 
 from typing import Dict
@@ -13,7 +13,8 @@ class TrainBertExperiment(Experiment):
     def experiment(self, opts: Dict):
         data = torch.load(opts["data_path"])
         model = PretrainedBertModule(
-            tokenizer_vocab_path=opts["tokenizer_vocab_path"]
+            tokenizer_vocab_path=opts["tokenizer_vocab_path"],
+            output_classes=opts["output_classes"]
         )
         model = model.to(torch.device("cuda"))
         trainer = Trainer(data, model, opts=opts)
@@ -40,7 +41,6 @@ def main():
 
     args = parser.parse_args()
     e = TrainBertExperiment()
-    opts = vars(args)
     e.run(vars(args))
 
 

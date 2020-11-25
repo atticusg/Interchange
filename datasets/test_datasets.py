@@ -1,8 +1,9 @@
 import itertools
 import pytest
 
+from torch.utils.data import DataLoader
 from datasets.logical_form import LogicalFormDataset
-from datasets.mqnli import MQNLIData
+from datasets.mqnli import MQNLIData, MQNLIBertData, bert_subsequence_collate
 from datasets.utils import write_pickle, read_pickle
 
 def bool_product(n):
@@ -56,3 +57,28 @@ def test_pickle():
     assert isinstance(data2, MQNLIData)
 
     assert len(data.train) == len(data2.train)
+
+
+def test_mqnli_hard():
+    train_file = "../mqnli_data/mqnli-hard-mini.train.txt"
+    dev_file = "../mqnli_data/mqnli-hard.dev.txt"
+    test_file = "../mqnli_data/mqnli-hard.test.txt"
+    vocab_remapping = "../mqnli_data/bert-remapping.txt"
+    data = MQNLIBertData(train_file, dev_file, test_file, vocab_remapping, variant="subphrase")
+    # x = data.train.generate_subphrase_inputs(1)
+    # for ex in x:
+    #     print(data.decode(ex, return_str=True))
+    # attn_mask = data.train.generate_subphrase_attn_masks(1)
+    # print(attn_mask)
+
+    dataloader = DataLoader(data.train, batch_size=3, collate_fn=bert_subsequence_collate)
+    for input_tuple in dataloader:
+        print(input_tuple)
+        print("input_ids.shape", input_tuple[0].shape)
+        print("token_type_ids.shape", input_tuple[1].shape)
+        print("attention_mask.shape", input_tuple[2].shape)
+        print("labels.shape", input_tuple[-1].shape)
+        input_ids = input_tuple[0]
+        for ex in input_ids:
+            print(data.decode(ex, return_str=True))
+        break

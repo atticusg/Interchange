@@ -116,7 +116,7 @@ class Certificate:
 class ImplementationExperiment:
     def __init__(self, input_space, interventions, causal_model, dynamical_system):
         self.causal_model = causal_model
-        self.dynamical_system = dynamical system
+        self.dynamical_system = dynamical_system
         self.interventions = [{"intermediate": intervention, "input":input, "solution":self.dynamical_system.runmodel(input, intervention)} for intervention in sorted(interventions,key=lambda x: len(x.keys())) for input in input_space]
         self.links = []
         self.set_maplist()

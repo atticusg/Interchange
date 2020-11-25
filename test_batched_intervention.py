@@ -10,7 +10,7 @@ from intervention.utils import serialize
 
 import compgraphs
 from modeling.pretrained_bert import PretrainedBertModule
-from train import load_model
+from trainer import load_model
 
 from itertools import product
 

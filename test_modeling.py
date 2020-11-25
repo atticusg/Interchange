@@ -1,6 +1,6 @@
 import pytest
 
-from train import *
+from trainer import *
 from datasets.sentiment import SentimentData
 from datasets.mqnli import MQNLIData
 from modeling.lstm import LSTMModule, LSTMSelfAttnModule
