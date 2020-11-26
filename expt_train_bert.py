@@ -17,7 +17,7 @@ class TrainBertExperiment(Experiment):
             output_classes=opts["output_classes"]
         )
         model = model.to(torch.device("cuda"))
-        trainer = Trainer(data, model, opts=opts)
+        trainer = Trainer(data, model, **opts)
         ckpt, model_save_path = trainer.train()
 
         return {

@@ -7,7 +7,7 @@ def my_collate(batch, batch_first=True):
     sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first)
     lengths = torch.tensor([len(x) for x in sequences])
     labels = torch.tensor([x[1] for x in sorted_batch])
-    return (sequences_padded, labels, lengths)
+    return (sequences_padded, lengths, labels)
 
 
 def write_pickle(d, f):

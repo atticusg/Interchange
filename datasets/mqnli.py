@@ -6,52 +6,87 @@ from transformers import BertTokenizer
 from typing import Dict, List
 from intervention import LOC
 
+"""
+    notevery | bad | singer | doesnot | badly | sings | every | good | song ]
+    0          1     2        3         4       5       6       7      8
+[0] <P>      | bad | <P>    | ...
+[1] <P>      | <P> | singer | <P>     | ...
+[2] <P>      | ...      ... | <P>     | badly | <P>   | ...
+[3] <P>      | ...                ... | <P>   |
+"""
+
+
+lstm_subphrase_loc_mappings = []
+
+
+"""
+   [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
+    0     1      2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
+[0]      | <P> | <P>   | bad | <P>    | <P>  | ...
+[1]      | <P> | ...   | <P> | singer | <P>  | ...
+[2]      | <P> | ...                     ... | <P> | badly | <P>   | ...
+[3]      | <P> | ...                           ... | <P>   | sings | <P> | ...
+[4]      | <P> | ...                                                         <P> | good | <P>  |
+[5]      | <P> | ...                                                         ... | <P>  | song |
+[6]      | <P> | <P>   | bad | singer | <P>  | ...
+[7]      | <P> | ...                     ... | <P> | badly | sings | <P> | ...
+[8]      | <P> | ...                                                 ... |   <P> | good | song |
+[9]      | <P> | ...                     ... | <P> | badly | sings | not | every | good | song |
+[10]     | <P> | ...         | <P>    | does | not | badly | sings | not | every | good | song |
+[11] <the whole sentence>
+"""
+bert_subphrase_loc_mappings = [(0, 3), (0, 16), (1, 4), (1, 17), (2, 7), (2, 20),
+                               (3, 8), (3, 21), (4, 11), (4, 24), (5, 12), (5, 25),
+                               (6, LOC[3:5]), (6, LOC[16:18]),
+                               (7, LOC[7:9]), (7, LOC[20:22]),
+                               (8, LOC[11:13]), (8, LOC[24:26]),
+                               (9, LOC[7:13]), (9, LOC[20:26]),
+                               (10, LOC[5:13]), (10, LOC[18:26]), (11, LOC[:])]
+subphrase_loss_weighting = [1. / 6] * 6 + [1. / 3] * 3 + [0.8] * 2 + [1.]
 
 class MQNLIData:
-    def __init__(self, train_file, dev_file, test_file, use_separator=False,
-                 for_transformer=False, store_text=False):
+    def __init__(self, train_file, dev_file, test_file, variant="lstm"):
         self.output_classes = 3
         self.word_to_id = {}
         self.id_to_word = {}
         self.id_to_word[0] = '[PAD]'
         self.word_to_id['[PAD]'] = 0
-        max_info = {
-            'id': 1,
-            'sentence_len': 0
-        }
+        self.variant = variant
+        max_info = {'id': 1}
 
-        if for_transformer:
+        if variant == "lstm" or variant == "lstm-subphrase":
+            self.id_to_word[1] = '[SEP]'
+            self.word_to_id['[SEP]'] = 1
+            max_info['id'] = 2
+        elif "transformer" in variant:
             self.id_to_word[1] = '[CLS]'
             self.word_to_id['[CLS]'] = 1
             self.id_to_word[2] = '[SEP]'
             self.word_to_id['[SEP]'] = 2
             max_info['id'] = 3
         else:
-            if use_separator:
-                self.id_to_word[1] = '[SEP]'
-                self.word_to_id['[SEP]'] = 1
-                max_info['id'] = 2
+            raise ValueError(f"Invalid variant {variant}")
 
         print("--- Loading Dataset ---")
         self.train = MQNLIDataset(train_file, self.word_to_id, self.id_to_word,
-                                  max_info, for_transformer, store_text)
+                                  max_info, variant)
         train_ids = max_info["id"]
         print(f"--- loaded train set, {train_ids} unique tokens up to now")
 
+        if variant == "lstm-subphrase": variant = "lstm"
+
         self.dev = MQNLIDataset(dev_file, self.word_to_id, self.id_to_word,
-                                max_info, for_transformer, store_text)
+                                max_info, variant)
         dev_ids = max_info["id"]
         print(f"--- loaded dev set, {dev_ids} unique tokens up to now")
 
         self.test = MQNLIDataset(test_file, self.word_to_id, self.id_to_word,
-                                 max_info, for_transformer, store_text)
+                                 max_info, variant)
         test_ids = max_info["id"]
         print(f"--- loaded test set, {test_ids} unique tokens up to now")
 
-        self.vocab_size, self.max_sentence_len = max_info['id'], max_info[
-            'sentence_len']
-        print(f"--- Got {self.vocab_size} unique words, "
-              f"max sentence len {self.max_sentence_len}")
+        self.vocab_size = max_info['id']
+        print(f"--- Got {self.vocab_size} unique words")
 
     def decode(self, t, return_str=False):
         if return_str:
@@ -83,48 +118,49 @@ class MQNLIData:
 
 class MQNLIDataset(Dataset):
     def __init__(self, file_name, word_to_id, id_to_word, max_info,
-                 for_transformer=False, store_text=False):
+                 variant="lstm"):
         print("--- Loading sentences from " + file_name)
-        label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
+        self.variant = variant
+        if "subphrase" in variant:
+            label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2,
+                          "independence": 3, "equivalence": 4, "entails": 5,
+                          "reverse entails": 6, "contradiction2": 7,
+                          "alternation": 8, "cover": 9}
+        else:
+            label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2}
         raw_x = []
         raw_y = []
-        if store_text:
-            self.example_text = []
-        curr_id, max_sentence_len = max_info['id'], max_info['sentence_len']
+
+        curr_id = max_info['id']
         with open(file_name, 'r') as f:
             for line in f:
-                if store_text:
-                    self.example_text.append(line.strip())
                 example = json.loads(line.strip())
                 sentence1 = example["sentence1"].split()
                 sentence2 = example["sentence2"].split()
                 label = label_dict[example["gold_label"]]
 
-                if len(sentence1) != len(sentence2):
-                    raise RuntimeError("Premise and hypothesis have different lengths!\n"
-                                       "P=\'%s\'\nH=\'%s\'" % sentence1, sentence2)
+                assert len(sentence1) == len(sentence2)
 
                 ids = []
-                if for_transformer:
-                    ids.append(0)
+                if "transformer" in variant: ids.append(0) # [SEP] token
+
                 for word in sentence1:
                     if word not in word_to_id:
                         word_to_id[word] = curr_id
                         id_to_word[curr_id] = word
                         curr_id += 1
                     ids.append(word_to_id[word])
-                if for_transformer:
-                    ids.append(1)
+
+                ids.append(1) # [SEP] token
+
                 for word in sentence2:
                     if word not in word_to_id:
                         word_to_id[word] = curr_id
                         id_to_word[curr_id] = word
                         curr_id += 1
                     ids.append(word_to_id[word])
-                if for_transformer:
-                    ids.append(1)
 
-                max_sentence_len = max(max_sentence_len, len(ids))
+                if "transformer" in variant: ids.append(1) # [SEP] token
 
                 ids = np.asarray(ids)
                 raw_x.append(ids)
@@ -133,14 +169,17 @@ class MQNLIDataset(Dataset):
         self.raw_x = raw_x
         self.raw_y = raw_y
         self.num_examples = len(raw_x)
-        max_info['id'], max_info['sentence_len'] = curr_id, max_sentence_len
+        max_info['id'] = curr_id
         print("--- Loaded {} sentences".format(self.num_examples))
 
     def __len__(self):
         return self.num_examples
 
     def __getitem__(self, i):
-        sample = (torch.tensor(self.raw_x[i], dtype=torch.long), self.raw_y[i])
+        if self.variant == "lstm" or self.variant == "transformer":
+            sample = (torch.tensor(self.raw_x[i], dtype=torch.long), self.raw_y[i])
+        elif self.variant == "lstm-subphrase":
+            pass
         return sample
 
 
@@ -210,14 +249,7 @@ class MQNLIBertData(MQNLIData):
 
         return word_to_id, id_to_word
 
-subphrase_loc_mappings = [(0, 3), (0, 16), (1, 4), (1, 17), (2, 7), (2, 20),
-                          (3, 8), (3, 21), (4, 11), (4, 24), (5, 12), (5, 25),
-                          (6, LOC[3:5]), (6, LOC[16:18]),
-                          (7, LOC[7:9]), (7, LOC[20:22]),
-                          (8, LOC[11:13]), (8, LOC[24:26]),
-                          (9, LOC[7:13]), (9, LOC[20:26]),
-                          (10, LOC[5:13]), (10, LOC[18:26]), (11, LOC[:])]
-subphrase_loss_weighting = [1. / 6] * 6 + [1. / 3] * 3 + [0.8] * 2 + [1.]
+
 
 class MQNLIBertDataset(Dataset):
     def __init__(self, file_name: str, vocab_remapping: Dict[str,str],
@@ -236,9 +268,8 @@ class MQNLIBertDataset(Dataset):
             label_dict = {"neutral": 0, "entailment": 1, "contradiction": 2,
                           "independence": 3, "equivalence": 4, "entails": 5,
                           "reverse entails": 6, "contradiction2": 7,
-                          "alternation": 8, "cover": 9,}
+                          "alternation": 8, "cover": 9}
             self.label_dict = label_dict
-            self.output_remapping = torch.tensor([0,1,1,0,2,2,0], dtype=torch.long)
         else:
             raise NotImplementedError(f"Does not support data variant {variant}")
 
@@ -320,20 +351,6 @@ class MQNLIBertDataset(Dataset):
     def generate_subphrase_inputs(self, i: int) -> torch.Tensor:
         """ Given a full sentence, generate examples containing subphrases
 
-            [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
-            0       1    2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
-        [0]       | <P> | <P>   | bad | <P>    | <P>  | ...
-        [1]       | <P> | ...   | <P> | singer | <P>  | ...
-        [2]       | <P> | ...                     ... | <P> | badly | <P>   | ...
-        [3]       | <P> | ...                           ... | <P>   | sings | <P> | ...
-        [4]       | <P> | ...                                                         <P> | good | <P>  |
-        [5]       | <P> | ...                                                         ... | <P>  | song |
-        [6]       | <P> | <P>   | bad | singer | <P>  | ...
-        [7]       | <P> | ...                     ... | <P> | badly | sings | <P> | ...
-        [8]       | <P> | ...                                                 ... |   <P> | good | song |
-        [9]       | <P> | ...                     ... | <P> | badly | sings | not | every | good | song |
-        [10]      | <P> | ...         | <P>    | does | not | badly | sings | not | every | good | song |
-        [11] <the whole sentence>
         :param i: idx
         :return: torch.Tensor
         """
@@ -343,7 +360,7 @@ class MQNLIBertDataset(Dataset):
         res[:,13] = self.word_to_id["[SEP]"]
         res[:,26] = self.word_to_id["[SEP]"]
 
-        for loc in subphrase_loc_mappings:
+        for loc in bert_subphrase_loc_mappings:
             res[loc] = torch.tensor(sentence[loc[1]], dtype=torch.long)
         return res
 
@@ -353,7 +370,7 @@ class MQNLIBertDataset(Dataset):
         res[:, 13] = 1.0
         res[:, 26] = 1.0
 
-        for loc in subphrase_loc_mappings:
+        for loc in bert_subphrase_loc_mappings:
             res[loc] = 1.0
         return res
 

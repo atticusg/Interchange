@@ -32,34 +32,37 @@ def get_collate_fxn(dataset, batch_first: bool) -> Callable:
             return None
 
 class Trainer:
-    def __init__(self, data, model, batch_size=64, lr=0.01, weight_norm=0,
-                 max_epochs=100, run_steps=-1, evals_per_epoch=5, eval_batch_size=64,
-                 patient_epochs=20, lr_scheduler_type="None", lr_warmup_ratio=0.05, optimizer_type="adam",
+    def __init__(self, data, model,
+                 batch_size=64, lr=0.01, weight_norm=0,
+                 max_epochs=100, run_steps=-1,
+                 evals_per_epoch=5, eval_batch_size=64,
+                 patient_epochs=20, lr_scheduler_type="None",
+                 lr_warmup_ratio=0.05, optimizer_type="adam",
                  batch_first=True, device="cuda",
                  model_save_path=None, res_save_dir=None,
-                 verbose=True, opts={}):
+                 verbose=True, **kwargs):
         self.data = data
         self.model = model
-        self.device = torch.device(opts.get("device", device))
+        self.device = torch.device(device)
 
-        self.batch_size = opts.get("batch_size", batch_size)
-        self.eval_batch_size = opts.get("eval_batch_size", eval_batch_size)
-        self.batch_first = opts.get("batch_first", batch_first)
+        self.batch_size = batch_size
+        self.eval_batch_size = eval_batch_size
+        self.batch_first = batch_first
 
-        self.optimizer_type = opts.get("optimizer_type", optimizer_type)
-        self.lr = opts.get("lr", lr)
-        self.lr_scheduler_type = opts.get("lr_scheduler_type", lr_scheduler_type)
-        self.lr_warmup_ratio = opts.get("lr_warmup_ratio", lr_warmup_ratio)
-        self.weight_norm = opts.get("weight_norm", weight_norm)
+        self.optimizer_type = optimizer_type
+        self.lr = lr
+        self.lr_scheduler_type = lr_scheduler_type
+        self.lr_warmup_ratio = lr_warmup_ratio
+        self.weight_norm = weight_norm
 
-        self.max_epochs = opts.get("max_epochs", max_epochs)
-        self.run_steps = opts.get("run_steps", run_steps)
-        self.evals_per_epoch = opts.get("evals_per_epoch", evals_per_epoch)
-        self.patient_epochs = opts.get("patient_epochs", patient_epochs)
+        self.max_epochs = max_epochs
+        self.run_steps = run_steps
+        self.evals_per_epoch = evals_per_epoch
+        self.patient_epochs = patient_epochs
 
-        self.verbose = opts.get("verbose", verbose)
-        self.model_save_path = opts.get("model_save_path", model_save_path)
-        self.res_save_dir = opts.get("res_save_dir", res_save_dir)
+        self.verbose = verbose
+        self.model_save_path = model_save_path
+        self.res_save_dir = res_save_dir
 
         if self.optimizer_type == "adam":
             self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr,
@@ -82,16 +85,19 @@ class Trainer:
                 self.scheduler = get_constant_schedule_with_warmup(
                     self.optimizer, num_warmup_steps)
             else:
-                raise ValueError(f"Unsupported lr scheduler type: {self.lr_scheduler_type}")
+                raise ValueError(f"Unsupported lr scheduler type: "
+                                 f"{self.lr_scheduler_type}")
 
 
 
-        self.collate_fn = get_collate_fxn(self.data.train, batch_first=self.batch_first)
+        self.collate_fn = get_collate_fxn(self.data.train,
+                                          batch_first=self.batch_first)
         if self.collate_fn is not None:
             self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True, collate_fn=self.collate_fn)
         else:
-            self.dataloader = DataLoader(data.train, batch_size=self.batch_size, shuffle=True)
+            self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
+                                         shuffle=True)
 
         if getattr(self.data.train, "variant", "") == "subphrase":
             print("Using weighted loss function")
@@ -100,8 +106,10 @@ class Trainer:
             self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
         # setup for early stopping
-        self.eval_steps = math.ceil(data.train.num_examples / self.batch_size) // self.evals_per_epoch
-        self.patient_threshold = self.patient_epochs * self.evals_per_epoch * self.eval_steps
+        self.eval_steps = math.ceil(data.train.num_examples / self.batch_size) \
+                          // self.evals_per_epoch
+        self.patient_threshold = self.patient_epochs * self.evals_per_epoch \
+                                 * self.eval_steps
 
     def config(self):
         return {
@@ -262,34 +270,10 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64,
             tuple = [x.to(device) for x in tuple]
             labels = tuple[-1]
 
-
             logits = model(tuple)
             pred = torch.argmax(logits, dim=1)
 
             pred = pred.to(device)
-
-            """
-            if get_summary:
-                y = y_batch.to(model.device).type(torch.float)
-                res = res.to(model.device)
-
-            if get_pred or get_summary:
-                pred_list = pred.tolist()
-                if get_summary:
-                    x_list = []
-                    for sentence in tuple[0].tolist():
-                        x_list.append([i for i in sentence if i != 0])
-                    err_list = torch.abs(res - y).tolist()
-                y_list = y_batch.tolist()
-                if get_summary:
-                    ids_and_errors = [pair for pair in \
-                                      zip(range(len(y_list)), err_list,
-                                          y_list)]
-                    bad_sentences.extend(
-                        [(x_list[pair[0]], pair[1], pair[2]) \
-                         for pair in ids_and_errors if pair[1] > 0.5])
-                preds_and_labels.append(list(zip(pred_list, y_list)))
-            """
 
             correct_in_batch = torch.sum(torch.eq(pred, labels)).item()
             total_preds += labels.shape[0]

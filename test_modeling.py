@@ -3,9 +3,7 @@ import pytest
 from trainer import *
 from datasets.sentiment import SentimentData
 from datasets.mqnli import MQNLIData
-from modeling.lstm import LSTMModule, LSTMSelfAttnModule
-from modeling.transformer import TransformerModule
-from modeling.cbow import CBOWModule
+from modeling.lstm import LSTMModule
 from modeling.utils import modularize
 
 @pytest.fixture
@@ -54,3 +52,10 @@ def test_load_and_eval(sentiment_data):
 def test_modularize():
     f = lambda x, y: x * y
     f_module = modularize(f)
+
+def test_refactored_lstm():
+    model, ckpt = load_model(LSTMModule, "mqnli_models/lstm/lstm_sep_best.pt")
+    model = model.to(torch.device("cuda"))
+    data = torch.load("mqnli_data/mqnli-lstm-easy.pt")
+    correct, total = evaluate_and_predict(data.dev, model, batch_first=False)
+    print(f"Accuracy = {correct}/{total} = {correct/total:.2%}")

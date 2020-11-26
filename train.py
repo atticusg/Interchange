@@ -45,10 +45,11 @@ def preprocess(model_type, train, dev, test, data_path, variant):
     if model_type == "bert":
         data = MQNLIBertData(train, dev, test, REMAPPING_PATH, variant=variant)
     elif model_type == "lstm":
-        data = MQNLIData(train, dev, test, use_separator=True)
+        data = MQNLIData(train, dev, test, variant=variant)
     else:
         raise NotImplementedError(f"Does not support model type {model_type}")
     torch.save(data, data_path)
+    print(f"Saved preprocessed dataset to {data_path}")
 
 def setup(db_path, data_path):
     default_opts = DEFAULT_OPTS.copy()
