@@ -72,7 +72,8 @@ DEFAULT_LSTM_OPTS = {
     "patient_epochs": 20,
 
     "model_save_path": "lstm",
-    "res_save_dir": ""
+    "res_save_dir": "",
+    "log_path": ""
 }
 
 def preprocess(model_type, train, dev, test, data_path, variant):
