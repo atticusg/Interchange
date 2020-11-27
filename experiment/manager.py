@@ -217,3 +217,11 @@ class ExperimentManager:
             else:
                 subprocess.run(cmds)
         # subprocess.Popen(cmds, start_new_session=True)
+
+def recover_boolean_args(opts: Dict, reference: Dict):
+    """ Some boolean arguments in opts may be cast to integers (0, 1) by the
+    database. Recover those boolean arguments given a reference."""
+
+    for k in opts.keys():
+        if k in reference and isinstance(reference[k], bool):
+            opts[k] = bool(opts[k])

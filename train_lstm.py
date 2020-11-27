@@ -1,21 +1,18 @@
 import torch
 import argparse
 
-from train import DEFAULT_OPTS
-from modeling.pretrained_bert import PretrainedBertModule
+from train import DEFAULT_LSTM_OPTS
+from modeling.lstm import LSTMModule
 from trainer import Trainer
-from experiment import Experiment
+import experiment
 
 from typing import Dict
 
 
-class TrainBertExperiment(Experiment):
+class TrainLSTMExperiment(experiment.Experiment):
     def experiment(self, opts: Dict):
         data = torch.load(opts["data_path"])
-        model = PretrainedBertModule(
-            tokenizer_vocab_path=opts["tokenizer_vocab_path"],
-            output_classes=opts["output_classes"]
-        )
+        model = LSTMModule(**opts)
         model = model.to(torch.device("cuda"))
         trainer = Trainer(data, model, **opts)
         ckpt, model_save_path = trainer.train()
@@ -31,7 +28,7 @@ class TrainBertExperiment(Experiment):
 
 def main():
     parser = argparse.ArgumentParser()
-    for arg_name, default_val in DEFAULT_OPTS.items():
+    for arg_name, default_val in DEFAULT_LSTM_OPTS.items():
         arg_type = type(default_val)
         arg_type = int if arg_type == bool else arg_type
         parser.add_argument(f"--{arg_name}", type=arg_type, default=default_val)
@@ -40,8 +37,10 @@ def main():
     parser.add_argument("--db_path", type=str)
 
     args = parser.parse_args()
-    e = TrainBertExperiment()
-    e.run(vars(args))
+    e = TrainLSTMExperiment()
+    args = vars(args)
+    experiment.recover_boolean_args(args, DEFAULT_LSTM_OPTS)
+    e.run(args)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@ import pytest
 
 from torch.utils.data import DataLoader
 from datasets.logical_form import LogicalFormDataset
-from datasets.mqnli import MQNLIData, MQNLIBertData, bert_subsequence_collate
+from datasets.mqnli import MQNLIData, MQNLIBertData, bert_subphrase_collate
+from datasets.mqnli import lstm_subphrase_collate
 from datasets.utils import write_pickle, read_pickle
 
 def bool_product(n):
@@ -35,7 +36,7 @@ def test_mqnli_dataset():
     train_file = "../mqnli_data/mini.train.txt"
     dev_file = "../mqnli_data/mini.dev.txt"
     test_file = "../mqnli_data/mini.test.txt"
-    data = MQNLIData(train_file, dev_file, test_file, for_transformer=False)
+    data = MQNLIData(train_file, dev_file, test_file)
     print("*** First piece of data: ", data.train[0])
     print("*** length: ", data.train[0][0].shape)
     print("Premise:", " ".join(data.id_to_word[w.item()] for w in data.train[0][0][:9]))
@@ -47,8 +48,7 @@ def test_pickle():
     train_file = "../mqnli_data/mini.train.txt"
     dev_file = "../mqnli_data/mini.dev.txt"
     test_file = "../mqnli_data/mini.test.txt"
-    data = MQNLIData(train_file, dev_file, test_file, for_transformer=False)
-
+    data = MQNLIData(train_file, dev_file, test_file)
 
     pickle_file = "../mqnli_data/mini.pt"
     write_pickle(data, pickle_file)
@@ -71,7 +71,7 @@ def test_mqnli_hard():
     # attn_mask = data.train.generate_subphrase_attn_masks(1)
     # print(attn_mask)
 
-    dataloader = DataLoader(data.train, batch_size=3, collate_fn=bert_subsequence_collate)
+    dataloader = DataLoader(data.train, batch_size=3, collate_fn=bert_subphrase_collate)
     for input_tuple in dataloader:
         print(input_tuple)
         print("input_ids.shape", input_tuple[0].shape)
@@ -81,4 +81,15 @@ def test_mqnli_hard():
         input_ids = input_tuple[0]
         for ex in input_ids:
             print(data.decode(ex, return_str=True))
+        break
+
+def test_mqnli_lstm_subsequence():
+    train_file = "../mqnli_data/mqnli-hard-mini.train.txt"
+    dev_file = "../mqnli_data/mqnli-hard.dev.txt"
+    test_file = "../mqnli_data/mqnli-hard.test.txt"
+    data = MQNLIData(train_file, dev_file, test_file, variant="lstm-subphrase")
+
+    dataloader = DataLoader(data.train, batch_size=4, collate_fn=lstm_subphrase_collate)
+    for input_tuple in dataloader:
+        print(input_tuple)
         break

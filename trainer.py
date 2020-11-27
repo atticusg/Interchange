@@ -22,25 +22,18 @@ def print_stats(epoch, step, loss, acc, better=True, lr=None):
         print(f"Now at epoch {epoch}, step {step}, loss {loss:.4}, "
               f"got accuracy of {acc:.2%}{', BETTER' if better else ''}")
 
-def get_collate_fxn(dataset, batch_first: bool) -> Callable:
-    if isinstance(dataset, datasets.mqnli.MQNLIDataset):
-        return lambda batch: datasets.my_collate(batch, batch_first=batch_first)
-    elif isinstance(dataset, datasets.mqnli.MQNLIBertDataset):
-        if dataset.variant == "subphrase":
-            return datasets.mqnli.bert_subsequence_collate
-        else:
-            return None
+
 
 class Trainer:
     def __init__(self, data, model,
-                 batch_size=64, lr=0.01, weight_norm=0,
-                 max_epochs=100, run_steps=-1,
-                 evals_per_epoch=5, eval_batch_size=64,
-                 patient_epochs=20, lr_scheduler_type="None",
-                 lr_warmup_ratio=0.05, optimizer_type="adam",
-                 batch_first=True, device="cuda",
+                 batch_size=64, eval_batch_size=64, batch_first=True,
+                 optimizer_type="adam", weight_norm=0., lr=0.01,
+                 lr_scheduler_type="", lr_warmup_ratio=0.05,
+                 lr_step_epochs=10, lr_step_decay_rate=0.1,
+                 max_epochs=100, run_steps=-1, evals_per_epoch=5, patient_epochs=20,
+                 device="cuda",
                  model_save_path=None, res_save_dir=None,
-                 verbose=True, **kwargs):
+                 **kwargs):
         self.data = data
         self.model = model
         self.device = torch.device(device)
@@ -50,19 +43,26 @@ class Trainer:
         self.batch_first = batch_first
 
         self.optimizer_type = optimizer_type
+        self.weight_norm = weight_norm
         self.lr = lr
         self.lr_scheduler_type = lr_scheduler_type
         self.lr_warmup_ratio = lr_warmup_ratio
-        self.weight_norm = weight_norm
+        self.lr_step_epochs = lr_step_epochs
+        self.lr_step_decay_rate = lr_step_decay_rate
 
         self.max_epochs = max_epochs
         self.run_steps = run_steps
         self.evals_per_epoch = evals_per_epoch
         self.patient_epochs = patient_epochs
 
-        self.verbose = verbose
         self.model_save_path = model_save_path
         self.res_save_dir = res_save_dir
+
+        # setup for early stopping
+        steps_per_epoch = math.ceil(data.train.num_examples / self.batch_size)
+        self.eval_steps = steps_per_epoch // self.evals_per_epoch
+        self.patient_threshold = self.patient_epochs * self.evals_per_epoch \
+                                 * self.eval_steps
 
         if self.optimizer_type == "adam":
             self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr,
@@ -75,23 +75,24 @@ class Trainer:
 
         self.scheduler = None
         if self.lr_scheduler_type:
-            steps_per_epoch = math.ceil(data.train.num_examples / self.batch_size)
             num_warmup_steps = math.floor(self.lr_warmup_ratio * steps_per_epoch)
             total_steps = steps_per_epoch * self.max_epochs
             if self.lr_scheduler_type == "linear":
                 self.scheduler = get_linear_schedule_with_warmup(
                     self.optimizer, num_warmup_steps, total_steps)
-            elif self.lr_warmup_ratio == "constant":
+            elif self.lr_scheduler_type == "constant":
                 self.scheduler = get_constant_schedule_with_warmup(
-                    self.optimizer, num_warmup_steps)
+                    self.optimizer, num_warmup_steps, total_steps)
+            elif self.lr_scheduler_type == "step":
+                self.scheduler = torch.optim.lr_scheduler.StepLR(
+                    self.optimizer, self.lr_step_epochs * steps_per_epoch,
+                    gamma=self.lr_step_decay_rate)
             else:
                 raise ValueError(f"Unsupported lr scheduler type: "
                                  f"{self.lr_scheduler_type}")
 
+        self.collate_fn = datasets.mqnli.get_collate_fxn(self.data.train, batch_first=self.batch_first)
 
-
-        self.collate_fn = get_collate_fxn(self.data.train,
-                                          batch_first=self.batch_first)
         if self.collate_fn is not None:
             self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True, collate_fn=self.collate_fn)
@@ -99,17 +100,12 @@ class Trainer:
             self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True)
 
-        if getattr(self.data.train, "variant", "") == "subphrase":
+        if "subphrase" in getattr(self.data.train, "variant", ""):
             print("Using weighted loss function")
             self.loss_fxn = nn.CrossEntropyLoss(reduction='none')
         else:
             self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
-        # setup for early stopping
-        self.eval_steps = math.ceil(data.train.num_examples / self.batch_size) \
-                          // self.evals_per_epoch
-        self.patient_threshold = self.patient_epochs * self.evals_per_epoch \
-                                 * self.eval_steps
 
     def config(self):
         return {
@@ -121,6 +117,8 @@ class Trainer:
             "lr": self.lr,
             "lr_scheduler_type": self.lr_scheduler_type,
             "lr_warmup_ratio": self.lr_warmup_ratio,
+            "lr_step_epochs": self.lr_step_epochs,
+            "lr_step_decay_rate": self.lr_step_decay_rate,
             "weight_norm": self.weight_norm,
 
             "max_epochs": self.max_epochs,
@@ -129,7 +127,7 @@ class Trainer:
             "patient_epochs": self.patient_epochs,
 
             "model_save_path": self.model_save_path,
-            "verbose": self.verbose
+            "res_save_dir": self.res_save_dir
         }
 
     def train(self):
@@ -154,12 +152,11 @@ class Trainer:
 
 
         train_start_time = time.time()
-        if self.verbose:
-            print("========= Start training =========")
+
+        print("========= Start training =========")
 
         for epoch in range(self.max_epochs):
-            if self.verbose:
-                print("------ Beginning epoch {} ------".format(epoch))
+            print("------ Beginning epoch {} ------".format(epoch))
             epoch_start_time = time.time()
             for step, input_tuple in enumerate(self.dataloader):
                 self.model.train()
@@ -171,7 +168,7 @@ class Trainer:
                 logits = self.model(input_tuple)
                 loss = self.loss_fxn(logits, labels)
 
-                if getattr(self.data.train, "variant", "") == "subphrase":
+                if "subphrase" in getattr(self.data.train, "variant", ""):
                     loss = torch.mean(loss * input_tuple[-3])
 
                 loss.backward()
@@ -210,14 +207,12 @@ class Trainer:
                         if model_save_path:
                             torch.save(best_model_checkpoint, model_save_path)
 
-                        if self.verbose:
-                            print_stats(epoch, step, loss.item(), acc,
-                                lr=self.scheduler.get_lr()[0] if self.scheduler else None)
+                        print_stats(epoch, step, loss.item(), acc,
+                            lr=self.scheduler.get_lr()[0] if self.scheduler else None)
 
                     else:
-                        if self.verbose:
-                            print_stats(epoch, step, loss.item(), acc, better=False,
-                                lr=self.scheduler.get_lr()[0] if self.scheduler else None)
+                        print_stats(epoch, step, loss.item(), acc, better=False,
+                            lr=self.scheduler.get_lr()[0] if self.scheduler else None)
 
                         steps_without_increase += self.eval_steps
                         if steps_without_increase >= self.patient_threshold:
@@ -226,14 +221,10 @@ class Trainer:
                                   'trigger early stopping.')
                             early_stopping = True
                             break
-            if self.verbose:
-                duration = time.time() - epoch_start_time
-                print("---- Finished epoch %d in %.2f seconds, "
-                      "best accuracy: %.4f ----"
-                      % (epoch, duration, best_dev_acc))
-            else:
-                print("---- Finished epoch {}, best accuracy: {:.4f}"
-                      .format(epoch, best_dev_acc))
+
+            duration = time.time() - epoch_start_time
+            print(f"---- Finished epoch {epoch} in {duration:.2f} seconds, "
+                  f"best accuracy: {best_dev_acc:.2%} ----")
             if early_stopping:
                 break
 
@@ -259,7 +250,7 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64,
         correct_preds = 0
         batch_size = eval_batch_size
 
-        collate_fn = get_collate_fxn(dataset, batch_first=batch_first)
+        collate_fn = datasets.mqnli.get_collate_fxn(dataset, batch_first=batch_first)
         if collate_fn is not None:
             dataloader = DataLoader(dataset, batch_size=batch_size,
                                     shuffle=False, collate_fn=collate_fn)

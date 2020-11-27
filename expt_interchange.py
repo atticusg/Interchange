@@ -182,8 +182,8 @@ class InterchangeExperiment(experiment.Experiment):
         # set up to get examples from dataset
         hi2lo_dict = {}
         if model_type == "lstm":
-            collate_fn = lambda batch: datasets.utils.my_collate(batch,
-                                                                 batch_first=False)
+            collate_fn = lambda batch: datasets.utils.lstm_collate(batch,
+                                                                   batch_first=False)
             dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
                                     collate_fn=collate_fn)
         elif model_type == "bert":

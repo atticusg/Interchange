@@ -4,7 +4,7 @@ import argparse
 from experiment import db_utils as db
 from experiment import ExperimentManager
 
-DEFAULT_SCRIPT = "python expt_train_bert.py"
+DEFAULT_SCRIPT = "python train_bert.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun",
               "neg", "v_adv", "v_verb", "vp_q",
               "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
@@ -12,7 +12,7 @@ META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 REMAPPING_PATH="mqnli_data/bert-remapping.txt"
 VOCAB_PATH = "mqnli_data/bert-vocab.txt"
 
-DEFAULT_OPTS = {
+DEFAULT_BERT_OPTS = {
     "data_path": "",
     "tokenizer_vocab_path": VOCAB_PATH,
     "device": "cuda",
@@ -38,6 +38,43 @@ DEFAULT_OPTS = {
     "log_path": ""
 }
 
+DEFAULT_LSTM_OPTS = {
+    "data_path": "",
+    "device": "cuda",
+
+    "task": "mqnli",
+    "output_classes": 3,
+    "vocab_size": 0,
+
+    "embed_dim": 256,
+    "lstm_hidden_dim": 128,
+    "bidirectional": True,
+    "num_lstm_layers": 4,
+    "dropout": 0.,
+    "embed_init_scaling": 0.1,
+    "fix_embeddings": False,
+    'batch_first': False,
+
+    "batch_size": 64,
+    "eval_batch_size": 2048,
+
+    "optimizer_type": "adamw",
+    "lr": 0.001,
+    "lr_scheduler_type": "",
+    "lr_warmup_ratio": 0.25,
+    "lr_step_epochs": 2,
+    "lr_step_decay_rate": 0.1,
+    "weight_norm": 0.,
+
+    "max_epochs": 400,
+    "run_steps": -1,
+    "evals_per_epoch": 5,
+    "patient_epochs": 20,
+
+    "model_save_path": "lstm",
+    "res_save_dir": ""
+}
+
 def preprocess(model_type, train, dev, test, data_path, variant):
     import torch
     from datasets.mqnli import MQNLIBertData, MQNLIData
@@ -52,10 +89,21 @@ def preprocess(model_type, train, dev, test, data_path, variant):
     print(f"Saved preprocessed dataset to {data_path}")
 
 def setup(db_path, data_path):
-    default_opts = DEFAULT_OPTS.copy()
+    import torch
+    if "bert" in db_path:
+        default_opts = DEFAULT_BERT_OPTS.copy()
+    elif "lstm" in db_path:
+        default_opts = DEFAULT_LSTM_OPTS.copy()
+    else:
+        raise ValueError(f"Cannot infer model type from database path {db_path}")
+
     default_opts["data_path"] = data_path
     if "hard" or "medium" in data_path:
         default_opts["output_classes"] = 10
+    if "lstm" in db_path:
+        data = torch.load(data_path)
+        default_opts["vocab_size"] = data.vocab_size
+
     ExperimentManager(db_path, default_opts)
 
 def add_one(db_path):
@@ -69,16 +117,24 @@ def add_grid_search(db_path, repeat, res_save_dir):
     manager = ExperimentManager(db_path)
 
     if "bert" in db_path:
-        grid_dict = {"batch_size": [12],
-                     "lr": [2e-5, 5e-5],
-                     "max_epochs": [3,4],
-                     "lr_scheduler_type": ["linear"],
-                     "lr_warmup_ratio": [0.25],
-                     "evals_per_epoch": [8]}
+        grid_dict = {
+            "batch_size": [12],
+            "lr": [2e-5, 5e-5],
+            "max_epochs": [3,4],
+            "lr_scheduler_type": ["linear"],
+            "lr_warmup_ratio": [0.25],
+            "evals_per_epoch": [8]
+        }
     elif "lstm" in db_path:
-        grid_dict = {}
+        grid_dict = {
+            "lr": [0.001, 0.0001],
+            "dropout": [0.1],
+            "num_lstm_layers": [2, 4, 6],
+            "lr_scheduler_type": [""],
+            "evals_per_epoch": [8],
+        }
     else:
-        raise NotImplementedError(f"Cannot infer model type from database path {db_path}")
+        raise ValueError(f"Cannot infer model type from database path {db_path}")
 
     var_opt_names = list(grid_dict.keys())
     var_opt_values = list(v if isinstance(v, list) else list(v) \
@@ -115,7 +171,13 @@ def add_grid_search(db_path, repeat, res_save_dir):
 
 
 def run(db_path, script, n, detach, metascript, ready_status, started_status):
-    expt_opts = list(DEFAULT_OPTS.keys())
+    if "lstm" in db_path:
+        expt_opts = list(DEFAULT_LSTM_OPTS.keys())
+    elif "bert" in db_path:
+        expt_opts = list(DEFAULT_BERT_OPTS.keys())
+    else:
+        raise ValueError(f"Cannot infer model type from database path {db_path}")
+
     manager = ExperimentManager(db_path, expt_opts)
 
     if os.path.exists(script):

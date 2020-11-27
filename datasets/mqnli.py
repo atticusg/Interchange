@@ -3,50 +3,27 @@ import json
 import numpy as np
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
-from typing import Dict, List
+from typing import Dict, List, Callable, Optional
 from intervention import LOC
 
-"""
-    notevery | bad | singer | doesnot | badly | sings | every | good | song ]
-    0          1     2        3         4       5       6       7      8
-[0] <P>      | bad | <P>    | ...
-[1] <P>      | <P> | singer | <P>     | ...
-[2] <P>      | ...      ... | <P>     | badly | <P>   | ...
-[3] <P>      | ...                ... | <P>   |
-"""
 
-
-lstm_subphrase_loc_mappings = []
-
-
-"""
-   [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
-    0     1      2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
-[0]      | <P> | <P>   | bad | <P>    | <P>  | ...
-[1]      | <P> | ...   | <P> | singer | <P>  | ...
-[2]      | <P> | ...                     ... | <P> | badly | <P>   | ...
-[3]      | <P> | ...                           ... | <P>   | sings | <P> | ...
-[4]      | <P> | ...                                                         <P> | good | <P>  |
-[5]      | <P> | ...                                                         ... | <P>  | song |
-[6]      | <P> | <P>   | bad | singer | <P>  | ...
-[7]      | <P> | ...                     ... | <P> | badly | sings | <P> | ...
-[8]      | <P> | ...                                                 ... |   <P> | good | song |
-[9]      | <P> | ...                     ... | <P> | badly | sings | not | every | good | song |
-[10]     | <P> | ...         | <P>    | does | not | badly | sings | not | every | good | song |
-[11] <the whole sentence>
-"""
-bert_subphrase_loc_mappings = [(0, 3), (0, 16), (1, 4), (1, 17), (2, 7), (2, 20),
-                               (3, 8), (3, 21), (4, 11), (4, 24), (5, 12), (5, 25),
-                               (6, LOC[3:5]), (6, LOC[16:18]),
-                               (7, LOC[7:9]), (7, LOC[20:22]),
-                               (8, LOC[11:13]), (8, LOC[24:26]),
-                               (9, LOC[7:13]), (9, LOC[20:26]),
-                               (10, LOC[5:13]), (10, LOC[18:26]), (11, LOC[:])]
 subphrase_loss_weighting = [1. / 6] * 6 + [1. / 3] * 3 + [0.8] * 2 + [1.]
+
+def get_collate_fxn(dataset, batch_first: bool) -> Optional[Callable]:
+    if isinstance(dataset, MQNLIDataset):
+        if "subphrase" in dataset.variant:
+            return lambda batch: lstm_subphrase_collate(batch, batch_first=batch_first)
+        else:
+            return lambda batch: lstm_collate(batch, batch_first=batch_first)
+    elif isinstance(dataset, MQNLIBertDataset):
+        if dataset.variant == "subphrase":
+            return bert_subphrase_collate
+        else:
+            return None
 
 class MQNLIData:
     def __init__(self, train_file, dev_file, test_file, variant="lstm"):
-        self.output_classes = 3
+        self.output_classes = 10 if "subphrase" in variant else 3
         self.word_to_id = {}
         self.id_to_word = {}
         self.id_to_word[0] = '[PAD]'
@@ -115,6 +92,37 @@ class MQNLIData:
     def load(f):
         return torch.load(f)
 
+"""
+    notevery | bad | singer | doesnot | badly | sings | every | good | song | [SEP] | ...
+    0          1     2        3         4       5       6       7      8      9
+[0] bad      | <P> | ...
+[1] singer   | <P> | ...
+[2] badly    | <P> | ...
+[3] sings    | <P> | ...
+[4] good     | <P> | ...
+[5] song     | <P> | ...
+[6] bad      | singer 
+[7] badly    | sings
+[8] good     | song 
+[9] badly sings every good song
+[10] doesnot badly sings every good song
+"""
+
+lstm_subphrase_loc_mappings = \
+    [((0, 0), 1), ((0, 1), 9), ((0, 2), 11),
+     ((1, 0), 2), ((1, 1), 9), ((1, 2), 12),
+     ((2, 0), 4), ((2, 1), 9), ((2, 2), 14),
+     ((3, 0), 5), ((3, 1), 9), ((3, 2), 15),
+     ((4, 0), 7), ((4, 1), 9), ((4, 2), 17),
+     ((5, 0), 8), ((5, 1), 9), ((5, 2), 18),
+     ((6, LOC[:2]), LOC[1:3]), ((6, 2), 9), ((6, LOC[3:5]), LOC[11:13]),
+     ((7, LOC[:2]), LOC[4:6]), ((7, 2), 9), ((7, LOC[3:5]), LOC[14:16]),
+     ((8, LOC[:2]), LOC[7:9]), ((8, 2), 9), ((8, LOC[3:5]), LOC[17:19]),
+     ((9, LOC[:5]), LOC[4:9]), ((9, 5), 9), ((9, LOC[6:11]), LOC[14:19]),
+     ((10, LOC[:6]), LOC[3:9]), ((10, 6), 9), ((10, LOC[7:13]), LOC[13:19]),
+     ((11, LOC[:]), LOC[:])]
+lstm_subphrase_lengths = [3,3,3,3,3,3,5,5,5,11,13,19]
+
 
 class MQNLIDataset(Dataset):
     def __init__(self, file_name, word_to_id, id_to_word, max_info,
@@ -137,7 +145,11 @@ class MQNLIDataset(Dataset):
                 example = json.loads(line.strip())
                 sentence1 = example["sentence1"].split()
                 sentence2 = example["sentence2"].split()
-                label = label_dict[example["gold_label"]]
+
+                if "subphrase" not in variant:
+                    label = label_dict[example["gold_label"]]
+                else:
+                    label = [label_dict[l] for l in example["gold_label"]]
 
                 assert len(sentence1) == len(sentence2)
 
@@ -179,8 +191,44 @@ class MQNLIDataset(Dataset):
         if self.variant == "lstm" or self.variant == "transformer":
             sample = (torch.tensor(self.raw_x[i], dtype=torch.long), self.raw_y[i])
         elif self.variant == "lstm-subphrase":
-            pass
+            sample = (self.generate_subphrase_inputs(i),
+                      torch.tensor(subphrase_loss_weighting, dtype=torch.float),
+                      torch.tensor(lstm_subphrase_lengths, dtype=torch.long),
+                      torch.tensor(self.raw_y[i], dtype=torch.long))
+            return sample
+        else:
+            raise ValueError(f"model variant not supported: {self.variant}")
         return sample
+
+    def generate_subphrase_inputs(self, i: int) -> torch.Tensor:
+        sentence = self.raw_x[i]
+        res = torch.full((12, 19), 0, dtype=torch.long)
+        for res_loc, raw_loc in lstm_subphrase_loc_mappings:
+            res[res_loc] = torch.tensor(sentence[raw_loc], dtype=torch.long)
+        return res
+
+
+def lstm_collate(batch, batch_first=False):
+    sorted_batch = sorted(batch, key=lambda pair: pair[0].shape[0], reverse=True)
+    sequences = [x[0] for x in sorted_batch]
+    sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first)
+    labels = torch.tensor([x[1] for x in sorted_batch])
+    return (sequences_padded, labels)
+
+def lstm_subphrase_collate(batch, batch_first=False):
+    input_ids = torch.cat([x[0] for x in batch])
+    loss_weighting = torch.cat([x[-3] for x in batch])
+    lengths = torch.cat([x[-2] for x in batch])
+    labels = torch.cat([x[-1] for x in batch])
+
+    sorted_lengths, sort_idxs = torch.sort(lengths, descending=True)
+    sorted_input_ids = input_ids[sort_idxs]
+    sorted_loss_weighting = loss_weighting[sort_idxs]
+    sorted_labels = labels[sort_idxs]
+
+    if not batch_first: sorted_input_ids = sorted_input_ids.T
+
+    return sorted_input_ids, sorted_loss_weighting, sorted_lengths, sorted_labels
 
 
 def load_remapping(file_name: str) -> Dict:
@@ -249,7 +297,29 @@ class MQNLIBertData(MQNLIData):
 
         return word_to_id, id_to_word
 
-
+"""
+   [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
+    0     1      2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
+[0]      | <P> | <P>   | bad | <P>    | <P>  | ...
+[1]      | <P> | ...   | <P> | singer | <P>  | ...
+[2]      | <P> | ...                     ... | <P> | badly | <P>   | ...
+[3]      | <P> | ...                           ... | <P>   | sings | <P> | ...
+[4]      | <P> | ...                                                         <P> | good | <P>  |
+[5]      | <P> | ...                                                         ... | <P>  | song |
+[6]      | <P> | <P>   | bad | singer | <P>  | ...
+[7]      | <P> | ...                     ... | <P> | badly | sings | <P> | ...
+[8]      | <P> | ...                                                 ... |   <P> | good | song |
+[9]      | <P> | ...                     ... | <P> | badly | sings | not | every | good | song |
+[10]     | <P> | ...         | <P>    | does | not | badly | sings | not | every | good | song |
+[11] <the whole sentence>
+"""
+bert_subphrase_loc_mappings = [(0, 3), (0, 16), (1, 4), (1, 17), (2, 7), (2, 20),
+                               (3, 8), (3, 21), (4, 11), (4, 24), (5, 12), (5, 25),
+                               (6, LOC[3:5]), (6, LOC[16:18]),
+                               (7, LOC[7:9]), (7, LOC[20:22]),
+                               (8, LOC[11:13]), (8, LOC[24:26]),
+                               (9, LOC[7:13]), (9, LOC[20:26]),
+                               (10, LOC[5:13]), (10, LOC[18:26]), (11, LOC[:])]
 
 class MQNLIBertDataset(Dataset):
     def __init__(self, file_name: str, vocab_remapping: Dict[str,str],
@@ -397,7 +467,7 @@ class MQNLIBertDataset(Dataset):
                                       f"{self.variant}")
 
 
-def bert_subsequence_collate(batch):
+def bert_subphrase_collate(batch):
     input_ids = torch.cat([x[0] for x in batch])
     token_type_ids = torch.cat([x[1] for x in batch])
     attention_mask = torch.cat([x[2] for x in batch])

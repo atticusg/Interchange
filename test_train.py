@@ -417,3 +417,37 @@ def test_train_transformer_mqnli(mqnli_bert_mini_data):
 def test_load_bert():
     save_path = "mqnli_models/bert/retrained_ber_1106_150804.pt"
     model = load_model(PretrainedBertModule, save_path)
+
+def test_train_lstm_mqnli_hard_mini():
+    data = torch.load("mqnli_data/mqnli-lstm-hard-mini.pt")
+    print("output classes", data.output_classes)
+    model_config = {
+        'task': 'mqnli',
+        'output_classes': data.output_classes,
+        'vocab_size': data.vocab_size,
+
+        'embed_dim': 256,
+        'lstm_hidden_dim': 128,
+        'bidirectional': True,
+        'num_lstm_layers': 4,
+        'dropout': 0,
+        'embed_init_scaling': 0.1,
+        'batch_first': False
+    }
+    train_config = {
+        'batch_first': False,
+        'batch_size': 8,
+        'max_epochs': 100,
+        'evals_per_epoch': 2,
+        'patient_epochs': 400,
+        'lr': 0.0001,
+        'lr_scheduler_type': 'step',
+        'lr_step_epochs': 20,
+        'lr_step_decay_rate': 1. / 3.,
+        'weight_norm': 0,
+        'model_save_path': "mqnli_models/lstm/lstm_sep_test.pt"
+    }
+
+    model = LSTMModule(**model_config).to(torch.device("cuda"))
+    trainer = Trainer(data, model, **train_config)
+    trainer.train()
