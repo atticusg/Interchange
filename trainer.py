@@ -257,11 +257,11 @@ def evaluate_and_predict(dataset, model, eval_batch_size=64,
         else:
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-        for tuple in dataloader:
-            tuple = [x.to(device) for x in tuple]
-            labels = tuple[-1]
+        for input_tuple in dataloader:
+            input_tuple = [x.to(device) for x in input_tuple]
+            labels = input_tuple[-1]
 
-            logits = model(tuple)
+            logits = model(input_tuple)
             pred = torch.argmax(logits, dim=1)
 
             pred = pred.to(device)

@@ -61,20 +61,20 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
         # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
         #  0        1     2       3     4        5      6     7       8       9     10      11     12
 
-        d = {"sentence_q": [1, 2, 14, 15],
-             "subj_adj": [3, 16],
-             "subj_noun": [4, 17],
-             "neg": [5, 6, 18, 19],
-             "v_adv": [7, 20],
-             "v_verb": [8, 21],
-             "vp_q": [9, 10, 22, 23],
-             "obj_adj": [11, 24],
-             "obj_noun": [12, 25],
-             "obj": [11, 12, 24, 25],
-             "vp": [8, 9, 10, 21, 22, 23],
-             "v_bar": [7, 8, 20, 21],
-             "negp": [5, 6, 18, 19],
-             "subj": [3, 4, 16, 17]}
+        d = {"sentence_q": [0, 1, 2, 14, 15],
+             "subj_adj": [0, 3, 16],
+             "subj_noun": [0, 4, 17],
+             "neg": [0, 5, 6, 18, 19],
+             "v_adv": [0, 7, 20],
+             "v_verb": [0, 8, 21],
+             "vp_q": [0, 9, 10, 22, 23],
+             "obj_adj": [0, 11, 24],
+             "obj_noun": [0, 12, 25],
+             "obj": [0, 11, 12, 24, 25],
+             "vp": [0, 8, 9, 10, 21, 22, 23],
+             "v_bar": [0, 7, 8, 20, 21],
+             "negp": [0, 5, 6, 18, 19],
+             "subj": [0, 3, 4, 16, 17]}
         return d[high_node_name]
 
 class InterchangeExperiment(experiment.Experiment):
@@ -241,7 +241,7 @@ class InterchangeExperiment(experiment.Experiment):
 
 
     def save_results(self, opts: Dict, res: List) -> str:
-        save_dir = opts.get("res_save_dir", None)
+        save_dir = opts.get("res_save_dir", "")
 
         if save_dir:
             abstraction = json.loads(opts["abstraction"])
@@ -274,7 +274,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", required=True)
     parser.add_argument("--model_path", required=True)
-    parser.add_argument("--res_save_dir", type=str)
+    parser.add_argument("--res_save_dir", type=str, default="")
     parser.add_argument("--graph_alpha", type=int, default=100)
     parser.add_argument("--abstraction", type=str, default='["sentence_q", ["bert_layer_2"]]')
     parser.add_argument("--num_inputs", type=int, default=50)

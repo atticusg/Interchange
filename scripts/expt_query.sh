@@ -1,4 +1,9 @@
 MODEL=$1
-DIFFICULTY=$2
 shift
-python experiment.py query -d "experiment_data/${MODEL}-${DIFFICULTY}/${MODEL}-${DIFFICULTY}.db" "$@"
+DIFFICULTY=$1
+shift
+DATE=$1
+shift
+python experiment.py query \
+    -d "experiment_data/${MODEL}/${MODEL}-${DIFFICULTY}-${DATE}.db" \
+    "$@"
