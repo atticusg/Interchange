@@ -202,8 +202,8 @@ def main():
     analyze_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
-    run_parser.add_argument("-b", "--metascript_batch_size", type=int, default=0)
-    run_parser.add_argument("-l", "--metascript_log_dir", type=str)
+    analyze_parser.add_argument("-b", "--metascript_batch_size", type=int, default=0)
+    analyze_parser.add_argument("-l", "--metascript_log_dir", type=str)
     analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
     analyze_parser.add_argument("-s", "--started_status", type=int, default=None)
 
