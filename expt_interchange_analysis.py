@@ -33,20 +33,20 @@ class ListDataset(Dataset):
 class Analysis:
     def __init__(self, data, high_model, low_model, hi2lo_dict=None, opts=None):
         if isinstance(data, str):
-            with open(data, "rb") as f:
-                data = pickle.load(f)
+            data = torch.load(data)
+            # with open(data, "rb") as f:
+            #     data = pickle.load(f)
         self.data = data
-        abstraction = json.loads(opts["abstraction"])
-        self.high_node = abstraction[0]
-        self.low_node = abstraction[1][0]
+        # abstraction = json.loads(opts.get("abstraction", [""]))
+        # self.high_node = abstraction[0]
         self.high_model = high_model
         self.low_model = low_model
         self.low_model_type = opts.get("model_type", "lstm")
-        self.graph_alpha = opts.get("graph_alpha", 100)
+        self.graph_alpha = opts.get("graph_alpha", 0)
         self.res_save_dir = opts.get("res_save_dir", "")
         self.batch_size = opts.get("interchange_batch_size", 0)
         self.low_model_device = getattr(low_model, "device", torch.device("cuda"))
-        self.expt_id = opts.get("expt_id", 0)
+        self.expt_id = opts.get("id", 0)
 
         if not self.batch_size:
             self.serialize_lo = serialize if self.low_model_type == "lstm" else \
@@ -111,39 +111,30 @@ class Analysis:
                         interv_output    =?=    interv_output
                                      (interv_eq)
 
-          hi_effect_eq? --true-- D
-               | false
-           interv_eq? --false-- C
-               | true
-            base_eq? --false-- B
-               | true
-               A
+          3 bit index: high_effect_eq, base_eq, interv_eq
         """
-        interv_count = 0  # A + B + C + D
-        effective_count = 0  # A + B + C
-        interv_eq_count = 0  # A + B
-        strict_success_count = 0 # A
+        counts = [0 for _ in range(8)]
 
         if isinstance(results, dict):
             for base_i, interv_i, low_base_output, high_base_output, low_interv_output, high_interv_output \
                     in zip(results["base_i"], results["interv_i"],
                            results["low_base_res"], results["high_base_res"],
                            results["low_interv_res"], results["high_interv_res"]):
-                interv_count += 1
 
-                interv_eq = (low_interv_output == high_interv_output)
-                base_eq = (low_base_output == high_base_output)
                 high_effect_eq = (high_base_output == high_interv_output)
+                base_eq = (low_base_output == high_base_output)
+                interv_eq = (low_interv_output == high_interv_output)
 
-                if not high_effect_eq:
-                    effective_count += 1
-                    if interv_eq:
-                        interv_eq_count += 1
-                        if base_eq:
-                            strict_success_count += 1
+                idx = (high_effect_eq << 2) + (base_eq << 1) + interv_eq
+
+                counts[idx] += 1
         else:
             low_base_outputs = self.get_low_base_outputs(results, self.low_model,
                                                          self.low_model_type)
+            interv_count = 0
+            effective_count = 0
+            interv_eq_count = 0
+            strict_success_count = 0
             for i, (k, v) in enumerate(results.items()):
                 low, high = k
                 if i % 10000 == 0:
@@ -168,20 +159,18 @@ class Analysis:
                         if base_eq:
                             strict_success_count += 1
 
-        effective_ratio = effective_count / interv_count if interv_count != 0 else 0
-        interv_eq_rate = interv_eq_count / effective_count if effective_count != 0 else 0
-        strict_success_rate = strict_success_count / effective_count if effective_count != 0 else 0
-        print(f"    Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
-        print(f"    interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
-        print(f"    strict_success_rate: {strict_success_count}/{effective_count}={strict_success_rate * 100:.3f}%")
-
+        # effective_ratio = effective_count / interv_count if interv_count != 0 else 0
+        # interv_eq_rate = interv_eq_count / effective_count if effective_count != 0 else 0
+        # strict_success_rate = strict_success_count / effective_count if effective_count != 0 else 0
+        # print(f"    Percentage of effective high intervs: {effective_count}/{interv_count}={effective_ratio * 100:.3f}%")
+        # print(f"    interv_eq_rate: {interv_eq_count}/{effective_count}={interv_eq_rate * 100:.3f}%")
+        # print(f"    strict_success_rate: {strict_success_count}/{effective_count}={strict_success_rate * 100:.3f}%")
         res_dict = {
-            "interv_count": interv_count,
-            "effective_ratio": effective_ratio,
-            "interv_eq_rate": interv_eq_rate,
-            "strict_success_rate": strict_success_rate,
             "mapping": stringify_mapping(mapping)
         }
+
+        for i in range(8):
+            res_dict[f"res_{i}_count"] = counts[i]
 
         return res_dict
 
@@ -246,22 +235,22 @@ class InterchangeAnalysis(Experiment):
                 or not os.path.exists(opts["save_path"]):
             raise ValueError("Cannot find saved data for expt {opts['id']}")
 
-        module, _ = load_model(LSTMModule, opts["model_path"],
-                               device=torch.device("cpu"))
-        module.eval()
-        data = torch.load(opts["data_path"], map_location=torch.device("cpu"))
-
-        abstraction = json.loads(opts["abstraction"])
-
-        high_intermediate_node = abstraction[0]
-        low_intermediate_nodes = abstraction[1]
-
-        base_compgraph = MQNLI_LSTM_CompGraph(module)
-        low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
-                                               low_intermediate_nodes)
-        high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
-
-        a = Analysis(opts["save_path"], high_model, low_model, opts=opts)
+        # module, _ = load_model(LSTMModule, opts["model_path"],
+        #                        device=torch.device("cpu"))
+        # module.eval()
+        # data = torch.load(opts["data_path"], map_location=torch.device("cpu"))
+        #
+        # abstraction = json.loads(opts["abstraction"])
+        #
+        # high_intermediate_node = abstraction[0]
+        # low_intermediate_nodes = abstraction[1]
+        #
+        # base_compgraph = MQNLI_LSTM_CompGraph(module)
+        # low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
+        #                                        low_intermediate_nodes)
+        # high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
+        opts["interchange_batch_size"] = 50
+        a = Analysis(opts["save_path"], None, None, opts=opts)
         res_dict = a.analyze()
         print(res_dict)
         return res_dict
@@ -269,20 +258,20 @@ class InterchangeAnalysis(Experiment):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", required=True)
-    parser.add_argument("--model_path", required=True)
+    # parser.add_argument("--data_path", required=True)
+    # parser.add_argument("--model_path", required=True)
     parser.add_argument("--save_path", required=True)
-    parser.add_argument("--abstraction", type=str)
-    parser.add_argument("--num_inputs", type=int)
+    # parser.add_argument("--abstraction", type=str)
+    # parser.add_argument("--num_inputs", type=int)
     parser.add_argument("--res_save_dir", type=str)
-    parser.add_argument("--graph_alpha", type=int, default=100)
+    # parser.add_argument("--graph_alpha", type=int, default=0)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
 
     args = parser.parse_args()
 
-    e = InterchangeAnalysis(finished_status=2)
+    e = InterchangeAnalysis(finished_status=3)
     e.run(vars(args))
 
 if __name__ == "__main__":

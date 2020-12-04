@@ -1,9 +1,7 @@
-import torch
 import numpy as np
 import copy
 
 import torch
-from typing import Union
 from intervention.location import Location
 
 def copy_helper(x):

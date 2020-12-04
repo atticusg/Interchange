@@ -85,9 +85,12 @@ def run(db_path, script, n, detach, metascript, metascript_batch_size, metascrip
                 ready_status=ready_status, started_status=started_status)
 
 
-def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, started_status):
-    expt_opts = ["data_path", "model_path", "save_path", "abstraction",
-                 "num_inputs", "res_save_dir"]
+def analyze(db_path, script, n, detach, metascript,
+            metascript_batch_size, metascript_log_dir,
+            ready_status, started_status):
+    # expt_opts = ["data_path", "model_path", "save_path", "abstraction",
+    #              "num_inputs", "res_save_dir"]
+    expt_opts = ["save_path", "res_save_dir"]
     manager = ExperimentManager(db_path, expt_opts)
 
     if metascript and os.path.exists(metascript):
@@ -95,8 +98,8 @@ def analyze(db_path, script, n, detach, metascript, log_dir, ready_status, start
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, metascript_batch=False,
-                metascript_log_dir=log_dir,
+                metascript=metascript, metascript_batch_size=metascript_batch_size,
+                metascript_log_dir=metascript_log_dir,
                 ready_status=ready_status, started_status=started_status)
 
 def add_graph(db_path, ids, alphas, all):
@@ -199,7 +202,8 @@ def main():
     analyze_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_parser.add_argument("-x", "--detach", action="store_true")
     analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
-    analyze_parser.add_argument("-l", "--log_dir", type=str)
+    run_parser.add_argument("-b", "--metascript_batch_size", type=int, default=0)
+    run_parser.add_argument("-l", "--metascript_log_dir", type=str)
     analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
     analyze_parser.add_argument("-s", "--started_status", type=int, default=None)
 
