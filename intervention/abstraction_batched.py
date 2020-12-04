@@ -61,106 +61,133 @@ class InterchangeDataset(IterableDataset):
 
 def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
                  batch_size, mapping, unwanted_low_nodes):
-    if low_model_type == "lstm":
-        raise NotImplementedError
-    elif low_model_type == "bert":
-        if unwanted_low_nodes is None:
-            unwanted_low_nodes = set()
-        relevant_mappings = {node: loc for node, loc in mapping.items() \
-                             if node not in unwanted_low_nodes}
+    if low_model_type not in {"bert", "lstm"}:
+        raise NotImplementedError(
+            f"Does not support low model type {low_model_type}")
+    if unwanted_low_nodes is None:
+        unwanted_low_nodes = set()
+    relevant_mappings = {node: loc for node, loc in mapping.items() \
+                         if node not in unwanted_low_nodes}
+    high_node = list(relevant_mappings.keys())[0]
+    low_node = list(relevant_mappings[high_node].keys())[0]
+    low_loc = relevant_mappings[high_node][low_node]
 
-        if len(relevant_mappings) > 1:
-            raise NotImplementedError("Currently does not support more than one intermediate nodes")
+    if len(relevant_mappings) > 1:
+        raise NotImplementedError(
+            "Currently does not support more than one intermediate nodes")
 
-        print("--- Testing mapping", relevant_mappings)
+    print("--- Testing mapping", relevant_mappings)
+    print("    Getting base outputs")
+    device = torch.device("cuda")
+    subset = Subset(dataset, list(range(num_inputs)))
 
-        high_node = list(relevant_mappings.keys())[0]
-        low_node = list(relevant_mappings[high_node].keys())[0]
-        low_loc = relevant_mappings[high_node][low_node]
+    dataloader = DataLoader(subset, batch_size=batch_size, shuffle=False)
+    input_tuple_len = len(subset[0])
+    icd = intervention.abstraction_batched.InterchangeDataset(input_tuple_len, low_loc)
 
-        print("    Getting base outputs")
-        device = torch.device("cuda")
-        subset = Subset(dataset, list(range(num_inputs)))
-        dataloader = DataLoader(subset, batch_size=batch_size, shuffle=False)
-        icd = intervention.abstraction_batched.InterchangeDataset(5, low_loc)
-        for i, input_tuple in enumerate(dataloader):
-            high_base_key = [serialize(x) for x in input_tuple[-2]]
-            high_input = intervention.GraphInput.batched(
-                {"input": input_tuple[-2].T}, high_base_key)
-            high_output = high_model.compute(high_input)
-            high_hidden = high_model.get_result(high_node, high_input)
+    low_batch_dim = 0 if low_model_type == "bert" else 1
+    for i, input_tuple in enumerate(dataloader):
+        if low_model_type == "bert":
+            high_input_tensor = input_tuple[-2]
+        elif low_model_type == "lstm":
+            high_input_tensor = torch.cat((input_tuple[0][:,:9],
+                                          input_tuple[0][:,10:]), dim=1)
 
-            low_key = [serialize(x) for x in input_tuple[0]]
-            low_input = intervention.GraphInput.batched(
-                {"input": [x.to(device) for x in input_tuple]}, low_key)
-            low_output = low_model.compute(low_input)
-            low_hidden = low_model.get_result(low_node, low_input)
-            icd.add_example(low_input_tuple=input_tuple,
-                            low_outputs=low_output.tolist(),
-                            low_hidden_values=low_hidden,
-                            high_inputs=input_tuple[-2],
-                            high_outputs=high_output.tolist(),
-                            high_hidden_values=high_hidden)
+        high_base_key = [serialize(x) for x in high_input_tensor]
+        high_input = intervention.GraphInput.batched(
+            {"input": high_input_tensor.T}, high_base_key)
+        # high model uses batch_dim = 0 because all intermediate outputs are
+        # in batch-first order.
+        high_output = high_model.compute(high_input)
+        high_hidden = high_model.get_result(high_node, high_input)
 
-        print("    Running interchange experiments")
-        intervention_dataloader = DataLoader(icd, batch_size=batch_size)
-        res_dict = {"base_i": [], "interv_i": [],
-                    "high_base_res": [], "low_base_res": [],
-                    "high_interv_res": [], "low_interv_res": []}
-        count = 0
-        for i, input_tuple in enumerate(intervention_dataloader):
-            if i % 100 == 0:
-                print(f"    > {count} / {num_inputs ** 2}")
-            high_input = input_tuple[icd.idx_high_inputs]
-            high_interv_value = input_tuple[icd.idx_high_hidden]
+        low_key = [serialize(x) for x in input_tuple[0]]
+        if low_model_type == "bert":
+            low_input_tuple_for_graph = [x.to(device) for x in input_tuple]
+        elif low_model_type == "lstm":
+            low_input_tuple_for_graph = [input_tuple[0].T.to(device),
+                                         input_tuple[-1].to(device)]
 
-            high_base_key = [serialize(x) for x in high_input]
-            high_base = intervention.GraphInput.batched(
-                {"input": high_input.T}, high_base_key, cache_results=False)
-            high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
-                               zip(high_input, high_interv_value)]
+        low_input = intervention.GraphInput.batched(
+            {"input": low_input_tuple_for_graph}, low_key, batch_dim=low_batch_dim)
+        low_output = low_model.compute(low_input)
+        low_hidden = low_model.get_result(low_node, low_input)
 
-            high_intervention = intervention.Intervention.batched(
-                high_base, high_interv_key,
-                intervention={high_node: high_interv_value}
-            )
+        icd.add_example(low_input_tuple=input_tuple,
+                        low_outputs=low_output.tolist(),
+                        low_hidden_values=low_hidden,
+                        high_inputs=high_input_tensor,
+                        high_outputs=high_output.tolist(),
+                        high_hidden_values=high_hidden)
 
-            high_base_res, high_interv_res = \
-                high_model.intervene(high_intervention, store_cache=False)
+    print("    Running interchange experiments")
+    intervention_dataloader = DataLoader(icd, batch_size=batch_size)
 
-            low_input = input_tuple[0]
-            low_interv_value = input_tuple[icd.idx_low_hidden]
-            low_base_key = [serialize(x) for x in low_input]
-            low_base = intervention.GraphInput.batched(
-                {"input": [x.to(device) for x in input_tuple[:5]]}, low_base_key,
-                cache_results=False)
-            low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
-                              zip(low_input, low_interv_value)]
+    print("low_hidden_values", len(icd.low_hidden_values))
+    res_dict = {"base_i": [], "interv_i": [],
+                "high_base_res": [], "low_base_res": [],
+                "high_interv_res": [], "low_interv_res": []}
+    count = 0
+    for i, input_tuple in enumerate(intervention_dataloader):
+        if i % 100 == 0:
+            print(f"    > {count} / {num_inputs ** 2}")
+        high_input = input_tuple[icd.idx_high_inputs]
+        high_interv_value = input_tuple[icd.idx_high_hidden]
 
-            low_intervention = intervention.Intervention.batched(
-                low_base, low_interv_key,
-                intervention={low_node: low_interv_value.to(device)},
-                location={low_node: low_loc}
-            )
+        high_base_key = [serialize(x) for x in high_input]
+        high_base = intervention.GraphInput.batched(
+            {"input": high_input.T}, high_base_key, cache_results=False
+        )
+        high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
+                           zip(high_input, high_interv_value)]
+        high_intervention = intervention.Intervention.batched(
+            high_base, high_interv_key,
+            intervention={high_node: high_interv_value},
+        )
 
-            low_base_res, low_interv_res = \
-                low_model.intervene(low_intervention, store_cache=False)
+        high_base_res, high_interv_res = \
+            high_model.intervene(high_intervention, store_cache=False)
 
-            # assert torch.all(low_base_res.to(torch.device("cpu")) == input_tuple[icd.idx_low_outputs])
-            # assert torch.all(high_base_res == input_tuple[icd.idx_high_outputs])
+        low_input_tensor = input_tuple[0]
+        low_interv_value = input_tuple[icd.idx_low_hidden]
+        low_base_key = [serialize(x) for x in low_input_tensor]
+        if low_model_type == "bert":
+            low_input_tuple_for_graph = [x.to(device) for x in input_tuple[:5]]
+        elif low_model_type == "lstm":
+            low_input_tuple_for_graph = [input_tuple[0].T.to(device),
+                                         input_tuple[-1].to(device)]
 
-            res_dict["base_i"].extend(input_tuple[icd.idx_base_i].tolist())
-            res_dict["interv_i"].extend(input_tuple[icd.idx_interv_i].tolist())
-            res_dict["low_base_res"].extend(low_base_res.tolist())
-            res_dict["high_base_res"].extend(high_base_res.tolist())
-            res_dict["low_interv_res"].extend(low_interv_res.tolist())
-            res_dict["high_interv_res"].extend(high_interv_res.tolist())
-            count += len(input_tuple[icd.idx_base_i].tolist())
+        low_base = intervention.GraphInput.batched(
+            {"input": low_input_tuple_for_graph}, low_base_key,
+            cache_results=False, batch_dim=low_batch_dim)
 
-        res_dict["interchange_dataset"] = icd
-        res_dict["mapping"] = mapping
+        low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
+                          zip(low_input_tensor, low_interv_value)]
 
-        return res_dict
+        low_intervention = intervention.Intervention.batched(
+            low_base, low_interv_key,
+            intervention={low_node: low_interv_value.to(device)},
+            location={low_node: low_loc}, batch_dim=low_batch_dim
+        )
+
+        low_base_res, low_interv_res = \
+            low_model.intervene(low_intervention, store_cache=False)
+
+        # assert torch.all(low_base_res.to(torch.device("cpu")) == input_tuple[icd.idx_low_outputs])
+        # assert torch.all(high_base_res == input_tuple[icd.idx_high_outputs])
+
+        res_dict["base_i"].extend(input_tuple[icd.idx_base_i].tolist())
+        res_dict["interv_i"].extend(input_tuple[icd.idx_interv_i].tolist())
+        res_dict["low_base_res"].extend(low_base_res.tolist())
+        res_dict["high_base_res"].extend(high_base_res.tolist())
+        res_dict["low_interv_res"].extend(low_interv_res.tolist())
+        res_dict["high_interv_res"].extend(high_interv_res.tolist())
+        count += len(input_tuple[icd.idx_base_i].tolist())
+
+    res_dict["interchange_dataset"] = icd
+    res_dict["mapping"] = mapping
+
+    return res_dict
 
 
 

@@ -44,11 +44,13 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
     module, _ = load_model(model_class, model_path, device=device)
 
     if model_type == "lstm":
-        num_layers = module.num_lstm_layers
+        num_layers = module.num_lstm_layers - 1
         layer_name = "lstm"
+        graph_alpha = 0
     elif model_type == "bert":
         num_layers = len(module.bert.encoder.layer) - 1
         layer_name = "bert_layer"
+        graph_alpha = 100
 
     time_str = datetime.now().strftime("%m%d-%H%M%S")
     for high_node in HIGH_NODES:
@@ -58,7 +60,8 @@ def add(db_path, model_type, model_path, res_dir, num_inputs):
                 id = manager.insert({"abstraction": abstraction,
                                      "num_inputs": n,
                                      "model_type": model_type,
-                                     "interchange_batch_size": 100})
+                                     "interchange_batch_size": 100,
+                                     "graph_alpha": graph_alpha})
                 res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
                 manager.update({"model_path": model_path,
                                 "res_save_dir": res_save_dir}, id)
@@ -115,9 +118,8 @@ def add_graph(db_path, ids, alphas, all):
 
 
 
-def analyze_graph(db_path, script, n, detach, metascript, log_dir, ready_status, started_status):
-    expt_opts = ["data_path", "graph_save_paths", "mappings", "res_save_dir",
-                 "abstraction"]
+def analyze_graph(db_path, script, n, detach, metascript, ready_status, started_status):
+    expt_opts = ["save_path", "graph_alpha", "res_save_dir"]
     manager = ExperimentManager(db_path, expt_opts)
 
     if metascript and os.path.exists(metascript):
@@ -125,9 +127,7 @@ def analyze_graph(db_path, script, n, detach, metascript, log_dir, ready_status,
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, metascript_batch=False,
-                metascript_log_dir=log_dir,
-                ready_status=ready_status, started_status=started_status)
+                metascript=metascript, ready_status=ready_status, started_status=started_status)
 
 
 def query(db_path, id=None, status=None, abstraction=None, limit=None):
@@ -209,7 +209,6 @@ def main():
     analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
     analyze_graph_parser.add_argument("-m", "--metascript", type=str, default=None)
-    analyze_graph_parser.add_argument("-l", "--log_dir", type=str)
     analyze_graph_parser.add_argument("-r", "--ready_status", type=int, default=0)
     analyze_graph_parser.add_argument("-s", "--started_status", type=int, default=None)
 

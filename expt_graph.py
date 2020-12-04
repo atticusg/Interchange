@@ -6,11 +6,13 @@ import torch
 
 from datetime import datetime
 
+from collections import defaultdict
 from experiment import Experiment
 from trainer import load_model
 from modeling.lstm import LSTMModule
 
-from intervention.analysis import construct_graph, find_cliques
+from intervention.utils import stringify_mapping
+from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
 from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
@@ -59,11 +61,37 @@ def save_graph_analysis(G, causal_edges, input_to_id, cliques, graph_alpha, res_
 
 class GraphExperiment(Experiment):
     def experiment(self, opts):
-        G, causal_edges, input_to_id, cliques = self.get_results(opts)
-        graph_save_path = save_graph_analysis(G, causal_edges, input_to_id, cliques,
-                                              opts["graph_alpha"],
-                                              opts["res_save_dir"],
-                                              opts.get("id", None))
+        res_dict = defaultdict(list)
+        save_path = opts["save_path"]
+        data = torch.load(save_path)
+        for i, data_dict in enumerate(data):
+            mapping = data_dict["mapping"]
+            print(f"--- Analyzing mapping ({i + 1}/{len(data)}) {stringify_mapping(mapping)}")
+            one_expt_res = self.analyze_one_experiment(data_dict, opts)
+            for key, value in one_expt_res.items():
+                res_dict[key + 's'].append(value)
+
+        for key in res_dict.keys():
+            str_list = json.dumps(res_dict[key])
+            res_dict[key] = str_list
+        return dict(res_dict)
+
+        # G, causal_edges, input_to_id, cliques = self.get_results(opts)
+        # graph_save_path = save_graph_analysis(G, causal_edges, input_to_id, cliques,
+        #                                       opts["graph_alpha"],
+        #                                       opts["res_save_dir"],
+        #                                       opts.get("id", None))
+        # res_dict = {"graph_save_path": graph_save_path}
+        # res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
+        # return res_dict
+
+    def analyze_one_experiment(self, data_dict, opts):
+        G, causal_edges, input_to_id = construct_graph_batch(data_dict)
+        cliques = find_cliques(G, causal_edges, opts["graph_alpha"])
+        graph_save_path = save_graph_analysis(
+            G, causal_edges, input_to_id,cliques,
+            opts["graph_alpha"], opts["res_save_dir"], opts["id"]
+        )
         res_dict = {"graph_save_path": graph_save_path}
         res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
         return res_dict
@@ -112,18 +140,15 @@ class GraphExperiment(Experiment):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--graph_alpha", type=int, required=True)
-    parser.add_argument("--data_path", type=str, required=True)
-    parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--save_path", type=str, required=True)
     parser.add_argument("--res_save_dir", type=str, required=True)
-    parser.add_argument("--abstraction", type=str)
 
     parser.add_argument("--id", type=int)
     parser.add_argument("--db_path", type=str)
 
     args = parser.parse_args()
 
-    e = GraphExperiment(finished_status=4)
+    e = GraphExperiment(finished_status=2)
     e.run(vars(args))
 
 

@@ -36,10 +36,10 @@ class MQNLIData:
             self.word_to_id['[SEP]'] = 1
             max_info['id'] = 2
         elif "transformer" in variant:
-            self.id_to_word[1] = '[CLS]'
-            self.word_to_id['[CLS]'] = 1
-            self.id_to_word[2] = '[SEP]'
-            self.word_to_id['[SEP]'] = 2
+            self.id_to_word[1] = '[SEP]'
+            self.word_to_id['[SEP]'] = 1
+            self.id_to_word[2] = '[CLS]'
+            self.word_to_id['[CLS]'] = 2
             max_info['id'] = 3
         else:
             raise ValueError(f"Invalid variant {variant}")
@@ -154,7 +154,7 @@ class MQNLIDataset(Dataset):
                 assert len(sentence1) == len(sentence2)
 
                 ids = []
-                if "transformer" in variant: ids.append(0) # [SEP] token
+                if "transformer" in variant: ids.append(2) # [CLS] token
 
                 for word in sentence1:
                     if word not in word_to_id:
@@ -214,6 +214,9 @@ def lstm_collate(batch, batch_first=False):
     sequences_padded = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=batch_first)
     labels = torch.tensor([x[1] for x in sorted_batch])
     return (sequences_padded, labels)
+
+# def lstm_collate(batch, batch_first=False):
+#     print(type(batch))
 
 def lstm_subphrase_collate(batch, batch_first=False):
     input_ids = torch.cat([x[0] for x in batch])

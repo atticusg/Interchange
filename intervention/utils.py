@@ -4,6 +4,7 @@ import copy
 
 import torch
 from typing import Union
+from intervention.location import Location
 
 def copy_helper(x):
     if isinstance(x, (list, tuple, str, dict, np.ndarray)):
@@ -35,3 +36,17 @@ def serialize(x):
 
 def deserialize(x: tuple):
     return torch.tensor(x)
+
+def stringify_mapping(m):
+    res = {}
+    for high, low in m.items():
+        low_dict = {}
+        for low_node, low_loc in low.items():
+            if isinstance(low_loc, slice):
+                str_low_loc = Location.slice_to_str(low_loc)
+            else:
+                str_low_loc = str(low_loc)
+            low_dict[low_node] = str_low_loc
+        res[high] = low_dict
+    return res
+
