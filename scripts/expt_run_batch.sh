@@ -11,3 +11,4 @@ python experiment.py run \
     -b 7 \
     -l "experiment_data/${MODEL}/${DIFFICULTY}-${DATE}/batched_runs/" \
     "$@"
+# -n <NUMBER> -s <STARTED_STATUS>

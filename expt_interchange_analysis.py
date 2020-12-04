@@ -12,8 +12,7 @@ from expt_graph import analyze_graph_results, save_graph_analysis
 
 from intervention import Intervention, GraphInput
 from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
-from intervention.utils import serialize, deserialize
-from intervention.location import Location
+from intervention.utils import serialize, deserialize, stringify_mapping
 
 from trainer import load_model
 from modeling.lstm import LSTMModule
@@ -21,19 +20,6 @@ from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 from typing import Dict
-
-def stringify_mapping(m):
-    res = {}
-    for high, low in m.items():
-        low_dict = {}
-        for low_node, low_loc in low.items():
-            if isinstance(low_loc, slice):
-                str_low_loc = Location.slice_to_str(low_loc)
-            else:
-                str_low_loc = str(low_loc)
-            low_dict[low_node] = str_low_loc
-        res[high] = low_dict
-    return res
 
 # for getting base results of bert model
 class ListDataset(Dataset):
@@ -113,7 +99,8 @@ class Analysis:
     def analyze_one_experiment(self, results, realizations_to_inputs, mapping):
         res_dict = {}
         res_dict.update(self.analyze_counts(results, mapping))
-        res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
+        if self.graph_alpha > 0:
+            res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
         return res_dict
 
     def analyze_counts(self, results, mapping):
@@ -243,9 +230,10 @@ class Analysis:
 
         print("    Finding cliques")
         cliques = find_cliques(G, causal_edges, self.graph_alpha)
-        graph_save_path = save_graph_analysis(G, causal_edges, input_to_id, cliques,
-                                              self.graph_alpha, self.res_save_dir,
-                                              self.expt_id)
+        graph_save_path = save_graph_analysis(
+            G, causal_edges, input_to_id, cliques,
+            self.graph_alpha, self.res_save_dir, self.expt_id
+        )
         res_dict = {"graph_save_path": graph_save_path}
         res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
         return res_dict

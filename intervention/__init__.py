@@ -5,6 +5,5 @@ from intervention.graph_node import GraphNode
 from intervention.graph import ComputationGraph
 from intervention.constructor import CompGraphConstructor
 from intervention.abstraction_torch import find_abstractions as find_abstractions_torch
-from intervention.abstraction_batched import InterchangeDataset
-
+from intervention.abstraction_batched import find_abstractions_batch
 LOC = Location()

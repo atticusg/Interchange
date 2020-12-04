@@ -8,7 +8,6 @@ import time
 
 import torch
 from torch.utils.data import DataLoader
-import torch.autograd.profiler as profiler
 
 import intervention
 import datasets
@@ -32,28 +31,21 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
                     lstm_p_h_continuous: bool=True):
     if "lstm" in data_variant:
         # mapping for lstm model
-        d = {"sentence_q": [logic.IDX_Q_S],
-             "subj_adj": [logic.IDX_A_S],
-             "subj_noun": [logic.IDX_N_S],
-             "neg": [logic.IDX_NEG],
-             "v_adv": [logic.IDX_ADV],
-             "v_verb": [logic.IDX_V],
-             "vp_q": [logic.IDX_Q_O],
-             "obj_adj": [logic.IDX_A_O],
-             "obj_noun": [logic.IDX_N_O],
-             "obj": [logic.IDX_A_O, logic.IDX_N_O],
-             "vp": [logic.IDX_Q_O],
-             "v_bar": [logic.IDX_ADV, logic.IDX_V],
-             "negp":[logic.IDX_NEG],
-             "subj": [logic.IDX_A_S, logic.IDX_N_S]}
+        d = {"sentence_q": [0, 10],
+             "subj_adj": [1, 11],
+             "subj_noun": [2, 12],
+             "neg": [3, 13],
+             "v_adv": [4, 14],
+             "v_verb": [5, 15],
+             "vp_q": [6, 16],
+             "obj_adj": [7, 17],
+             "obj_noun": [8, 18],
+             "obj": [7, 8, 17, 18],
+             "vp": [6, 16],
+             "v_bar": [4, 5, 14, 15],
+             "negp":[3, 13],
+             "subj": [1, 2, 11, 12]}
 
-        for k, idxs in d.items():
-            locs = []
-            for idx in idxs:
-                locs.append(intervention.LOC[idx])
-                if lstm_p_h_continuous:
-                    locs.append(intervention.LOC[10 + idx])
-            d[k] = locs
         return d[high_node_name]
 
     if "bert" in data_variant:
@@ -125,14 +117,15 @@ class InterchangeExperiment(experiment.Experiment):
         low_model.set_cache_device(torch.device("cpu"))
         high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
+
         # set up to get examples from dataset
         if opts.get("interchange_batch_size", 0):
             # ------ Batched interchange experiment ------ #
             start_time = time.time()
-            batch_results = intervention.abstraction_batched.find_abstractions_batch(
+            batch_results = intervention.find_abstractions_batch(
                 low_model=low_model,
                 high_model=high_model,
-                low_model_type="bert",
+                low_model_type=model_type,
                 dataset=data.dev,
                 num_inputs=opts["num_inputs"],
                 batch_size=opts["interchange_batch_size"],
