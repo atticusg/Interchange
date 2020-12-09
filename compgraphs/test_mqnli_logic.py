@@ -1,7 +1,7 @@
 import pytest
 import torch
 import time
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 
 from mqnli.make_subphrase_labels import get_intermediate_labels
 
@@ -29,7 +29,7 @@ node_name_test_set = [
 
 @pytest.mark.parametrize("intermediate_nodes, expected",node_name_test_set)
 def test_get_node_names(intermediate_nodes, expected):
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     res = g.get_node_names(intermediate_nodes)
     assert all(res_name == expected_name for res_name, expected_name in zip(res, expected)), \
         f"Got {res}, expected {expected}"
@@ -65,28 +65,28 @@ def has_children(g, node, child_names):
 
 def test_graph_structure1():
     intermediate_nodes = ["vp"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     has_children(g, "sentence", ["input", "vp"])
     has_children(g, "vp", "input")
 
 
 def test_graph_structure2():
     intermediate_nodes = ["vp", "neg"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     has_children(g, "sentence", ["input", "neg", "vp"])
     has_children(g, "neg", "input")
     has_children(g, "vp", "input")
 
 def test_graph_structure3():
     intermediate_nodes = ["negp", "vp"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     has_children(g, "sentence", ["input", "negp"])
     has_children(g, "negp", ["input", "vp"])
     has_children(g, "vp", "input")
 
 def test_graph_run_without_errors():
     intermediate_nodes = ["vp"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": torch.zeros(18, 10)})
     res = g.compute(i)
     """
@@ -151,7 +151,7 @@ def test_intermediate_values(node):
     i = GraphInput({"input": example_batch})
 
     intermediate_nodes = [node]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     g.compute(i)
     got = g.get_result(node, i)
 
@@ -164,7 +164,7 @@ def test_intermediate_values(node):
 def test_final_value():
     intermediate_nodes = ["vp"]
     i = GraphInput({"input": example_batch})
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     res = g.compute(i)
     print("res", res)
     print("labels", labels)
@@ -184,7 +184,7 @@ example_3batch = torch.stack((example_0[0], example_1[0], example_2[0]), dim=1)
 
 def test_get_p_h():
     intermediate_nodes = ["get_p", "get_h"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
 
     i = GraphInput({"input": example_3batch})
     g.compute(i)
@@ -209,7 +209,7 @@ test_set = [("obj_noun", torch.tensor([1,1,0,1,1])),
 @pytest.mark.parametrize("node,expected", test_set)
 def test_nodes(node, expected):
     intermediate_nodes = [node]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result(node, i)
@@ -218,7 +218,7 @@ def test_nodes(node, expected):
 
 def test_object_quantifier_signatures():
     intermediate_nodes = ["vp_q"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("vp_q", i)
@@ -235,7 +235,7 @@ def test_object_quantifier_signatures():
 
 def test_vp_shape():
     intermediate_nodes = ["vp"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     got = g.get_result("vp", i)
@@ -245,7 +245,7 @@ def test_vp_shape():
 
 def test_negp_shape():
     intermediate_nodes = ["negp"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     got = g.get_result("negp", i)
@@ -256,7 +256,7 @@ def test_negp_shape():
 
 def test_neg_signatures():
     intermediate_nodes = ["neg"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("neg", i)
@@ -275,7 +275,7 @@ def test_neg_signatures():
 
 def test_subject_quantifier_signatures():
     intermediate_nodes = ["sentence_q"]
-    g = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    g = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     i = GraphInput({"input": example_batch})
     g.compute(i)
     res = g.get_result("sentence_q", i)
@@ -300,7 +300,7 @@ def mqnli_data():
 
 def test_whole_graph(mqnli_data):
     intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
-    graph = MQNLI_Logic_CompGraph(mqnli_data, intermediate_nodes)
+    graph = Abstr_MQNLI_Logic_CompGraph(mqnli_data, intermediate_nodes)
     with torch.no_grad():
         collate_fn = lambda batch: my_collate(batch, batch_first=False)
         dataloader = DataLoader(mqnli_data.train, batch_size=2048, shuffle=False,
@@ -318,7 +318,7 @@ def test_whole_graph(mqnli_data):
 
 def test_whole_graph_single_batch():
     intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
-    graph = MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
+    graph = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     with torch.no_grad():
         collate_fn = lambda batch: my_collate(batch, batch_first=False)
         dataloader = DataLoader(mqnli_mini_data.train, batch_size=1, shuffle=False,

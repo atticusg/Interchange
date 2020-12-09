@@ -15,7 +15,7 @@ import pickle
 
 from trainer import load_model
 from modeling.lstm import LSTMModule
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 
@@ -227,7 +227,7 @@ class InterchangeAnalysis(Experiment):
         base_compgraph = MQNLI_LSTM_CompGraph(module)
         low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
                                                low_intermediate_nodes)
-        high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
+        high_model = Abstr_MQNLI_Logic_CompGraph(data, [high_intermediate_node])
 
         a = ExploratoryAnalysis(opts["save_path"], opts["abstraction"], high_model,
                                 low_model)

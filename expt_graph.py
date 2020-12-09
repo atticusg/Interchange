@@ -13,7 +13,7 @@ from modeling.lstm import LSTMModule
 
 from intervention.utils import stringify_mapping
 from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 
@@ -111,7 +111,7 @@ class GraphExperiment(Experiment):
         base_compgraph = MQNLI_LSTM_CompGraph(module)
         low_model = Abstr_MQNLI_LSTM_CompGraph(base_compgraph,
                                                low_intermediate_nodes)
-        high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
+        high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
         with open(opts["save_path"], "rb") as f:
             graph_data = pickle.load(f)

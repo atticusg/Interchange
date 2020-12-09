@@ -77,7 +77,7 @@ def test_base_run(mqnli_bert_data, mqnli_bert_model):
 
 
     print("Setting up models and data")
-    high_model = compgraphs.MQNLI_Logic_CompGraph(mqnli_bert_data, [high_node])
+    high_model = compgraphs.Abstr_MQNLI_Logic_CompGraph(mqnli_bert_data, [high_node])
     low_model = compgraphs.MQNLI_Bert_CompGraph(mqnli_bert_model)
     low_model = compgraphs.Abstr_MQNLI_Bert_CompGraph(low_model, [low_node])
 
@@ -163,8 +163,8 @@ def test_intervention():
                                          "mqnli_models/bert_best.pt",
                                          device=torch.device("cuda"))
         mqnli_bert_model.eval()
-        high_model = compgraphs.MQNLI_Logic_CompGraph(mqnli_bert_data,
-                                                      [high_node])
+        high_model = compgraphs.Abstr_MQNLI_Logic_CompGraph(mqnli_bert_data,
+                                                            [high_node])
         low_model = compgraphs.MQNLI_Bert_CompGraph(mqnli_bert_model)
         low_model = compgraphs.Abstr_MQNLI_Bert_CompGraph(low_model, [low_node],
                                                           interv_info=interv_info)

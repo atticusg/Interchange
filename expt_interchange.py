@@ -18,7 +18,7 @@ from expt_interchange_analysis import Analysis
 
 import compgraphs
 from compgraphs import mqnli_logic as logic
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 
 from typing import List, Dict, Optional
 
@@ -115,7 +115,7 @@ class InterchangeExperiment(experiment.Experiment):
                                               interv_info=interv_info,
                                               root_output_device=torch.device("cpu"))
         low_model.set_cache_device(torch.device("cpu"))
-        high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
+        high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
 
         # set up to get examples from dataset

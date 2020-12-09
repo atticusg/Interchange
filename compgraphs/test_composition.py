@@ -1,7 +1,7 @@
 from compgraphs.mqnli_logic import negation_signatures as vectorized_neg_signatures
 from compgraphs.mqnli_logic import relation_composition as vectorized_relation_composition
 from compgraphs.mqnli_logic import quantifier_signatures as vectorized_determiner_signatures
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph, compgraph_structure
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph, compgraph_structure
 from intervention import GraphInput
 from datasets.mqnli import MQNLIData
 
@@ -61,7 +61,7 @@ examples = mqnli_mini_data.dev[:20][0]
 labels = mqnli_mini_data.dev[:20][1]
 example_5batch = examples.transpose(0,1)
 
-graph = MQNLI_Logic_CompGraph(mqnli_mini_data, list(compgraph_structure.keys()))
+graph = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, list(compgraph_structure.keys()))
 
 IDX_Q_S, IDX_A_S, IDX_N_S, IDX_NEG, IDX_ADV, IDX_V, \
         IDX_Q_O, IDX_A_O, IDX_N_O = range(9)
