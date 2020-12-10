@@ -248,3 +248,22 @@ class ComputationGraph:
         if isinstance(res, torch.Tensor) and self.root_output_device:
             res = res.to(self.root_output_device)
         return res
+
+    def get_state_dict(self):
+        return {
+            "base_caches": {
+                node_name: node.base_cache for node_name, node in self.nodes.items() if node.cache_results
+            },
+            "interv_caches": {
+                node_name: node.interv_cache for node_name, node in self.nodes.items() if node.cache_results
+            },
+            "base_output_devices": {
+                node_name: node.base_output_devices for node_name, node in self.nodes.items() if node.cache_results
+            },
+            "interv_output_devices": {
+                node_name: node.interv_output_devices for node_name, node in self.nodes.items() if node.cache_results
+            }
+        }
+
+    def set_state_dict(self, d):
+        pass

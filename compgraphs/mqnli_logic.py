@@ -202,15 +202,21 @@ class MQNLI_Logic_CompGraph(ComputationGraph):
         def input(x):
             return x
 
+        input.cache_results = False
+
         @GraphNode(input)
         def get_p(x: torch.Tensor) -> torch.Tensor:
             # (18, batch_size) ->  (9, batch_size)
             return x[:9, :]
 
+        get_p.cache_results = False
+
         @GraphNode(input)
         def get_h(x: torch.Tensor) -> torch.Tensor:
             # (18, batch_size) ->  (9, batch_size)
             return x[9:, :]
+
+        get_h.cache_results = False
 
         @GraphNode(get_p, get_h)
         def obj_noun(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:

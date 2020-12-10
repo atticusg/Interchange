@@ -86,6 +86,7 @@ class GraphNode:
                 return None
             one_key, one_value = inputs.keys[0], values[0]
             if isinstance(one_value, torch.Tensor):
+                # stack all the values together into one tensor
                 stack_dim = 0 if one_value.dim() == 0 else inputs.batch_dim
                 result = torch.stack(values, dim=stack_dim)
                 if self.cache_device is not None:
