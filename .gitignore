@@ -6,8 +6,8 @@ __pycache__/
 /compgraph_cpp/dist
 /sentiment_data
 /sentiment_models
-/mqnli_data
 /mqnli_models
+/mqnli_data/*.pt
 /experiment_data
 /probing_results
 intervention/forward_tree_dump.txt
