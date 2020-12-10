@@ -1,6 +1,6 @@
-pytorch>=1.4.0
+pytorch>=1.6.0
 numpy
 boolean.py
-transformers
+transformers==3.4.0
 tqdm
 
