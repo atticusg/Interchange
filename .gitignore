@@ -7,7 +7,7 @@ __pycache__/
 /sentiment_data
 /sentiment_models
 /mqnli_models
-/mqnli_data/*.pt
+/mqnli_data
 /experiment_data
 /probing_results
 intervention/forward_tree_dump.txt
