@@ -9,7 +9,7 @@ from datetime import datetime
 from intervention import GraphInput
 from experiment import Experiment
 from compgraphs import mqnli_logic as logic
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 
 int_to_rln = ["indep", "equiv", "entail", "rev_entail", "contradict", "alter", "cover"]
 positions = ["p_subj_q", "p_subj_adj", "p_subj_n", "p_neg", "p_adv", "p_v", "p_obj_q", "p_obj_adj", "p_obj_n",
@@ -67,7 +67,7 @@ class VisualizeCliques(Experiment):
         self.high_node = abstraction[0]
         self.low_node = abstraction[1][0]
 
-        self.high_model = MQNLI_Logic_CompGraph(self.data, [self.high_node])
+        self.high_model = Abstr_MQNLI_Logic_CompGraph(self.data, [self.high_node])
 
         causal_edge_ratios = []
         max_clique_causal_edge_ratios = []

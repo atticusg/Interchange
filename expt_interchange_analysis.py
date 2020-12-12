@@ -16,7 +16,7 @@ from intervention.utils import serialize, deserialize, stringify_mapping
 
 from trainer import load_model
 from modeling.lstm import LSTMModule
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph
 
 from typing import Dict

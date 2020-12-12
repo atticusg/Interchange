@@ -3,8 +3,7 @@ import os
 import stat
 import shlex
 import subprocess
-import tempfile
-import time
+import argparse
 
 from datetime import datetime
 from typing import Dict, List, Union, Optional
@@ -225,3 +224,18 @@ def recover_boolean_args(opts: Dict, reference: Dict):
     for k in opts.keys():
         if k in reference and isinstance(reference[k], bool):
             opts[k] = bool(opts[k])
+
+def parse_args(parser: argparse.ArgumentParser, default_opts: Dict):
+    for arg_name, default_val in default_opts.items():
+        arg_type = type(default_val)
+        arg_type = int if arg_type == bool else arg_type
+        parser.add_argument(f"--{arg_name}", type=arg_type, default=default_val)
+
+    parser.add_argument("--id", type=int)
+    parser.add_argument("--db_path", type=str)
+
+    args = parser.parse_args()
+    args = vars(args)
+    recover_boolean_args(args, default_opts)
+
+    return args

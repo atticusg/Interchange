@@ -18,7 +18,8 @@ from expt_interchange_analysis import Analysis
 
 import compgraphs
 from compgraphs import mqnli_logic as logic
-from compgraphs.mqnli_logic import MQNLI_Logic_CompGraph
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
+from modeling.utils import get_target_locs
 
 from typing import List, Dict, Optional
 
@@ -27,47 +28,7 @@ SAMPLE_RES_DICT = {
     'save_path': "",
 }
 
-def get_target_locs(high_node_name: str, data_variant: str="lstm",
-                    lstm_p_h_continuous: bool=True):
-    if "lstm" in data_variant:
-        # mapping for lstm model
-        d = {"sentence_q": [0, 10],
-             "subj_adj": [1, 11],
-             "subj_noun": [2, 12],
-             "neg": [3, 13],
-             "v_adv": [4, 14],
-             "v_verb": [5, 15],
-             "vp_q": [6, 16],
-             "obj_adj": [7, 17],
-             "obj_noun": [8, 18],
-             "obj": [7, 8, 17, 18],
-             "vp": [6, 16],
-             "v_bar": [4, 5, 14, 15],
-             "negp":[3, 13],
-             "subj": [1, 2, 11, 12]}
 
-        return d[high_node_name]
-
-    if "bert" in data_variant:
-        # mapping for bert model
-        # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
-        #  0        1     2       3     4        5      6     7       8       9     10      11     12
-
-        d = {"sentence_q": [0, 1, 2, 14, 15],
-             "subj_adj": [0, 3, 16],
-             "subj_noun": [0, 4, 17],
-             "neg": [0, 5, 6, 18, 19],
-             "v_adv": [0, 7, 20],
-             "v_verb": [0, 8, 21],
-             "vp_q": [0, 9, 10, 22, 23],
-             "obj_adj": [0, 11, 24],
-             "obj_noun": [0, 12, 25],
-             "obj": [0, 11, 12, 24, 25],
-             "vp": [0, 8, 9, 10, 21, 22, 23],
-             "v_bar": [0, 7, 8, 20, 21],
-             "negp": [0, 5, 6, 18, 19],
-             "subj": [0, 3, 4, 16, 17]}
-        return d[high_node_name]
 
 class InterchangeExperiment(experiment.Experiment):
     def experiment(self, opts: Dict) -> Dict:
@@ -115,7 +76,7 @@ class InterchangeExperiment(experiment.Experiment):
                                               interv_info=interv_info,
                                               root_output_device=torch.device("cpu"))
         low_model.set_cache_device(torch.device("cpu"))
-        high_model = MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
+        high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
 
         # set up to get examples from dataset
