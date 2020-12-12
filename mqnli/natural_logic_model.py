@@ -1,8 +1,7 @@
 import json
 import copy
 import random
-
-# copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph
+from data_util import sentence
 
 def strong_composition(signature1, signature2, relation1, relation2):
     #returns the stronger relation of the first relation/signature composed
@@ -198,6 +197,86 @@ def compute_simple_relation(premise, hypothesis):
     object_DP_relation = determiner_phrase(object_determiner_signature, object_NP_relation, VP_relation)
     object_negDP_relation = negation_phrase(object_negation_signature, object_DP_relation)
     negverb_relation = negation_phrase(verb_negation_signature, object_negDP_relation)
+    subject_DP_relation = determiner_phrase(subject_determiner_signature, subject_NP_relation, negverb_relation)
+    subject_NegDP_relation = negation_phrase(subject_negation_signature, subject_DP_relation)
+    return subject_NegDP_relation
+
+def compute_simple_relation_intervention(premise, hypothesis, premise2, hypothesis2, location):
+    #computes the relation between a premise and hypothesis simple sentence
+    #leaves
+
+    subject_negation_signature2 = negation_merge(premise2.subject_negation, hypothesis2.subject_negation)
+    subject_determiner_signature2 = determiner_merge(premise2.natlog_subject_determiner, hypothesis2.natlog_subject_determiner)
+    subject_noun_relation2 = standard_lexical_merge(premise2.subject_noun,hypothesis2.subject_noun)
+    subject_adjective_relation2 = standard_lexical_merge(premise2.subject_adjective,hypothesis2.subject_adjective)
+    verb_negation_signature2 = negation_merge(premise2.verb_negation, hypothesis2.verb_negation)
+    verb_relation2 = standard_lexical_merge(premise2.verb,hypothesis2.verb)
+    adverb_relation2 = standard_lexical_merge(premise2.adverb,hypothesis2.adverb)
+    object_negation_signature2 = negation_merge(premise2.object_negation, hypothesis2.object_negation)
+    object_determiner_signature2 = determiner_merge(premise2.natlog_object_determiner, hypothesis2.natlog_object_determiner)
+    object_noun_relation2 = standard_lexical_merge(premise2.object_noun,hypothesis2.object_noun)
+    object_adjective_relation2 = standard_lexical_merge(premise2.object_adjective,hypothesis2.object_adjective)
+
+    #the nodes of the tree
+    VP_relation2 = standard_phrase(adverb_relation2, verb_relation2)
+    object_NP_relation2 = standard_phrase(object_adjective_relation2, object_noun_relation2)
+    subject_NP_relation2 = standard_phrase(subject_adjective_relation2, subject_noun_relation2)
+    object_DP_relation2 = determiner_phrase(object_determiner_signature2, object_NP_relation2, VP_relation2)
+    object_negDP_relation2 = negation_phrase(object_negation_signature2, object_DP_relation2)
+    negverb_relation2 = negation_phrase(verb_negation_signature2, object_negDP_relation2)
+    subject_DP_relation2 = determiner_phrase(subject_determiner_signature2, subject_NP_relation2, negverb_relation2)
+    subject_NegDP_relation2 = negation_phrase(subject_negation_signature2, subject_DP_relation2)
+
+
+    subject_negation_signature = negation_merge(premise.subject_negation, hypothesis.subject_negation)
+    subject_determiner_signature = determiner_merge(premise.natlog_subject_determiner, hypothesis.natlog_subject_determiner)
+    if location == "sentence_q":
+        subject_determiner_signature =subject_determiner_signature2
+        subject_negation_signature =subject_negation_signature2
+    subject_noun_relation = standard_lexical_merge(premise.subject_noun,hypothesis.subject_noun)
+    if location == "subj_noun":
+        subject_noun_relation =subject_noun_relation2
+    subject_adjective_relation = standard_lexical_merge(premise.subject_adjective,hypothesis.subject_adjective)
+    if location == "subj_adj":
+        subject_adjective_relation =subject_adjective_relation2
+    verb_negation_signature = negation_merge(premise.verb_negation, hypothesis.verb_negation)
+    if location == "neg":
+        verb_negation_signature=verb_negation_signature2
+    verb_relation = standard_lexical_merge(premise.verb,hypothesis.verb)
+    if location == "v_verb":
+        verb_relation =verb_relation2
+    adverb_relation = standard_lexical_merge(premise.adverb,hypothesis.adverb)
+    if location == "v_adv":
+        adverb_relation =adverb_relation2
+    object_negation_signature = negation_merge(premise.object_negation, hypothesis.object_negation)
+    object_determiner_signature = determiner_merge(premise.natlog_object_determiner, hypothesis.natlog_object_determiner)
+    if location == "vp_q":
+        object_determiner_signature =object_determiner_signature2
+        object_negation_signature =object_negation_signature2
+    object_noun_relation = standard_lexical_merge(premise.object_noun,hypothesis.object_noun)
+    if location == "obj_noun":
+        object_noun_relation = object_noun_relation2
+    object_adjective_relation = standard_lexical_merge(premise.object_adjective,hypothesis.object_adjective)
+    if location == "obj_adj":
+        object_adjective_relation =object_adjective_relation2
+
+    #the nodes of the tree
+    VP_relation = standard_phrase(adverb_relation, verb_relation)
+    if location == "v_bar":
+        VP_relation = VP_relation2
+    object_NP_relation = standard_phrase(object_adjective_relation, object_noun_relation)
+    if location == "obj":
+        object_NP_relation = object_NP_relation2
+    subject_NP_relation = standard_phrase(subject_adjective_relation, subject_noun_relation)
+    if location == "subj":
+        subject_NP_relation = subject_NP_relation2
+    object_DP_relation = determiner_phrase(object_determiner_signature, object_NP_relation, VP_relation)
+    object_negDP_relation = negation_phrase(object_negation_signature, object_DP_relation)
+    if location == "vp":
+        object_negDP_relation = object_negDP_relation2
+    negverb_relation = negation_phrase(verb_negation_signature, object_negDP_relation)
+    if location == "negp":
+        negverb_relation=negverb_relation2
     subject_DP_relation = determiner_phrase(subject_determiner_signature, subject_NP_relation, negverb_relation)
     subject_NegDP_relation = negation_phrase(subject_negation_signature, subject_DP_relation)
     return subject_NegDP_relation
