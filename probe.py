@@ -26,7 +26,8 @@ DEFAULT_PROBING_OPTS = {
     "probe_train_lr_patience_epochs": 4,
     "probe_train_lr_anneal_factor": 0.5,
     "res_save_dir": "",
-    "res_save_path": ""
+    "res_save_path": "",
+    "log_path": ""
 }
 
 def setup(db_path, model_path, data_path):
