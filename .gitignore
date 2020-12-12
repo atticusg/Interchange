@@ -12,3 +12,5 @@ __pycache__/
 /probing_results
 intervention/forward_tree_dump.txt
 *.swp
+.ipynb_checkpoints/*
+.DS_Store
