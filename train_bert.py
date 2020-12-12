@@ -31,20 +31,9 @@ class TrainBertExperiment(experiment.Experiment):
 
 def main():
     parser = argparse.ArgumentParser()
-    for arg_name, default_val in DEFAULT_BERT_OPTS.items():
-        arg_type = type(default_val)
-        arg_type = int if arg_type == bool else arg_type
-        parser.add_argument(f"--{arg_name}", type=arg_type, default=default_val)
-
-    parser.add_argument("--id", type=int)
-    parser.add_argument("--db_path", type=str)
-
-    args = parser.parse_args()
+    opts = experiment.parse_args(parser, DEFAULT_BERT_OPTS)
     e = TrainBertExperiment()
-    args = vars(args)
-    experiment.recover_boolean_args(args, DEFAULT_BERT_OPTS)
-    e.run(args)
-
+    e.run(opts)
 
 if __name__ == "__main__":
     main()
