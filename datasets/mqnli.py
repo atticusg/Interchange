@@ -9,7 +9,7 @@ from intervention import LOC
 
 subphrase_loss_weighting = [1. / 6] * 6 + [1. / 3] * 3 + [0.8] * 2 + [1.]
 
-def get_collate_fxn(dataset, batch_first: bool) -> Optional[Callable]:
+def get_collate_fxn(dataset, batch_first: bool=False) -> Optional[Callable]:
     if isinstance(dataset, MQNLIDataset):
         if "subphrase" in dataset.variant:
             return lambda batch: lstm_subphrase_collate(batch, batch_first=batch_first)
