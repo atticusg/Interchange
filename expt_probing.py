@@ -53,7 +53,7 @@ class ProbingExperiment(experiment.Experiment):
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
             # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
             probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
-                                     low_node, **opts)
+                                     low_node, opts["model_type"], **opts)
             loc_dict = get_target_loc_dict(opts["model_type"])
             print(f"=== Training probes")
             for high_node in loc_dict.keys():

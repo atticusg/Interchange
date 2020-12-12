@@ -8,6 +8,7 @@ from collections import defaultdict
 from typing import Union
 
 from probing.utils import get_num_classes
+from datasets.mqnli import get_collate_fxn
 
 excluded_high_nodes = {"input", "root", "get_p", "get_h"}
 
@@ -62,7 +63,7 @@ ADJ_SIG_TO_IDX = {
 }
 
 class ProbingData:
-    def __init__(self, data, hi_compgraph, lo_compgraph, lo_node_name,
+    def __init__(self, data, hi_compgraph, lo_compgraph, lo_node_name, lo_model_type,
                  probe_train_num_examples: int=6000,
                  probe_train_num_dev_examples: int=600,
                  probe_preprocessing_device: Union[str, torch.device]= "cuda",
@@ -73,21 +74,24 @@ class ProbingData:
         self.lo_node_name = lo_node_name
 
         self.train = ProbingDataset(
-            data.train, probe_train_num_examples, hi_compgraph, lo_compgraph, lo_node_name,
+            data.train, probe_train_num_examples, hi_compgraph,
+            lo_compgraph, lo_node_name, lo_model_type,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
             probe_correct_examples_only=probe_correct_examples_only
         )
 
         self.dev = ProbingDataset(
-            data.dev, probe_train_num_dev_examples, hi_compgraph, lo_compgraph, lo_node_name,
+            data.dev, probe_train_num_dev_examples, hi_compgraph,
+            lo_compgraph, lo_node_name, lo_model_type,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
             probe_correct_examples_only=probe_correct_examples_only
         )
 
 class ProbingDataset(Dataset):
-    def __init__(self, dataset, num_examples, hi_compgraph, lo_compgraph, lo_node_name,
+    def __init__(self, dataset, num_examples, hi_compgraph,
+                 lo_compgraph, lo_node_name, lo_model_type,
                  preprocessing_device: Union[str, torch.device]="cuda",
                  preprocessing_batch_size: int=128,
                  probe_correct_examples_only: bool=False):
@@ -111,9 +115,9 @@ class ProbingDataset(Dataset):
                 for input_tuple in dataloader:
                     if len(self.inputs) == self.num_examples:
                         break
-                    if "bert" in lo_node_name:
+                    if lo_model_type == "bert":
                         high_input_tensor = input_tuple[-2]
-                    elif "lstm" in lo_node_name:
+                    elif lo_model_type == "lstm":
                         high_input_tensor = torch.cat((input_tuple[0][:, :9],
                                                        input_tuple[0][:, 10:]),
                                                       dim=1)
@@ -126,15 +130,23 @@ class ProbingDataset(Dataset):
                     hi_output = hi_compgraph.compute(hi_input).cpu()
 
                     key = [serialize(x) for x in input_tuple[0]]
-                    input_tuple_for_graph = [x.to(device) for x in input_tuple]
+                    if lo_model_type == "bert":
+                        input_tuple_for_graph = [x.to(device) for x in input_tuple]
+                    elif lo_model_type == "lstm":
+                        input_tuple_for_graph = [input_tuple[0].T.to(device),
+                                                 input_tuple[1].to(device)]
+
                     lo_input = intervention.GraphInput.batched(
-                        {"input": input_tuple_for_graph}, key, batch_dim=0
+                        {"input": input_tuple_for_graph}, key,
+                        batch_dim=(1 if lo_model_type == "lstm" else 0)
                     )
                     lo_output = lo_compgraph.compute(lo_input)
                     lo_output = lo_output.to(torch.device("cpu"))
 
-                    correct = (hi_output == lo_output) if self.correct_only else torch.ones(len(lo_output), dtype=torch.bool)
-                    num_new_exs = min(sum(correct).item(), self.num_examples - len(self.inputs))
+                    correct = (hi_output == lo_output) if self.correct_only \
+                        else torch.ones(len(lo_output), dtype=torch.bool)
+                    num_new_exs = min(sum(correct).item(),
+                                      self.num_examples - len(self.inputs))
 
                     # gather results
                     for hi_node_name in hi_compgraph.nodes:
@@ -160,6 +172,8 @@ class ProbingDataset(Dataset):
                             self.labels[hi_node_name].extend(hi_node_values)
 
                     low_hidden_values = lo_compgraph.get_result(lo_node_name, lo_input)
+                    if lo_model_type == "lstm": # make batch first
+                        low_hidden_values = low_hidden_values.transpose(0,1)
                     low_hidden_values = low_hidden_values[correct][:num_new_exs]
                     low_hidden_values = low_hidden_values.to(torch.device("cpu"))
                     self.inputs.extend(low_hidden_values)
