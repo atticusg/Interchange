@@ -152,8 +152,10 @@ class ProbingDataset(Dataset):
                                     sig_to_idx = QUANTIFIER_SIG_TO_IDX
                                 else:
                                     sig_to_idx = NEG_SIG_TO_IDX
-                                hi_node_values = [sig_to_idx[tuple(x.tolist())]
-                                                  for x in hi_node_values]
+                                hi_node_values = torch.tensor(
+                                    [sig_to_idx[tuple(x.tolist())]
+                                     for x in hi_node_values]
+                                )
 
                             self.labels[hi_node_name].extend(hi_node_values)
 

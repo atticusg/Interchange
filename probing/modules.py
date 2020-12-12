@@ -46,6 +46,17 @@ class Probe(nn.Module):
             "probe_dropout": self.probe_dropout
         }
 
+    @classmethod
+    def from_checkpoint(cls, save_path, opts=None):
+        checkpoint = torch.load(save_path)
+        assert 'model_config' in checkpoint
+        model_config = checkpoint['model_config']
+        if opts:
+            model_config.update(opts)
+        model = cls(**model_config)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        return model
+
     def forward(self, batch):
         batch = self.dropout(batch)
         batch = self.linear1(batch)

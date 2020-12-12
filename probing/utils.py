@@ -23,3 +23,9 @@ def get_low_nodes(model_type):
         return ["lstm_0"]
     elif model_type == "bert":
         return [f"bert_layer_{i}" for i in range(11)]
+
+def get_low_hidden_dim(model_type, model):
+    if model_type == "lstm":
+        return model.lstm_hidden_dim * 2 if model.bidirectional else model.lstm_hidden_diM
+    elif model_type == "bert":
+        return model.bert.config.hidden_size

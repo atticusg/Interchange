@@ -21,7 +21,7 @@ class ProbeTrainer:
                  probe_train_lr: float=0.001,
                  probe_train_lr_patience_epochs: int=4,
                  probe_train_lr_anneal_factor: float=0.5,
-                 probe_save_dir: str="",
+                 res_save_dir: str= "",
                  device: Union[str, torch.device]= "cuda",
                  **kwargs):
         if isinstance(device, str):
@@ -37,7 +37,7 @@ class ProbeTrainer:
         self.probe_train_max_epochs = probe_train_max_epochs
         self.probe_train_lr_patience_epochs = probe_train_lr_patience_epochs
         self.probe_train_lr_anneal_factor = probe_train_lr_anneal_factor
-        self.probe_save_dir = probe_save_dir
+        self.res_save_dir = res_save_dir
 
         self.optimizer = optim.Adam(
             probe.parameters(),
@@ -59,16 +59,12 @@ class ProbeTrainer:
                                          shuffle=False, collate_fn=collate_fn)
 
     def train(self):
-        epochs_without_increase = 0
+        # epochs_without_increase = 0
+        best_model_checkpoint = {}
         best_dev_loss = float("inf")
         best_dev_acc = 0.
-        if self.probe_save_dir:
-            model_save_path = os.path.join(self.probe_save_dir,
-                f"{self.probe.name}-{datetime.now().strftime('%m%d_%H%M%S')}.pt")
-        else:
-            model_save_path = ""
 
-        print(f"======= Start training probe {self.probe.name} ========")
+        print(f"=== Start training probe {self.probe.name} ")
 
         for epoch in range(self.probe_train_max_epochs):
             train_loss = 0.
@@ -93,30 +89,33 @@ class ProbeTrainer:
             if dev_loss < best_dev_loss:
                 best_dev_loss = dev_loss
                 best_dev_acc = dev_acc
-                epochs_without_increase = 0
                 best_model_checkpoint = {
                     'model_name': self.probe.name,
                     'epoch': epoch,
                     'model_state_dict': self.probe.state_dict(),
                     'loss': train_loss,
-                    'best_dev_loss': best_dev_loss,
+                    'dev_loss': best_dev_loss,
                     'dev_acc': dev_acc,
                     'model_config': self.probe.config(),
-                    'model_save_path': model_save_path
                 }
-                if model_save_path:
-                    torch.save(best_model_checkpoint, model_save_path)
                 print_stats(epoch, train_loss, dev_acc, dev_loss, better=True)
             else:
                 print_stats(epoch, train_loss, dev_acc, dev_loss, better=False)
-                epochs_without_increase += 1
-                if epochs_without_increase >= self.probe_train_lr_patience_epochs:
-                    print("    Early stopping")
-                    break
+                # epochs_without_increase += 1
+                # if epochs_without_increase >= self.probe_train_lr_patience_epochs:
+                #     print("    Early stopping")
+                #     break
 
-        print(f"======= Finished training probe {self.probe.name} ========")
+        print(f"==== Finished training probe {self.probe.name}")
         print(f"    best accuracy: {best_dev_acc: .2%}")
-        print(f"    saved model to: {model_save_path}")
+
+        if self.res_save_dir:
+            time_str = datetime.now().strftime('%m%d_%H%M%S')
+            model_save_path = os.path.join(self.res_save_dir, f"{self.probe.name}-{time_str}.pt")
+            best_model_checkpoint["model_save_path"] = model_save_path
+            torch.save(best_model_checkpoint, model_save_path)
+            print(f"    saved model to: {model_save_path}")
+
         print(f"===============")
         return best_model_checkpoint
 
@@ -142,4 +141,3 @@ class ProbeTrainer:
 
         return correct_preds / total_preds, avg_loss
 
-# TODO: try loading probe

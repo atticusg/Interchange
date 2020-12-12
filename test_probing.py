@@ -48,7 +48,7 @@ def test_probe_dataset():
 
 def test_train():
     print("loading model")
-    model_path = "mqnli_models/bert-hard-best.pt"
+    model_path = "mqnli_models/bert-easy-best.pt"
     data_path = "mqnli_data/mqnli-bert-default.pt"
 
     hi_node_name = "subj"
@@ -73,7 +73,7 @@ def test_train():
     lo_compgraph = Abstr_MQNLI_Bert_CompGraph(base_graph, intermediate_nodes)
     lo_compgraph.set_cache_device(torch.device("cpu"))
 
-    probe = Probe(hi_node_name, lo_node_name, low_loc, is_control=True,
+    probe = Probe(hi_node_name, lo_node_name, low_loc, is_control=False,
                   probe_output_classes=7, probe_input_dim=768, probe_max_rank=12,
                   probe_dropout=0.1)
 
@@ -83,10 +83,47 @@ def test_train():
                              probe_train_num_dev_examples=1600)
     trainer = ProbeTrainer(probe_data, probe,
                            probe_train_batch_size=128,
-                           probe_save_dir=probe_save_dir,
+                           res_save_dir=probe_save_dir,
                            probe_train_lr_patience_epochs=10,
                            device=device)
     start_time = time.time()
     trainer.train()
     duration = time.time() - start_time
     print(f"Training took {duration:.2}s")
+
+def test_load_probe():
+    save_path = "probing_results/test_train/subj-bert_layer_0-3_x-1212_103748.pt"
+    model_path = "mqnli_models/bert-easy-best.pt"
+    data_path = "mqnli_data/mqnli-bert-default.pt"
+
+    probe = Probe.from_checkpoint(save_path)
+
+    model, _ = load_model(PretrainedBertModule, model_path)
+    device = torch.device("cuda")
+
+    model = model.to(device)
+    model.eval()
+
+    print("loading data")
+    data = torch.load(data_path)
+
+    print("constructing compgraph")
+    base_graph = MQNLI_Bert_CompGraph(model)
+    intermediate_nodes = [probe.low_node]
+    hi_compgraph = MQNLI_Logic_CompGraph(data)
+    lo_compgraph = Abstr_MQNLI_Bert_CompGraph(base_graph, intermediate_nodes)
+    lo_compgraph.set_cache_device(torch.device("cpu"))
+
+    print("obtaining hidden variables")
+    probe_data = ProbingData(data, hi_compgraph, lo_compgraph, probe.low_node,
+                             probe_train_num_examples=1600,
+                             probe_train_num_dev_examples=6400)
+
+    trainer = ProbeTrainer(probe_data, probe,
+                           probe_train_batch_size=128,
+                           res_save_dir="",
+                           probe_train_lr_patience_epochs=10,
+                           device=device)
+
+    acc, loss = trainer.eval()
+    print(f"Got acc {acc:.2%} loss {loss:.4}")
