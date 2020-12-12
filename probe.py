@@ -6,7 +6,28 @@ from experiment import ExperimentManager
 
 DEFAULT_SCRIPT = "python expt_probing.py"
 
-from expt_probing import DEFAULT_PROBING_OPTS
+DEFAULT_PROBING_OPTS = {
+    "model_path": "",
+    "data_path": "",
+    "model_type": "",
+
+    "is_control": False,
+    "probe_max_rank": 24,
+    "probe_dropout": 0.1,
+    "probe_train_num_examples": 6400,
+    "probe_train_num_dev_examples": 3200,
+    "probe_correct_examples_only": True,
+
+    "probe_train_batch_size": 128,
+    "probe_train_eval_batch_size": 256,
+    "probe_train_weight_norm": 0.,
+    "probe_train_max_epochs": 80,
+    "probe_train_lr": 0.001,
+    "probe_train_lr_patience_epochs": 4,
+    "probe_train_lr_anneal_factor": 0.5,
+    "res_save_dir": "",
+    "res_save_path": ""
+}
 
 def setup(db_path, model_path, data_path):
     default_opts = DEFAULT_PROBING_OPTS.copy()
