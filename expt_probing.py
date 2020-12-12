@@ -73,8 +73,6 @@ class ProbingExperiment(experiment.Experiment):
                                      "dev_acc": dev_acc,
                                      "dev_loss": dev_loss,
                                      "save_path": save_path})
-                break # for testing purposes
-            break # for testing
 
         csv_f.close()
         return {

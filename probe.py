@@ -46,10 +46,10 @@ def add_grid_search(db_path, res_save_dir):
 
     grid_dict = {
         "is_control": [False],
-        "probe_max_rank": [2, 4, 12, 24, 64, 128],
+        "probe_max_rank": [4, 8, 24, 96],
         "probe_dropout": [0.1],
-        "probe_train_num_examples": [64000, 6400, 640],
-        "probe_train_weight_norm": [0, 0.01, 0.1],
+        "probe_train_num_examples": [64000],
+        "probe_train_weight_norm": [0.01, 0.1],
     }
 
     var_opt_names = list(grid_dict.keys())
