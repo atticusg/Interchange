@@ -73,6 +73,10 @@ class ProbingExperiment(experiment.Experiment):
                                      "dev_acc": dev_acc,
                                      "dev_loss": dev_loss,
                                      "save_path": save_path})
+                    del probe
+                    del trainer
+            del probe_data
+            torch.cuda.empty_cache()
 
         csv_f.close()
         return {
