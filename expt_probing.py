@@ -50,7 +50,7 @@ class ProbingExperiment(experiment.Experiment):
         for low_node in probing.utils.get_low_nodes(opts["model_type"]):
             print(f"\n=== Getting hidden vectors for low node {low_node}")
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
-            lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
+            # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
             probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
                                      low_node, opts["model_type"], **opts)
             loc_dict = get_target_loc_dict(opts["model_type"])

@@ -116,11 +116,22 @@ class IgLSTMEmbeddingModule(nn.Module):
         output = self.embedding(input_ids) # [sentence_len, batch_size, emb_dim]
         return output.transpose(0, 1) # [batch_size, sentence_len, emb_dim]
 
+class IgLSTMRNNModule(nn.Module):
+    def __init__(self, lstm_layer):
+        super(IgLSTMRNNModule, self).__init__()
+        self.lstm_layer = lstm_layer
+
+    def forward(self, hidden):
+        hidden = hidden.transpose(0, 1)
+        output, _ = self.lstm_layer(hidden)
+        return output.transpose(0, 1)
+
 class IntegratedGradientsLSTM(IntegratedGradientsBase):
     def __init__(self, model, data, classes=('neutral', 'entailment', 'contradiction'),
                  layer=None):
         super().__init__(model, data, classes)
         self.embedding = IgLSTMEmbeddingModule(self.model.embedding.embedding)
+        self.lstm_layers = [IgLSTMRNNModule(layer) for layer in self.model.lstm_layers]
 
         if layer is None:
             self.layer = self.embedding
@@ -132,9 +143,10 @@ class IntegratedGradientsLSTM(IntegratedGradientsBase):
 
     def ig_forward(self, input_ids, label):
         emb_x = self.embedding(input_ids)
-        emb_x = emb_x.transpose(0, 1)
-        hidden = self.model._run_lstm(emb_x)
-
+        hidden = emb_x
+        for lstm_layer in self.lstm_layers:
+            hidden = lstm_layer(hidden)
+        hidden = hidden.transpose(0, 1)
         hidden_dim = hidden.shape[-1] // 2
         forward_out = hidden[-1, :, :hidden_dim]
         backward_out = hidden[0, :, hidden_dim:]
@@ -143,11 +155,9 @@ class IntegratedGradientsLSTM(IntegratedGradientsBase):
         repr = self.model.dropout0(repr)
         output = self.model.feed_forward1(repr)
         output = self.model.activation1(output)
-        output = self.model.dropout1(output)
 
         output = self.model.feed_forward2(output)
         output = self.model.activation2(output)
-        output = self.model.dropout2(output)
         output = self.model.logits(output)
         return output
 
