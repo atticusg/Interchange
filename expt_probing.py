@@ -35,7 +35,6 @@ class ProbingExperiment(experiment.Experiment):
         lo_base_compgraph = lo_base_compgraph_class(module)
         lo_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name(opts["model_type"])
         hi_compgraph = compgraphs.MQNLI_Logic_CompGraph(data)
-        # hi_compgraph.set_cache_device(torch.device("cpu"))
 
         if not os.path.exists(opts["res_save_dir"]): os.mkdir(opts["res_save_dir"])
         time_str = datetime.now().strftime('%m%d-%H%M%S')
@@ -51,7 +50,7 @@ class ProbingExperiment(experiment.Experiment):
         for low_node in probing.utils.get_low_nodes(opts["model_type"]):
             print(f"\n=== Getting hidden vectors for low node {low_node}")
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
-            # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
+            lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
             probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
                                      low_node, opts["model_type"], **opts)
             loc_dict = get_target_loc_dict(opts["model_type"])
@@ -76,6 +75,7 @@ class ProbingExperiment(experiment.Experiment):
                     del probe
                     del trainer
             del probe_data
+            del lo_abstr_compgraph
             torch.cuda.empty_cache()
 
         csv_f.close()
