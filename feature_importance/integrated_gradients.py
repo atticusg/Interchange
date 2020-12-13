@@ -7,36 +7,10 @@ import torch
 import torch.nn.functional as F
 
 
-class IntegratedGradients:
-    def __init__(self, model, classes=('neutral', 'entailment', 'contradiction'), layer=None):
+class IntegratedGradientsBase:
+    def __init__(self, model, classes):
         self.model = model
-        self.tokenizer = self.model.tokenizer
         self.classes = classes
-        if layer is None:
-            self.layer = self.model.bert.embeddings
-        else:
-            self.layer = layer
-        self.ig = LayerIntegratedGradients(
-            self.ig_forward,
-            self.layer)
-
-    def predict_proba(self, input_tuples):
-        self.model.eval()
-        with torch.no_grad():
-            logits = self.model(input_tuples)
-            preds = F.softmax(logits, dim=1)
-            return preds.cpu().numpy()
-
-    def predict(self, input_tuples, probs=None):
-        """Class predictions; `probs` can be the output of
-        `predict_proba` to avoid having to do that work twice
-        where we want both kinds of prediction.
-        """
-        if probs is None:
-            preds = self.predict_proba(input_tuples)
-        else:
-            preds = probs
-        return [self.classes[i] for i in preds.argmax(1)]
 
     def predict_with_ig(self, input_tuples):
         attrs, deltas = self.ig.attribute(
@@ -65,10 +39,10 @@ class IntegratedGradients:
         data = []
         iterator = zip(input_ids, labels, scores, deltas, attrs, preds, probs)
         for inputs, label, score, delta, attr, pred, prob in iterator:
-            raw_input = self.tokenizer.convert_ids_to_tokens(inputs)
+            tokens = self.ids_to_tokens(inputs)
             d = {
                 'input_ids': inputs,
-                'raw_input': raw_input,
+                'raw_input': tokens,
                 'true_class': label,
                 'pred_class': pred,
                 'pred_probs': prob,
@@ -79,16 +53,6 @@ class IntegratedGradients:
             }
             data.append(d)
         return data
-
-    def ig_forward(self, input_ids, token_type_ids, attention_mask, original_input, label):
-        outputs = self.model.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids)
-        pooled_output = outputs[1]
-        pooled_output = self.model.dropout(pooled_output)
-        logits = self.model.logits(pooled_output)
-        return logits
 
     @staticmethod
     def visualize(ig_data):
@@ -121,3 +85,60 @@ class IntegratedGradients:
             d['convergence_score'] = float(d['convergence_score'])
         with open(output_filename, "wt") as f:
             json.dump(ig_data, f, sort_keys=True, indent=4)
+
+    def predict_proba(self, input_tuples):
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(input_tuples)
+            preds = F.softmax(logits, dim=1)
+            return preds.cpu().numpy()
+
+    def predict(self, input_tuples, probs=None):
+        """Class predictions; `probs` can be the output of
+        `predict_proba` to avoid having to do that work twice
+        where we want both kinds of prediction.
+        """
+        if probs is None:
+            preds = self.predict_proba(input_tuples)
+        else:
+            preds = probs
+        return [self.classes[i] for i in preds.argmax(1)]
+
+
+class IntegratedGradientsLSTM(IntegratedGradientsBase):
+    def __init__(self, model, classes=('neutral', 'entailment', 'contradiction'), layer=None):
+        super().__init__(model, classes)
+        if layer is None:
+            self.layer = self.model.embedding
+        else:
+            self.layer = layer
+        self.ig = LayerIntegratedGradients(
+            self.ig_forward,
+            self.layer)
+
+    def ig_forward(self, input_ids, label):
+        input_tuple = (input_ids, label)
+        return self.model(input_tuple)
+
+    def ids_to_tokens(self, inputs):
+        return inputs
+
+
+class IntegratedGradientsBERT(IntegratedGradientsBase):
+    def __init__(self, model, classes=('neutral', 'entailment', 'contradiction'), layer=None):
+        super().__init__(model, classes)
+        self.tokenizer = self.model.tokenizer
+        if layer is None:
+            self.layer = self.model.bert.embeddings
+        else:
+            self.layer = layer
+        self.ig = LayerIntegratedGradients(
+            self.ig_forward,
+            self.layer)
+
+    def ig_forward(self, input_ids, token_type_ids, attention_mask, original_input, label):
+        input_tuple = (input_ids, token_type_ids, attention_mask, original_input, label)
+        return self.model(input_tuple)
+
+    def ids_to_tokens(self, inputs):
+        return self.tokenizer.convert_ids_to_tokens(inputs)

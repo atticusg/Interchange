@@ -1,1 +1,1 @@
-from .integrated_gradients import IntegratedGradients
+from .integrated_gradients import IntegratedGradientsBERT, IntegratedGradientsLSTM
