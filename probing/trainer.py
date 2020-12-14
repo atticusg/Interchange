@@ -14,15 +14,16 @@ def print_stats(epoch, train_loss, dev_acc, dev_loss, better=True):
 class ProbeTrainer:
     """ Train one probe """
     def __init__(self, data, probe,
-                 probe_train_batch_size: int=64,
-                 probe_train_eval_batch_size: int=256,
-                 probe_train_weight_norm: float=0.,
-                 probe_train_max_epochs: int=40,
-                 probe_train_lr: float=0.001,
-                 probe_train_lr_patience_epochs: int=4,
-                 probe_train_lr_anneal_factor: float=0.5,
-                 res_save_dir: str= "",
-                 device: Union[str, torch.device]= "cuda",
+                 probe_train_batch_size: int = 64,
+                 probe_train_eval_batch_size: int = 256,
+                 probe_train_weight_norm: float = 0.,
+                 probe_train_max_epochs: int = 40,
+                 probe_early_stopping_epochs: int = 0,
+                 probe_train_lr: float = 0.001,
+                 probe_train_lr_patience_epochs: int = 4,
+                 probe_train_lr_anneal_factor: float = 0.5,
+                 res_save_dir: str = "",
+                 device: Union[str, torch.device] = "cuda",
                  **kwargs):
         if isinstance(device, str):
             device = torch.device(device)
@@ -35,6 +36,7 @@ class ProbeTrainer:
         self.probe_train_eval_batch_size = probe_train_eval_batch_size
         self.probe_train_weight_norm = probe_train_weight_norm
         self.probe_train_max_epochs = probe_train_max_epochs
+        self.probe_early_stopping_epochs = probe_early_stopping_epochs
         self.probe_train_lr_patience_epochs = probe_train_lr_patience_epochs
         self.probe_train_lr_anneal_factor = probe_train_lr_anneal_factor
         self.res_save_dir = res_save_dir
@@ -59,7 +61,7 @@ class ProbeTrainer:
                                          shuffle=False, collate_fn=collate_fn)
 
     def train(self):
-        # epochs_without_increase = 0
+        epochs_without_increase = 0
         best_model_checkpoint = {}
         best_dev_loss = float("inf")
         best_dev_acc = 0.
@@ -101,10 +103,10 @@ class ProbeTrainer:
                 print_stats(epoch, train_loss, dev_acc, dev_loss, better=True)
             else:
                 print_stats(epoch, train_loss, dev_acc, dev_loss, better=False)
-                # epochs_without_increase += 1
-                # if epochs_without_increase >= self.probe_train_lr_patience_epochs:
-                #     print("    Early stopping")
-                #     break
+                epochs_without_increase += 1
+                if self.probe_early_stopping_epochs > 0 and epochs_without_increase >= self.probe_early_stopping_epochs:
+                    print("    EARLY STOPPING")
+                    break
 
         print(f"==== Finished training probe {self.probe.name}")
         print(f"    best accuracy: {best_dev_acc: .2%}")

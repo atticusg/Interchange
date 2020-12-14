@@ -46,6 +46,8 @@ class ProbingExperiment(experiment.Experiment):
 
         probe_input_dim = probing.utils.get_low_hidden_dim(opts["model_type"], module)
 
+        early_stopping_epochs = 8 if opts["is_control"] else 0
+
         # do probing by low node
         for low_node in probing.utils.get_low_nodes(opts["model_type"]):
             print(f"\n=== Getting hidden vectors for low node {low_node}")
@@ -58,10 +60,16 @@ class ProbingExperiment(experiment.Experiment):
             for high_node in loc_dict.keys():
                 probe_output_classes = probing.utils.get_num_classes(high_node)
                 for low_loc in loc_dict[high_node]:
-                    probe = Probe(high_node, low_node, low_loc, opts["is_control"],
-                              probe_output_classes, probe_input_dim,
-                              opts["probe_max_rank"], opts["probe_dropout"])
-                    trainer = ProbeTrainer(probe_data, probe, device=device, **opts)
+                    probe = Probe(
+                        high_node, low_node, low_loc, opts["is_control"],
+                        probe_output_classes, probe_input_dim,
+                        opts["probe_max_rank"], opts["probe_dropout"]
+                    )
+                    trainer = ProbeTrainer(
+                        probe_data, probe, device=device,
+                        probe_early_stopping_epochs=early_stopping_epochs,
+                        **opts
+                    )
                     best_probe_checkpoint = trainer.train()
                     dev_acc = best_probe_checkpoint["dev_acc"]
                     dev_loss = best_probe_checkpoint["dev_loss"]
