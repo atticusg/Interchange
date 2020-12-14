@@ -37,15 +37,14 @@ def setup(db_path, model_path, data_path):
     default_opts["model_type"] = "bert" if "bert" in model_path else "lstm"
     ExperimentManager(db_path, default_opts)
 
-
-def add_grid_search(db_path, res_save_dir):
+def add_grid_search(db_path, res_save_dir, is_control):
     from datetime import datetime
     from itertools import product
 
     manager = ExperimentManager(db_path)
 
     grid_dict = {
-        "is_control": [False],
+        "is_control": [is_control],
         "probe_max_rank": [4, 8, 24, 96],
         "probe_dropout": [0.1],
         "probe_train_num_examples": [64000],
@@ -124,6 +123,7 @@ def main():
                                help="Experiment database path")
     add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True,
                                help="Directory to save stored results")
+    add_gs_parser.add_argument("-c", "--is_control", action="store_true")
 
 
     run_parser = subparsers.add_parser("run")
