@@ -127,7 +127,7 @@ class IgLSTMRNNModule(nn.Module):
         return output.transpose(0, 1)
 
 class IntegratedGradientsLSTM(IntegratedGradientsBase):
-    def __init__(self, model, data, classes=('neutral', 'entailment', 'contradiction'),
+    def __init__(self, model, data=None, classes=('neutral', 'entailment', 'contradiction'),
                  layer=None):
         super().__init__(model, data, classes)
         self.embedding = IgLSTMEmbeddingModule(self.model.embedding.embedding)
@@ -168,8 +168,8 @@ class IntegratedGradientsLSTM(IntegratedGradientsBase):
 
 
 class IntegratedGradientsBERT(IntegratedGradientsBase):
-    def __init__(self, model, classes=('neutral', 'entailment', 'contradiction'), layer=None):
-        super().__init__(model, classes)
+    def __init__(self, model, data=None, classes=('neutral', 'entailment', 'contradiction'), layer=None):
+        super().__init__(model, data, classes)
         self.tokenizer = self.model.tokenizer
         if layer is None:
             self.layer = self.model.bert.embeddings
