@@ -210,12 +210,15 @@ class GraphNode:
             return result
 
     def clear_caches(self):
-        del self.base_cache
-        del self.interv_cache
-        del self.base_output_devices
-        del self.interv_output_devices
-
-        self.base_cache = {}
-        self.interv_cache = {}
-        self.base_output_devices = {}
-        self.interv_output_devices = {}
+        if hasattr(self, "base_cache"):
+            del self.base_cache
+            self.base_cache = {}
+        if hasattr(self, "interv_cache"):
+            del self.interv_cache
+            self.interv_cache = {}
+        if hasattr(self, "base_output_devices"):
+            del self.base_output_devices
+            self.base_output_devices = {}
+        if hasattr(self, "interv_output_devices"):
+            del self.interv_output_devices
+            self.interv_output_devices = {}
