@@ -74,6 +74,7 @@ class ProbingExperiment(experiment.Experiment):
                                      "save_path": save_path})
                     del probe
                     del trainer
+            lo_abstr_compgraph.clear_caches() # important!
             del probe_data
             del lo_abstr_compgraph
             torch.cuda.empty_cache()
