@@ -156,7 +156,7 @@ def test_intervention():
     save_path = "experiment_data/bert/test-batch-sentence_q.pkl"
     if get_and_save_results:
         interv_info = {
-            "target_locs": get_target_locs(high_node, data_variant="bert")
+            "target_locs": get_target_locs(high_node, loc_mapping_type="bert")
         }
         mqnli_bert_data = torch.load("mqnli_data/mqnli_bert.pt")
         mqnli_bert_model, _ = load_model(PretrainedBertModule,

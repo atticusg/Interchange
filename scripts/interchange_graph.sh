@@ -2,7 +2,7 @@ MODEL=$1
 shift
 DIFFICULTY=$1
 shift
-python experiment.py analyze_graph \
+python interchange.py analyze_graph \
     -d "experiment_data/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
     -i "python expt_graph.py" \
     -x \

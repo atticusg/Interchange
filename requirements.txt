@@ -3,4 +3,5 @@ numpy
 boolean.py
 transformers==3.4.0
 tqdm
+seaborn
 

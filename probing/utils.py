@@ -1,5 +1,4 @@
-def get_num_classes(high_node: str) -> int:
-    d = {
+HIGH_NODE_LABEL_SPACE = {
         "root": 3,
         "sentence_q": 16,
         "subj": 4,
@@ -16,7 +15,9 @@ def get_num_classes(high_node: str) -> int:
         "obj_adj": 4,
         "obj_noun": 2
     }
-    return d[high_node]
+
+def get_num_classes(high_node: str) -> int:
+    return HIGH_NODE_LABEL_SPACE[high_node]
 
 def get_low_nodes(model_type):
     if model_type == "lstm":

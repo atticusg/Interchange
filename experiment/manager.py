@@ -56,6 +56,7 @@ class ExperimentManager:
             # else:
             #     raise ValueError
             if expt_opts:
+                if isinstance(expt_opts, dict): expt_opts = list(expt_opts.keys())
                 self.expt_opts = expt_opts
             else:
                 self.expt_opts = list(db.get_col_names(db_path, TABLE_NAME))
