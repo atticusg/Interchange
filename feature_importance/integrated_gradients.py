@@ -128,7 +128,8 @@ class IgLSTMRNNModule(nn.Module):
 
 class IntegratedGradientsLSTM(IntegratedGradientsBase):
     def __init__(self, model, data=None, classes=('neutral', 'entailment', 'contradiction'),
-                 layer=None):
+                 layer: int=None):
+        """ Provide an index (0 or 1) to indicate the lstm layer """
         super().__init__(model, data, classes)
         self.embedding = IgLSTMEmbeddingModule(self.model.embedding.embedding)
         self.lstm_layers = [IgLSTMRNNModule(layer) for layer in self.model.lstm_layers]
@@ -136,7 +137,7 @@ class IntegratedGradientsLSTM(IntegratedGradientsBase):
         if layer is None:
             self.layer = self.embedding
         else:
-            self.layer = layer
+            self.layer = self.lstm_layers[layer]
         self.ig = LayerIntegratedGradients(
             self.ig_forward,
             self.layer)

@@ -94,9 +94,14 @@ def get_target_loc_dict(data_variant):
         raise ValueError(f"Cannot recognize data variant {data_variant}")
     return d
 
-def get_target_locs(high_node_name: str, data_variant: str="lstm",
-                    lstm_p_h_continuous: bool=True):
-    if "lstm" in data_variant:
+def get_target_locs(high_node_name: str, loc_mapping_type: str= "lstm"):
+    """ Get list of indices for locations to intervene given type of model
+
+    :param high_node_name:
+    :param loc_mapping_type: type of model and type of mapping
+    :return:
+    """
+    if "lstm" in loc_mapping_type:
         # mapping for lstm model
         d = {"sentence_q": [0, 10],
              "subj_adj": [1, 11],
@@ -115,7 +120,24 @@ def get_target_locs(high_node_name: str, data_variant: str="lstm",
 
         return d[high_node_name]
 
-    if "bert" in data_variant:
+    if loc_mapping_type == "bert_cls_only":
+        d = {"sentence_q": [0],
+             "subj_adj": [0],
+             "subj_noun": [0],
+             "neg": [0],
+             "v_adv": [0],
+             "v_verb": [0],
+             "vp_q": [0],
+             "obj_adj": [0],
+             "obj_noun": [0],
+             "obj": [0],
+             "vp": [0],
+             "v_bar": [0],
+             "negp": [0],
+             "subj": [0]}
+        return d[high_node_name]
+
+    if "bert" in loc_mapping_type:
         # mapping for bert model
         # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
         #  0        1     2       3     4        5      6     7       8       9     10      11     12

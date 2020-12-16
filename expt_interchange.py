@@ -10,7 +10,8 @@ import torch
 from torch.utils.data import DataLoader
 
 import intervention
-import datasets
+import interchange
+import datasets.mqnli
 import modeling
 from trainer import load_model
 import experiment
@@ -51,20 +52,18 @@ class InterchangeExperiment(experiment.Experiment):
 
         # load data
         data = torch.load(opts["data_path"])
-        data_variant = datasets.mqnli.get_data_variant(data)
 
         # get intervention information based on model type and data variant
         abstraction = json.loads(opts["abstraction"])
         high_intermediate_node = abstraction[0]
         low_intermediate_nodes = abstraction[1]
         high_intermediate_nodes = [high_intermediate_node]
-        p_h_continuous = False
-        if model_type == "lstm":
-            p_h_continuous = hasattr(module, "p_h_separator") \
-                             and module.p_h_separator is not None
+
+        loc_mapping_type = datasets.mqnli.get_data_variant(data)
+        # override data varaint if specified in opts
+        if opts.get("loc_mapping_type", ""): loc_mapping_type = opts["loc_mapping_type"]
         interv_info = {
-            "target_locs": get_target_locs(high_intermediate_node, data_variant,
-                                           p_h_continuous)
+            "target_locs": get_target_locs(high_intermediate_node, loc_mapping_type)
         }
 
         # set up models
@@ -226,21 +225,9 @@ class InterchangeExperiment(experiment.Experiment):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", required=True)
-    parser.add_argument("--model_path", required=True)
-    parser.add_argument("--res_save_dir", type=str, default="")
-    parser.add_argument("--graph_alpha", type=int, default=100)
-    parser.add_argument("--abstraction", type=str, default='["sentence_q", ["bert_layer_2"]]')
-    parser.add_argument("--num_inputs", type=int, default=50)
-    parser.add_argument("--model_type", type=str, default="lstm")
-    parser.add_argument("--interchange_batch_size", type=int, default=0)
-
-    parser.add_argument("--id", type=int)
-    parser.add_argument("--db_path", type=str)
-
-    args = parser.parse_args()
+    opts = experiment.parse_args(parser, interchange.INTERCHANGE_DEFAULT_OPTS)
     e = InterchangeExperiment()
-    e.run(vars(args))
+    e.run(opts)
 
 if __name__ == "__main__":
     main()
