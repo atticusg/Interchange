@@ -13,8 +13,8 @@ DEFAULT_PROBING_OPTS = {
 
     "probe_max_rank": 24,
     "probe_dropout": 0.1,
-    "probe_train_num_examples": 6400,
-    "probe_train_num_dev_examples": 3200,
+    "probe_train_num_examples": 50000,
+    "probe_train_num_dev_examples": 5000,
     "probe_correct_examples_only": True,
 
     "probe_train_batch_size": 512,
@@ -48,7 +48,6 @@ def add_grid_search(db_path, res_save_dir, is_control):
         "probe_max_rank": [4, 8, 24, 96],
         "probe_train_lr": [0.001, 0.01],
         "probe_dropout": [0.1],
-        "probe_train_num_examples": [64000],
         "probe_train_weight_norm": [0.01, 0.1],
     }
 
