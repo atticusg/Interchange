@@ -3,6 +3,7 @@ import torch
 import argparse
 import experiment
 import csv
+import time
 from datetime import datetime
 from trainer import load_model
 
@@ -40,16 +41,15 @@ class ProbingExperiment(experiment.Experiment):
         time_str = datetime.now().strftime('%m%d-%H%M%S')
         res_save_path = os.path.join(opts["res_save_dir"], f"results-{time_str}.csv")
         csv_f = open(res_save_path, "w")
-        fieldnames = ["high_node", "low_node", "low_loc", "dev_acc", "dev_loss", "save_path"]
+        fieldnames = ["high_node", "low_node", "low_loc", "is_control", "train_acc", "dev_acc", "dev_loss", "save_path"]
         writer = csv.DictWriter(csv_f, fieldnames)
         writer.writeheader()
 
         probe_input_dim = probing.utils.get_low_hidden_dim(opts["model_type"], module)
 
-        early_stopping_epochs = 8 if opts["is_control"] else 0
-
         # do probing by low node
         for low_node in probing.utils.get_low_nodes(opts["model_type"]):
+            start_time = time.time()
             print(f"\n=== Getting hidden vectors for low node {low_node}")
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
             # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
@@ -60,32 +60,38 @@ class ProbingExperiment(experiment.Experiment):
             for high_node in loc_dict.keys():
                 probe_output_classes = probing.utils.get_num_classes(high_node)
                 for low_loc in loc_dict[high_node]:
-                    probe = Probe(
-                        high_node, low_node, low_loc, opts["is_control"],
-                        probe_output_classes, probe_input_dim,
-                        opts["probe_max_rank"], opts["probe_dropout"]
-                    )
-                    trainer = ProbeTrainer(
-                        probe_data, probe, device=device,
-                        probe_early_stopping_epochs=early_stopping_epochs,
-                        **opts
-                    )
-                    best_probe_checkpoint = trainer.train()
-                    dev_acc = best_probe_checkpoint["dev_acc"]
-                    dev_loss = best_probe_checkpoint["dev_loss"]
-                    save_path = best_probe_checkpoint["model_save_path"]
-                    writer.writerow({"high_node": high_node,
-                                     "low_node": low_node,
-                                     "low_loc": low_loc,
-                                     "dev_acc": dev_acc,
-                                     "dev_loss": dev_loss,
-                                     "save_path": save_path})
-                    del probe
-                    del trainer
+                    for is_control in [False, True]:
+                        probe = Probe(
+                            high_node, low_node, low_loc, is_control,
+                            probe_output_classes, probe_input_dim,
+                            opts["probe_max_rank"], opts["probe_dropout"]
+                        )
+                        trainer = ProbeTrainer(
+                            probe_data, probe, device=device, **opts
+                        )
+                        best_probe_checkpoint = trainer.train()
+                        train_acc = best_probe_checkpoint["train_acc"]
+                        dev_acc = best_probe_checkpoint["dev_acc"]
+                        dev_loss = best_probe_checkpoint["dev_loss"]
+                        save_path = best_probe_checkpoint["model_save_path"]
+                        writer.writerow({"high_node": high_node,
+                                         "low_node": low_node,
+                                         "low_loc": low_loc,
+                                         "is_control": is_control,
+                                         "train_acc": train_acc,
+                                         "dev_acc": dev_acc,
+                                         "dev_loss": dev_loss,
+                                         "save_path": save_path})
+                        del probe
+                        del trainer
+                    # break  # for testing
+            low_node_duration = time.time() - start_time
+            print(f"=== Probing {low_node} took {low_node_duration:.1f}s")
             lo_abstr_compgraph.clear_caches() # important!
             del probe_data
             del lo_abstr_compgraph
             torch.cuda.empty_cache()
+            # break  # for testing
 
         csv_f.close()
         return {
