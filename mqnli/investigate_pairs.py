@@ -12,7 +12,7 @@ def test_pair(data_path, premise1, hypothesis1, premise2, hypothesis2):
     hypothesis2 = du.parse_simple_sentence(data,hypothesis2)[0]
     partition = {high_node:set() for high_node in high_node_labels}
     for high_node in high_node_labels:
-        partition[high_node].add(nlm.compute_simple_relation_intervention(premise2, hypothesis1, premise2, hypothesis2, high_node))
+        partition[high_node].add(nlm.compute_simple_relation_intervention(premise1, hypothesis1, premise2, hypothesis2, high_node))
     return partition
 
 

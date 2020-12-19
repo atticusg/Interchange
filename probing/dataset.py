@@ -63,9 +63,8 @@ ADJ_SIG_TO_IDX = {
 }
 
 """
-notevery | bad | singer | doesnot | badly | sings | every | good | song | ...
-0          1     2        3         4       5       6       7      8      
-
+notevery | bad | singer | doesnot | badly | sings | every | good | song | notevery | bad | singer | doesnot | badly | sings | every | good | song |
+0          1     2        3         4       5       6       7      8      9          10    11       12        13      14      15      16     17            
 """
 
 SUBTREE_IDXS = {
@@ -86,7 +85,7 @@ SUBTREE_IDXS = {
 }
 
 class ProbingData:
-    def __init__(self, data, hi_compgraph, lo_compgraph, lo_node_name, lo_model_type,
+    def __init__(self, data, high_compgraph, low_compgraph, low_node, low_model_type,
                  probe_train_num_examples: int=6000,
                  probe_train_num_dev_examples: int=600,
                  probe_preprocessing_device: Union[str, torch.device]= "cuda",
@@ -94,19 +93,24 @@ class ProbingData:
                  probe_correct_examples_only: bool=False, **kwargs):
         super(ProbingData, self).__init__()
 
-        self.lo_node_name = lo_node_name
+        self.low_node = low_node
+        self.high_nodes = [n for n in high_compgraph.nodes if
+                           n not in excluded_high_nodes]
+        self.ctrl_mapping = {n: {} for n in self.high_nodes}
 
         self.train = ProbingDataset(
-            data.train, probe_train_num_examples, hi_compgraph,
-            lo_compgraph, lo_node_name, lo_model_type,
+            data.train, probe_train_num_examples, high_compgraph,
+            low_compgraph, low_node, low_model_type,
+            ctrl_mapping=self.ctrl_mapping,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
             probe_correct_examples_only=probe_correct_examples_only
         )
 
         self.dev = ProbingDataset(
-            data.dev, probe_train_num_dev_examples, hi_compgraph,
-            lo_compgraph, lo_node_name, lo_model_type,
+            data.dev, probe_train_num_dev_examples, high_compgraph,
+            low_compgraph, low_node, low_model_type,
+            ctrl_mapping=self.ctrl_mapping,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
             probe_correct_examples_only=probe_correct_examples_only
@@ -117,6 +121,7 @@ class ProbingDataset(Dataset):
                  high_compgraph: intervention.ComputationGraph,
                  low_compgraph: intervention.ComputationGraph,
                  low_node: str, low_model_type: str,
+                 ctrl_mapping=None,
                  preprocessing_device: Union[str, torch.device]="cuda",
                  preprocessing_batch_size: int=128,
                  probe_correct_examples_only: bool=False):
@@ -133,9 +138,11 @@ class ProbingDataset(Dataset):
         self.num_examples = num_examples
         self.labels = defaultdict(list)
         self.inputs = []
-        self.high_nodes = [n for n in high_compgraph.nodes if n not in excluded_high_nodes]
-        self.ctrl_mapping = {n: {} for n in self.high_nodes}
+        self.high_nodes = [n for n in high_compgraph.nodes if
+                           n not in excluded_high_nodes]
         self.ctrl_labels = defaultdict(list)
+        self.ctrl_mapping = ctrl_mapping if ctrl_mapping is not None else \
+            {n: {} for n in self.high_nodes}
         self.correct_only = probe_correct_examples_only
 
         with torch.no_grad():
@@ -208,14 +215,13 @@ class ProbingDataset(Dataset):
                             ctrl_input_key = serialize(ctrl_input)
                             if high_node in {"sentence_q", "neg", "vp_q"}:
                                 # closed-class inputs, assign numeric label depending on order of occurrence
-                                ctrl_label = self.ctrl_mapping[high_node]\
-                                    .get(ctrl_input_key, torch.tensor(len(self.ctrl_mapping[high_node])))
+                                ctrl_label = self.ctrl_mapping[high_node].get(ctrl_input_key, torch.tensor(len(self.ctrl_mapping[high_node])))
                             else:
-                                ctrl_label = torch.randint(get_num_classes(high_node),[])
+                                # open-class inputs
+                                ctrl_label = self.ctrl_mapping[high_node].get(ctrl_input_key, torch.randint(get_num_classes(high_node),[]))
+
                             self.ctrl_mapping[high_node][ctrl_input_key] = ctrl_label
                             self.ctrl_labels[high_node].append(ctrl_label)
-                                # if i == 0:
-                                #     print("high_node", high_node, "ctrl_input", ctrl_input_key, "label", ctrl_label)
 
                     low_hidden_values = low_compgraph.get_result(low_node, low_input)
                     if low_model_type == "lstm": # make batch first
@@ -237,7 +243,6 @@ class ProbingDataset(Dataset):
     def get_collate_fn(self, high_node, low_node, low_loc, is_control):
         if low_node != self.low_node:
             raise RuntimeError(f"This dataset does not contain hidden vectors for low node {low_node}")
-
         if is_control:
             def _collate_fn_ctrl(batch):
                 hidden = torch.stack([x["hidden"][low_loc] for x in batch])
@@ -250,4 +255,4 @@ class ProbingDataset(Dataset):
                 label = torch.stack([x[high_node] for x in batch])
                 return (hidden, label)
 
-        return _collate_fn
+            return _collate_fn

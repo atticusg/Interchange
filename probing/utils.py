@@ -21,9 +21,9 @@ def get_num_classes(high_node: str) -> int:
 
 def get_low_nodes(model_type):
     if model_type == "lstm":
-        return ["lstm_0"]
+        return ["lstm_0", "lstm_1"]
     elif model_type == "bert":
-        return [f"bert_layer_{i}" for i in range(11)]
+        return [f"bert_layer_{i}" for i in range(12)]
 
 def get_low_hidden_dim(model_type, model):
     if model_type == "lstm":

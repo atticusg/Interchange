@@ -13,17 +13,17 @@ DEFAULT_PROBING_OPTS = {
 
     "probe_max_rank": 24,
     "probe_dropout": 0.1,
-    "probe_train_num_examples": 50000,
-    "probe_train_num_dev_examples": 5000,
+    "probe_train_num_examples": 12800,
+    "probe_train_num_dev_examples": 2000,
     "probe_correct_examples_only": True,
 
     "probe_train_batch_size": 512,
     "probe_train_eval_batch_size": 1024,
     "probe_train_weight_norm": 0.,
-    "probe_train_max_epochs": 80,
-    "probe_train_early_stopping_epochs": 8,
+    "probe_train_max_epochs": 40,
+    "probe_train_early_stopping_epochs": 4,
     "probe_train_lr": 0.001,
-    "probe_train_lr_patience_epochs": 4,
+    "probe_train_lr_patience_epochs": 0,
     "probe_train_lr_anneal_factor": 0.5,
     "res_save_dir": "",
     "res_save_path": "",
@@ -44,7 +44,7 @@ def add_grid_search(db_path, res_save_dir):
     manager = ExperimentManager(db_path)
 
     grid_dict = {
-        "probe_max_rank": [4, 8, 24, 96],
+        "probe_max_rank": [2, 4, 8, 32, 128],
         "probe_train_lr": [0.001, 0.01],
         "probe_dropout": [0.1],
         "probe_train_weight_norm": [0.01, 0.1],
@@ -86,7 +86,7 @@ def run(db_path, script, n, detach, metascript, ready_status, started_status):
 
 def query(db_path, id=None, status=None, limit=None):
     manager = ExperimentManager(db_path)
-    cols = ["id", "status", "is_control", "probe_max_rank", "probe_train_num_examples", "res_save_dir"]
+    cols = ["id", "status", "probe_max_rank", "probe_train_num_examples", "res_save_dir"]
     rows = manager.query(cols=cols, status=status, id=id, limit=limit)
     if len(rows) == 0:
         return "No data found"
