@@ -13,13 +13,13 @@ def print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=True):
 class ProbeTrainer:
     """ Train one probe """
     def __init__(self, data, probe,
-                 probe_train_batch_size: int = 64,
+                 probe_train_batch_size: int = 512,
                  probe_train_eval_batch_size: int = 256,
                  probe_train_weight_norm: float = 0.,
                  probe_train_max_epochs: int = 40,
-                 probe_train_early_stopping_epochs: int = 0,
+                 probe_train_early_stopping_epochs: int = 4,
                  probe_train_lr: float = 0.001,
-                 probe_train_lr_patience_epochs: int = 4,
+                 probe_train_lr_patience_epochs: int = 0,
                  probe_train_lr_anneal_factor: float = 0.5,
                  res_save_dir: str = "",
                  device: Union[str, torch.device] = "cuda",
@@ -55,8 +55,9 @@ class ProbeTrainer:
         collate_fn = data.train.get_collate_fn(probe.high_node, probe.low_node, probe.low_loc, probe.is_control)
         self.train_dataloader = DataLoader(data.train, batch_size=probe_train_batch_size,
                                            shuffle=True, collate_fn=collate_fn)
+        dev_collate_fn = data.dev.get_collate_fn(probe.high_node, probe.low_node, probe.low_loc, probe.is_control)
         self.dev_dataloader = DataLoader(data.dev, batch_size=probe_train_eval_batch_size,
-                                         shuffle=False, collate_fn=collate_fn)
+                                         shuffle=False, collate_fn=dev_collate_fn)
 
     def train(self):
         epochs_without_increase = 0
@@ -107,7 +108,7 @@ class ProbeTrainer:
                     'dev_acc': dev_acc,
                     'model_config': self.probe.config(),
                 }
-                if epoch % 5 == 0: print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=True)
+                if epoch % 5 == 0: print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
             else:
                 if epoch % 5 == 0: print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
                 epochs_without_increase += 1
