@@ -69,7 +69,6 @@ class ProbeTrainer:
         for epoch in range(self.probe_train_max_epochs):
             train_loss = 0.
             num_examples = 0
-            total_preds = 0
             correct_preds = 0
 
             for step, batch in enumerate(self.train_dataloader):
@@ -82,14 +81,13 @@ class ProbeTrainer:
                 loss = self.loss_fxn(logits, labels)
                 loss.backward()
                 self.optimizer.step()
-                train_loss += loss.item()
+                train_loss += loss.item() * labels.shape[0]
                 num_examples += labels.shape[0]
                 pred = torch.argmax(logits, dim=1)
                 correct_in_batch = torch.sum(torch.eq(pred, labels)).item()
-                total_preds += labels.shape[0]
                 correct_preds += correct_in_batch
 
-            train_acc = correct_preds / total_preds
+            train_acc = correct_preds / num_examples
             train_loss /= num_examples
             dev_acc, dev_loss = self.eval()
             self.scheduler.step(dev_loss)
