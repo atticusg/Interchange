@@ -85,7 +85,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
     input_tuple_len = len(subset[0])
     icd = intervention.abstraction_batched.InterchangeDataset(input_tuple_len, low_loc)
 
-    low_batch_dim = 0 if low_model_type == "bert" else 1
+    low_batch_dim = 1 if low_model_type == "lstm" and not getattr(low_model, "batch_first", True) else 0
     for i, input_tuple in enumerate(dataloader):
         if low_model_type == "bert":
             high_input_tensor = input_tuple[-2]

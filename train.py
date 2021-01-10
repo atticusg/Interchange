@@ -45,6 +45,7 @@ DEFAULT_LSTM_OPTS = {
     "task": "mqnli",
     "output_classes": 3,
     "vocab_size": 0,
+    "tokenizer_vocab_path": "",
 
     "embed_dim": 256,
     "lstm_hidden_dim": 128,
@@ -66,10 +67,10 @@ DEFAULT_LSTM_OPTS = {
     "lr_step_decay_rate": 0.1,
     "weight_norm": 0.,
 
-    "max_epochs": 400,
+    "max_epochs": 200,
     "run_steps": -1,
     "evals_per_epoch": 5,
-    "patient_epochs": 20,
+    "patient_epochs": 10,
 
     "model_save_path": "lstm",
     "res_save_dir": "",
@@ -102,8 +103,11 @@ def setup(db_path, data_path):
     if "hard" or "medium" in data_path:
         default_opts["output_classes"] = 10
     if "lstm" in db_path:
-        data = torch.load(data_path)
-        default_opts["vocab_size"] = data.vocab_size
+        if "bert" in data_path:
+            default_opts["tokenizer_vocab_path"] = VOCAB_PATH
+        else:
+            data = torch.load(data_path)
+            default_opts["vocab_size"] = data.vocab_size
 
     ExperimentManager(db_path, default_opts)
 
@@ -144,8 +148,9 @@ def add_grid_search(db_path, repeat, res_save_dir):
             "max_epochs": [3, 4],
         }
     elif "lstm" in db_path:
-        # hard
+        # easy and hard
         grid_dict = {
+            "batch_first": [True],
             "lr": [0.001, 0.0001],
             "dropout": [0.1],
             "num_lstm_layers": [2, 4, 6],

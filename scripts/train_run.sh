@@ -7,4 +7,5 @@ python train.py run \
     -i "python train_${MODEL}.py" \
     -m "scripts/metascript.sh" \
     "$@"
+# -n <NUM> -s <STARTED STATUS>
 

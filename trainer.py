@@ -145,6 +145,9 @@ class Trainer:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
             model_save_path = self.model_save_path
             if self.res_save_dir:
+                if not os.path.exists(self.res_save_dir):
+                    os.mkdir(self.res_save_dir)
+
                 if model_save_path.endswith(".pt"):
                     model_save_path = model_save_path[:-len(".pt")]
                 model_save_path = os.path.join(self.res_save_dir,

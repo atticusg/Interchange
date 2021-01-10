@@ -457,7 +457,7 @@ class MQNLIBertDataset(Dataset):
                       torch.tensor(self.raw_orig_x[i], dtype=torch.long),
                       self.raw_y[i])
             return sample
-        elif self.variant == "subphrase":
+        elif "subphrase" in self.variant:
             sample = (self.generate_subphrase_inputs(i),
                       torch.tensor([[0]*14 + [1]*13]*12, dtype=torch.long),
                       self.generate_subphrase_attn_masks(i),
