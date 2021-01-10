@@ -148,15 +148,27 @@ def add_grid_search(db_path, repeat, res_save_dir):
             "max_epochs": [3, 4],
         }
     elif "lstm" in db_path:
-        # easy and hard
-        grid_dict = {
-            "batch_first": [True],
-            "lr": [0.001, 0.0001],
-            "dropout": [0.1],
-            "num_lstm_layers": [2, 4, 6],
-            "lr_scheduler_type": [""],
-            "evals_per_epoch": [8],
-        }
+        if "easy" in db_path:
+            grid_dict = {
+                "batch_first": [True],
+                "batch_size": [256],
+                "lr": [0.001, 0.0001],
+                "dropout": [0.1],
+                "num_lstm_layers": [2, 4, 6],
+                "lr_scheduler_type": [""],
+                "evals_per_epoch": [8],
+            }
+        else:
+            # hard
+            grid_dict = {
+                "batch_first": [True],
+                "batch_size": [64],
+                "lr": [0.001, 0.0001],
+                "dropout": [0.1],
+                "num_lstm_layers": [2, 4, 6],
+                "lr_scheduler_type": [""],
+                "evals_per_epoch": [8],
+            }
     else:
         raise ValueError(f"Cannot infer model type from database path {db_path}")
 
