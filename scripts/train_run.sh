@@ -8,4 +8,5 @@ python train.py run \
     -x \
     -m "scripts/metascript.sh" \
     "$@"
+# -n <NUM> -s <STARTED STATUS>
 

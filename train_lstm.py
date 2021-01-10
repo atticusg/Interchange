@@ -4,7 +4,7 @@ import argparse
 from train import DEFAULT_LSTM_OPTS
 from modeling.lstm import LSTMModule
 from trainer import Trainer
-import experiment
+import experiment.manager
 
 from typing import Dict
 
@@ -39,7 +39,7 @@ def main():
     args = parser.parse_args()
     e = TrainLSTMExperiment()
     args = vars(args)
-    experiment.recover_boolean_args(args, DEFAULT_LSTM_OPTS)
+    experiment.manager.recover_boolean_args(args, DEFAULT_LSTM_OPTS)
     e.run(args)
 
 
