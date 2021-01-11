@@ -100,7 +100,7 @@ def setup(db_path, data_path):
         raise ValueError(f"Cannot infer model type from database path {db_path}")
 
     default_opts["data_path"] = data_path
-    if "hard" or "medium" in data_path:
+    if "hard" in data_path or "medium" in data_path:
         default_opts["output_classes"] = 10
     if "lstm" in db_path:
         if "bert" in data_path:
