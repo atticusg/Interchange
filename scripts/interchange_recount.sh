@@ -3,7 +3,7 @@ shift
 DIFFICULTY=$1
 shift
 python interchange.py analyze \
-    -d "experiment_data/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
+    -d "data/interchange/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
     -i "python expt_interchange_analysis.py" \
     "$@"
 

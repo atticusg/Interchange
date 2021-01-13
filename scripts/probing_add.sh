@@ -3,6 +3,6 @@ shift
 DIFFICULTY=$1
 shift
 python probe.py add_grid_search \
-    --db_path "probing_results/probing-$MODEL-$DIFFICULTY.db"\
-    --res_save_dir "probing_results/$MODEL-$DIFFICULTY/" \
+    --db_path "data/probing/probing-$MODEL-$DIFFICULTY.db"\
+    --res_save_dir "data/probing/$MODEL-$DIFFICULTY/" \
     "$@"

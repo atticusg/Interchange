@@ -3,11 +3,11 @@ shift
 DIFFICULTY=$1
 shift
 python interchange.py run \
-    -d "experiment_data/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
+    -d "data/interchange/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
     -x \
     -m "scripts/metascript.sh" \
     -b 7 \
-    -l "experiment_data/${MODEL}/${DIFFICULTY}/batched_runs/" \
+    -l "data/interchange/${MODEL}/${DIFFICULTY}/batched_runs/" \
     "$@"
 # -n <NUMBER> -s <STARTED_STATUS>
 
