@@ -42,11 +42,11 @@ def g_has_children(g, node, child_names):
 
 @pytest.fixture
 def mqnli_sep_data():
-    return torch.load("../mqnli_data/mqnli-lstm-easy.pt")
+    return torch.load("../data/mqnli/preprocessed/lstm-easy.pt")
 
 @pytest.fixture
 def mqnli_lstm_sep_model():
-    model, _ = load_model(LSTMModule, "../mqnli_models/lstm/lstm_sep_best.pt")
+    model, _ = load_model(LSTMModule, "../data/models/lstm-easy-best.pt")
     model.eval()
     return model
 

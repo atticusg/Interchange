@@ -1,5 +1,5 @@
 MODEL=$1
 DIFFICULTY=$2
 python train.py setup \
-    -d mqnli_models/$MODEL-$DIFFICULTY.db \
-    -i mqnli_data/mqnli-bert-$DIFFICULTY.pt
+    -d data/training/$MODEL-$DIFFICULTY.db \
+    -i data/mqnli/preprocessed/bert-$DIFFICULTY.pt

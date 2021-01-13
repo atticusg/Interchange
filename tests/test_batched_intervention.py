@@ -16,8 +16,8 @@ from itertools import product
 
 from expt_interchange import get_target_locs
 
-data_path = "mqnli_data/mqnli_bert.pt"
-model_path = "mqnli_models/bert_best.pt"
+data_path = "data/mqnli/preprocessed/bert-easy.pt"
+model_path = "data/models/bert-easy-best.pt"
 
 @pytest.fixture
 def mqnli_bert_data():
@@ -158,9 +158,9 @@ def test_intervention():
         interv_info = {
             "target_locs": get_target_locs(high_node, loc_mapping_type="bert")
         }
-        mqnli_bert_data = torch.load("mqnli_data/mqnli_bert.pt")
+        mqnli_bert_data = torch.load("data/mqnli/preprocessed/bert-easy.pt")
         mqnli_bert_model, _ = load_model(PretrainedBertModule,
-                                         "mqnli_models/bert_best.pt",
+                                         "data/models/bert-easy-best.pt",
                                          device=torch.device("cuda"))
         mqnli_bert_model.eval()
         high_model = compgraphs.Abstr_MQNLI_Logic_CompGraph(mqnli_bert_data,

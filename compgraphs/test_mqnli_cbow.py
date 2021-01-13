@@ -11,13 +11,13 @@ import pytest
 
 @pytest.fixture
 def mqnli_data():
-    return MQNLIData("../mqnli_data/mqnli.train.txt",
-                     "../mqnli_data/mqnli.dev.txt",
-                     "../mqnli_data/mqnli.test.txt")
+    return MQNLIData("../data/mqnli/raw/easy/train.txt",
+                     "../data/mqnli/raw/easy/dev.txt",
+                     "../data/mqnli/raw/easy/test.txt")
 
 @pytest.fixture
 def mqnli_cbow_model():
-    model, _ = load_model(CBOWModule, "../mqnli_models/cbow.pt")
+    model, _ = load_model(CBOWModule, "../data/models/cbow.pt")
     model.eval()
     return model
 

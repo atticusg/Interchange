@@ -491,12 +491,11 @@ def bert_trainer_collate(batch):
 
 
 if __name__ == "__main__":
-    train_file = "../mqnli_data/mqnli.train.txt"
-    dev_file = "../mqnli_data/mqnli.dev.txt"
-    test_file = "../mqnli_data/mqnli.test.txt"
-    vocab_remapping_file = "../mqnli_data/bert-remapping.txt"
-    pickle_file = "../mqnli_data/mqnli_bert.pt"
-    tokenizer_vocab_file = "../mqnli_data/bert-vocab.pt"
+    train_file = "../data/mqnli/raw/easy/train.txt"
+    dev_file = "../data/mqnli/raw/easy/dev.txt"
+    test_file = "../data/mqnli/raw/easy/test.txt"
+    vocab_remapping_file = "../data/tokenization/bert-remapping.txt"
+    tokenizer_vocab_file = "../data/tokenization/bert-vocab.txt"
 
     data = MQNLIBertData(train_file, dev_file, test_file, vocab_remapping_file)
 

@@ -44,13 +44,13 @@ opts = {
 def main():
     model_type = "bert"
     model_class = modeling.get_module_class_by_name(model_type)
-    module, _ = load_model(model_class, "mqnli_models/bert-hard-best.pt")
+    module, _ = load_model(model_class, "../data/models/bert-hard-best.pt")
     device = torch.device("cuda")
     module = module.to(device)
     module.eval()
 
     print("=== Loading data")
-    data = torch.load("mqnli_data/mqnli-bert-default.pt")
+    data = torch.load("data/mqnli/preprocessed/bert-easy.pt")
 
     print("=== Constructing compgraph")
     lo_base_compgraph_class = compgraphs.get_compgraph_class_by_name(model_type)
