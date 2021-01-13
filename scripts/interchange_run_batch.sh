@@ -10,3 +10,4 @@ python interchange.py run \
     -l "experiment_data/${MODEL}/${DIFFICULTY}/batched_runs/" \
     "$@"
 # -n <NUMBER> -s <STARTED_STATUS>
+

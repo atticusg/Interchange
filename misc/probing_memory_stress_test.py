@@ -60,16 +60,18 @@ def main():
 
     probe_input_dim = probing.utils.get_low_hidden_dim("bert", module)
 
-    for low_node in probing.utils.get_low_nodes("bert"):
-        print(f"\n=== Getting hidden vectors for low node {low_node}")
-        lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph,
-                                                      [low_node])
-        probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
-                                 low_node, "bert", **opts)
-
-        del probe_data
-        del lo_abstr_compgraph
-        torch.cuda.empty_cache()
+    with torch.no_grad():
+        for low_node in probing.utils.get_low_nodes("bert"):
+            print(f"\n=== Getting hidden vectors for low node {low_node}")
+            lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph,
+                                                          [low_node])
+            # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
+            probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
+                                     low_node, "bert", **opts)
+            lo_abstr_compgraph.clear_caches()
+            del probe_data
+            del lo_abstr_compgraph
+            torch.cuda.empty_cache()
 
 if __name__ == '__main__':
     main()
