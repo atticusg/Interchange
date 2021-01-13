@@ -15,5 +15,5 @@ intervention/forward_tree_dump.txt
 .ipynb_checkpoints/*
 .DS_Store
 
-/data
+/data/*
 !/data/tokenization
