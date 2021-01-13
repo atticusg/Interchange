@@ -9,8 +9,8 @@ HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun",
               "neg", "v_adv", "v_verb", "vp_q",
               "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp", "subj"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
-REMAPPING_PATH="mqnli_data/bert-remapping.txt"
-VOCAB_PATH = "mqnli_data/bert-vocab.txt"
+REMAPPING_PATH="data/tokenization/bert-remapping.txt"
+VOCAB_PATH = "data/tokenization/bert-vocab.txt"
 
 DEFAULT_BERT_OPTS = {
     "data_path": "",

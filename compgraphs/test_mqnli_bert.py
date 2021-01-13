@@ -11,12 +11,12 @@ from modeling.pretrained_bert import PretrainedBertModule
 
 @pytest.fixture
 def mqnli_data():
-    return torch.load("../mqnli_data/mqnli_bert.pt")
+    return torch.load("../data/mqnli/preprocessed/bert-easy.pt")
 
 @pytest.fixture
 def mqnli_bert_model():
-    opts = {"tokenizer_vocab_path": "../mqnli_data/bert-vocab.txt"}
-    model, _ = load_model(PretrainedBertModule, "../mqnli_models/bert_best.pt", opts=opts)
+    opts = {"tokenizer_vocab_path": "../data/tokenization/bert-vocab.txt"}
+    model, _ = load_model(PretrainedBertModule, "../data/models/bert-easy-best.pt", opts=opts)
     model.eval()
     return model
 

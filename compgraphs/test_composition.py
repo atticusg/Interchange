@@ -53,9 +53,9 @@ def test_determiner_signatures():
                             assert got_str == exp_str
 
 
-mqnli_mini_data = MQNLIData("../mqnli_data/mini.train.txt",
-                     "../mqnli_data/mini.dev.txt",
-                     "../mqnli_data/mini.test.txt", store_text=True)
+mqnli_mini_data = MQNLIData("../data/mqnli/raw/easy_mini/train.txt",
+                     "../data/mqnli/raw/easy_mini/dev.txt",
+                     "../data/mqnli/raw/easy_mini/test.txt", store_text=True)
 
 examples = mqnli_mini_data.dev[:20][0]
 labels = mqnli_mini_data.dev[:20][1]

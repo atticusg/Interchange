@@ -11,9 +11,9 @@ from datasets.mqnli import MQNLIData
 from torch.utils.data import DataLoader
 
 
-mqnli_mini_data = MQNLIData("../mqnli_data/mini.train.txt",
-                     "../mqnli_data/mini.dev.txt",
-                     "../mqnli_data/mini.test.txt", store_text=True)
+mqnli_mini_data = MQNLIData("../data/mqnli/raw/easy_mini/train.txt",
+                     "../data/mqnli/raw/easy_mini/dev.txt",
+                     "../data/mqnli/raw/easy_mini/test.txt", store_text=True)
 
 
 
@@ -293,9 +293,9 @@ def test_subject_quantifier_signatures():
 
 @pytest.fixture
 def mqnli_data():
-    return MQNLIData("../mqnli_data/mqnli.train.txt",
-                     "../mqnli_data/mqnli.dev.txt",
-                     "../mqnli_data/mqnli.test.txt")
+    return MQNLIData("../data/mqnli/raw/easy/train.txt",
+                     "../data/mqnli/raw/easy/dev.txt",
+                     "../data/mqnli/raw/easy/test.txt")
 
 
 def test_whole_graph(mqnli_data):

@@ -33,9 +33,9 @@ def test_logical_form_dataset1(expr, inputs, res):
 
 
 def test_mqnli_dataset():
-    train_file = "../mqnli_data/mini.train.txt"
-    dev_file = "../mqnli_data/mini.dev.txt"
-    test_file = "../mqnli_data/mini.test.txt"
+    train_file = "../data/mqnli/raw/easy_mini/train-mini.txt"
+    dev_file = "../data/mqnli/raw/easy_mini/dev.txt"
+    test_file = "../data/mqnli/raw/easy_mini/test.txt"
     data = MQNLIData(train_file, dev_file, test_file)
     print("*** First piece of data: ", data.train[0])
     print("*** length: ", data.train[0][0].shape)
@@ -45,9 +45,9 @@ def test_mqnli_dataset():
 
 
 def test_pickle():
-    train_file = "../mqnli_data/mini.train.txt"
-    dev_file = "../mqnli_data/mini.dev.txt"
-    test_file = "../mqnli_data/mini.test.txt"
+    train_file = "../data/mqnli/raw/easy_mini/train-mini.txt"
+    dev_file = "../data/mqnli/raw/easy_mini/dev.txt"
+    test_file = "../data/mqnli/raw/easy_mini/test.txt"
     data = MQNLIData(train_file, dev_file, test_file)
 
     pickle_file = "../mqnli_data/mini.pt"
@@ -60,10 +60,10 @@ def test_pickle():
 
 
 def test_mqnli_hard():
-    train_file = "../mqnli_data/mqnli-hard-mini.train.txt"
-    dev_file = "../mqnli_data/mqnli-hard.dev.txt"
-    test_file = "../mqnli_data/mqnli-hard.test.txt"
-    vocab_remapping = "../mqnli_data/bert-remapping.txt"
+    train_file = "../data/mqnli/raw/hard/train-mini.txt"
+    dev_file = "../data/mqnli/raw/hard/dev.txt"
+    test_file = "../data/mqnli/raw/hard/test.txt"
+    vocab_remapping = "../data/tokenization/bert-remapping.txt"
     data = MQNLIBertData(train_file, dev_file, test_file, vocab_remapping, variant="subphrase")
     # x = data.train.generate_subphrase_inputs(1)
     # for ex in x:
@@ -84,9 +84,9 @@ def test_mqnli_hard():
         break
 
 def test_mqnli_lstm_subsequence():
-    train_file = "../mqnli_data/mqnli-hard-mini.train.txt"
-    dev_file = "../mqnli_data/mqnli-hard.dev.txt"
-    test_file = "../mqnli_data/mqnli-hard.test.txt"
+    train_file = "../data/mqnli/raw/hard/train-mini.txt"
+    dev_file = "../data/mqnli/raw/hard/dev.txt"
+    test_file = "../data/mqnli/raw/hard/test.txt"
     data = MQNLIData(train_file, dev_file, test_file, variant="lstm-subphrase")
 
     dataloader = DataLoader(data.train, batch_size=4, collate_fn=lstm_subphrase_collate)

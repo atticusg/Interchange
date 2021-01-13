@@ -4,9 +4,9 @@ from trainer import load_model, evaluate_and_predict
 from modeling.pretrained_bert import PretrainedBertModule
 from tqdm import tqdm
 
-model_save_path = "mqnli_models/bert-hard-best.pt"
-hard_data_path = "mqnli_data/mqnli-bert-hard.pt"
-easy_data_path = "mqnli_data/mqnli-bert-default.pt"
+model_save_path = "data/training/test/bert-test.pt"
+hard_data_path = "data/mqnli/preprocessed/bert-hard.pt"
+easy_data_path = "data/mqnli/preprocessed/bert-easy.pt"
 
 def test_full_sentence_labels():
     device = torch.device("cuda")

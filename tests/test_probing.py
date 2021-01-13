@@ -18,8 +18,8 @@ from probing.dataset import ProbingData, ProbingDataset
 
 def test_probe_dataset():
     print("\nloading model")
-    model_path = "mqnli_models/bert-easy-best.pt"
-    data_path = "mqnli_data/mqnli-bert-default.pt"
+    model_path = "data/models/bert-easy-best.pt"
+    data_path = "data/mqnli/preprocessed/bert-easy.pt"
     lo_node_name = "bert_layer_0"
     low_model_type="bert"
     num_examples = 6400
@@ -84,8 +84,8 @@ def test_probe_dataset():
 
 def test_train():
     print("loading model")
-    model_path = "mqnli_models/bert-easy-best.pt"
-    data_path = "mqnli_data/mqnli-bert-default.pt"
+    model_path = "data/models/bert-easy-best.pt"
+    data_path = "data/mqnli/preprocessed/bert-easy.pt"
 
     high_node = "obj"
     low_node = "bert_layer_2"
@@ -184,8 +184,8 @@ def test_train():
 
 def test_load_probe():
     save_path = "probing_results/test_train/subj-bert_layer_0-3_x-1212_103748.pt"
-    model_path = "mqnli_models/bert-easy-best.pt"
-    data_path = "mqnli_data/mqnli-bert-default.pt"
+    model_path = "data/models/bert-easy-best.pt"
+    data_path = "data/mqnli/preprocessed/bert-easy.pt"
 
     probe = Probe.from_checkpoint(save_path)
 
