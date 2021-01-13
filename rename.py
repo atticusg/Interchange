@@ -47,6 +47,8 @@ def rename_checkpoint(path):
     print(f"Renamed checkpoint {path}")
 
 
+
+
 def main():
     paths = sys.argv[1:]
     for path in paths:
