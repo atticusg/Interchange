@@ -2,7 +2,7 @@ MODEL=$1
 shift
 DIFFICULTY=$1
 shift
-python probe.py run \
+python probe_manager.py run \
     --db_path "data/probing/probing-$MODEL-$DIFFICULTY.db" \
     -x \
     -m "scripts/metascript.sh" \

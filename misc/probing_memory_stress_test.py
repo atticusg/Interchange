@@ -1,21 +1,11 @@
-import os
 import torch
-import argparse
-import experiment
-import csv
-from datetime import datetime
 from trainer import load_model
 
 import compgraphs
 import modeling
-from modeling.utils import get_target_loc_dict
 
-from probing.modules import Probe
 from probing.dataset import ProbingData
-from probing.trainer import ProbeTrainer
 import probing.utils
-
-from probe import DEFAULT_PROBING_OPTS
 
 opts = {
     "model_path": "",

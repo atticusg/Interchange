@@ -14,7 +14,7 @@ from trainer import load_model
 
 from itertools import product
 
-from expt_interchange import get_target_locs
+from interchange import get_target_locs
 
 data_path = "data/mqnli/preprocessed/bert-easy.pt"
 model_path = "data/models/bert-easy-best.pt"

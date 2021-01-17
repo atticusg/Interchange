@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 
 from experiment import Experiment
-from expt_graph import analyze_graph_results, save_graph_analysis
+from graph_analysis import analyze_graph_results, save_graph_analysis
 
 from intervention import Intervention, GraphInput
 from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
@@ -31,7 +31,10 @@ class ListDataset(Dataset):
         return len(self.data)
 
 class Analysis:
-    def __init__(self, data, high_model, low_model, hi2lo_dict=None, opts=None):
+    def __init__(self, data, high_model, low_model, hi2lo_dict=None,
+                 model_type="lstm", graph_alpha=0, res_save_dir="",
+                 save_intermediate_results=False, interchange_batch_size=100,
+                 device="cuda", id=0, **kwargs):
         if isinstance(data, str):
             data = torch.load(data)
             # with open(data, "rb") as f:
@@ -41,12 +44,13 @@ class Analysis:
         # self.high_node = abstraction[0]
         self.high_model = high_model
         self.low_model = low_model
-        self.low_model_type = opts.get("model_type", "lstm")
-        self.graph_alpha = opts.get("graph_alpha", 0)
-        self.res_save_dir = opts.get("res_save_dir", "")
-        self.batch_size = opts.get("interchange_batch_size", 0)
-        self.low_model_device = getattr(low_model, "device", torch.device("cuda"))
-        self.expt_id = opts.get("id", 0)
+        self.low_model_type = model_type
+        self.graph_alpha = graph_alpha
+        self.res_save_dir = res_save_dir
+        self.save_intermediate_results = save_intermediate_results
+        self.batch_size = interchange_batch_size
+        self.low_model_device = torch.device(device)
+        self.expt_id = id
 
         if not self.batch_size:
             self.serialize_lo = serialize if self.low_model_type == "lstm" else \
@@ -219,9 +223,12 @@ class Analysis:
 
         print("    Finding cliques")
         cliques = find_cliques(G, causal_edges, self.graph_alpha)
+        res_save_dir = self.res_save_dir
+        if not self.save_intermediate_results:
+            res_save_dir = ""
         graph_save_path = save_graph_analysis(
             G, causal_edges, input_to_id, cliques,
-            self.graph_alpha, self.res_save_dir, self.expt_id
+            self.graph_alpha, res_save_dir, self.expt_id
         )
         res_dict = {"graph_save_path": graph_save_path}
         res_dict.update(analyze_graph_results(G, causal_edges, input_to_id, cliques))
@@ -250,7 +257,7 @@ class InterchangeAnalysis(Experiment):
         #                                        low_intermediate_nodes)
         # high_model = MQNLI_Logic_CompGraph(data, [high_intermediate_node])
         opts["interchange_batch_size"] = 50
-        a = Analysis(opts["save_path"], None, None, opts=opts)
+        a = Analysis(opts["save_path"], None, None, **opts)
         res_dict = a.analyze()
         print(res_dict)
         return res_dict

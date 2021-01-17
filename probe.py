@@ -1,154 +1,106 @@
 import os
+import torch
 import argparse
+import experiment
+import csv
+import time
+from datetime import datetime
+from trainer import load_model
 
-from experiment import db_utils as db
-from experiment import ExperimentManager
+import compgraphs
+import modeling
+from modeling.utils import get_target_loc_dict
 
-DEFAULT_SCRIPT = "python expt_probing.py"
+from probing.modules import Probe
+from probing.dataset import ProbingData
+from probing.trainer import ProbeTrainer
+import probing.utils
 
-DEFAULT_PROBING_OPTS = {
-    "model_path": "",
-    "data_path": "",
-    "model_type": "",
+from probe_manager import DEFAULT_PROBING_OPTS
 
-    "probe_max_rank": 24,
-    "probe_dropout": 0.1,
-    "probe_train_num_examples": 12800,
-    "probe_train_num_dev_examples": 2000,
-    "probe_correct_examples_only": True,
+class ProbingExperiment(experiment.Experiment):
+    def experiment(self, opts):
+        print("=== Loading model")
+        model_type = opts.get("model_type", "bert")
+        model_class = modeling.get_module_class_by_name(model_type)
+        module, _ = load_model(model_class, opts["model_path"])
+        device = torch.device("cuda")
+        module = module.to(device)
+        module.eval()
 
-    "probe_train_batch_size": 512,
-    "probe_train_eval_batch_size": 1024,
-    "probe_train_weight_norm": 0.,
-    "probe_train_max_epochs": 40,
-    "probe_train_early_stopping_epochs": 4,
-    "probe_train_lr": 0.001,
-    "probe_train_lr_patience_epochs": 0,
-    "probe_train_lr_anneal_factor": 0.5,
-    "res_save_dir": "",
-    "res_save_path": "",
-    "log_path": ""
-}
+        print("=== Loading data")
+        data = torch.load(opts["data_path"])
 
-def setup(db_path, model_path, data_path):
-    default_opts = DEFAULT_PROBING_OPTS.copy()
-    default_opts["data_path"] = data_path
-    default_opts["model_path"] = model_path
-    default_opts["model_type"] = "bert" if "bert" in model_path else "lstm"
-    ExperimentManager(db_path, default_opts)
+        print("=== Constructing compgraph")
+        lo_base_compgraph_class = compgraphs.get_compgraph_class_by_name(model_type)
+        lo_base_compgraph = lo_base_compgraph_class(module)
+        lo_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name(opts["model_type"])
+        hi_compgraph = compgraphs.MQNLI_Logic_CompGraph(data)
 
-def add_grid_search(db_path, res_save_dir):
-    from datetime import datetime
-    from itertools import product
+        if not os.path.exists(opts["res_save_dir"]): os.mkdir(opts["res_save_dir"])
+        time_str = datetime.now().strftime('%m%d-%H%M%S')
+        res_save_path = os.path.join(opts["res_save_dir"], f"results-{time_str}.csv")
+        csv_f = open(res_save_path, "w")
+        fieldnames = ["high_node", "low_node", "low_loc", "is_control", "train_acc", "dev_acc", "dev_loss", "save_path"]
+        writer = csv.DictWriter(csv_f, fieldnames)
+        writer.writeheader()
 
-    manager = ExperimentManager(db_path)
+        probe_input_dim = probing.utils.get_low_hidden_dim(opts["model_type"], module)
 
-    grid_dict = {
-        "probe_max_rank": [2, 4, 8, 32, 128],
-        "probe_train_lr": [0.001, 0.01],
-        "probe_dropout": [0.1],
-        "probe_train_weight_norm": [0.01, 0.1],
-    }
+        # do probing by low node
+        for low_node in probing.utils.get_low_nodes(opts["model_type"]):
+            start_time = time.time()
+            print(f"\n=== Getting hidden vectors for low node {low_node}")
+            lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
+            # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
+            probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
+                                     low_node, opts["model_type"], **opts)
+            loc_dict = get_target_loc_dict(opts["model_type"])
+            print(f"=== Training probes")
+            for high_node in loc_dict.keys():
+                probe_output_classes = probing.utils.get_num_classes(high_node)
+                for low_loc in loc_dict[high_node]:
+                    for is_control in [False, True]:
+                        probe = Probe(
+                            high_node, low_node, low_loc, is_control,
+                            probe_output_classes, probe_input_dim,
+                            opts["probe_max_rank"], opts["probe_dropout"]
+                        )
+                        trainer = ProbeTrainer(
+                            probe_data, probe, device=device, **opts
+                        )
+                        best_probe_checkpoint = trainer.train()
+                        train_acc = best_probe_checkpoint["train_acc"]
+                        dev_acc = best_probe_checkpoint["dev_acc"]
+                        dev_loss = best_probe_checkpoint["dev_loss"]
+                        save_path = best_probe_checkpoint["model_save_path"]
+                        writer.writerow({"high_node": high_node,
+                                         "low_node": low_node,
+                                         "low_loc": low_loc,
+                                         "is_control": is_control,
+                                         "train_acc": train_acc,
+                                         "dev_acc": dev_acc,
+                                         "dev_loss": dev_loss,
+                                         "save_path": save_path})
+                        del probe
+                        del trainer
+                    # break  # for testing
+            low_node_duration = time.time() - start_time
+            print(f"=== Probing {low_node} took {low_node_duration:.1f}s")
+            lo_abstr_compgraph.clear_caches() # important!
+            del probe_data
+            del lo_abstr_compgraph
+            torch.cuda.empty_cache()
+            # break  # for testing
 
-    var_opt_names = list(grid_dict.keys())
-    var_opt_values = list(v if isinstance(v, list) else list(v) \
-                          for v in grid_dict.values())
-
-    # treat elements in list as separate args to fxn
-    for tup in product(*var_opt_values):
-        update_dict = {}
-        for name, val in zip(var_opt_names, tup):
-            update_dict[name] = val
-
-        id = manager.insert(update_dict)
-        time_str = datetime.now().strftime("%m%d-%H%M%S")
-        curr_save_dir = os.path.join(res_save_dir, f"probing-{id}-{time_str}")
-        manager.update({"res_save_dir": curr_save_dir}, id)
-        print("----inserted example into database:", update_dict)
-
-
-def run(db_path, script, n, detach, metascript, ready_status, started_status):
-    expt_opts = list(DEFAULT_PROBING_OPTS.keys())
-
-    manager = ExperimentManager(db_path, expt_opts)
-
-    if os.path.exists(script):
-        with open(script, "r") as f:
-            script = f.read().strip()
-
-    if metascript and os.path.exists(metascript):
-        with open(metascript, "r") as f:
-            metascript = f.read().strip()
-
-    manager.run(launch_script=script, n=n, detach=detach, metascript=metascript,
-                ready_status=ready_status, started_status=started_status)
-
-
-def query(db_path, id=None, status=None, limit=None):
-    manager = ExperimentManager(db_path)
-    cols = ["id", "status", "probe_max_rank", "probe_train_num_examples", "res_save_dir"]
-    rows = manager.query(cols=cols, status=status, id=id, limit=limit)
-    if len(rows) == 0:
-        return "No data found"
-    s = ", ".join(col for col in cols)
-    print(s)
-    print("-"*len(s))
-    for row in rows:
-        print(row)
-        print("-------")
-
-def update_status(db_path, ids, id_range, status):
-    if id_range:
-        ids = list(range(id_range[0], id_range[1] + 1))
-    for i in ids:
-        db.update(db_path, "results", {"status": status}, id=i)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="subparser")
-
-    setup_parser = subparsers.add_parser("setup")
-    setup_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
-    setup_parser.add_argument("-m", "--model_path", type=str,
-                              help="Path to trained model")
-    setup_parser.add_argument("-i", "--data_path", type=str,
-                              help="Path to pickled dataset")
-
-
-    add_gs_parser = subparsers.add_parser("add_grid_search")
-    add_gs_parser.add_argument("-d", "--db_path", type=str, required=True,
-                               help="Experiment database path")
-    add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True,
-                               help="Directory to save stored results")
-
-
-    run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("-d", "--db_path", type=str, required=True)
-    run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
-    run_parser.add_argument("-n", "--n", type=int, default=None)
-    run_parser.add_argument("-x", "--detach", action="store_true")
-    run_parser.add_argument("-m", "--metascript", type=str, default=None)
-    run_parser.add_argument("-r", "--ready_status", type=int, default=0)
-    run_parser.add_argument("-s", "--started_status", type=int, default=None)
-
-    query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
-    query_parser.add_argument("-i", "--id", type=int)
-    query_parser.add_argument("-s", "--status", type=int)
-    query_parser.add_argument("-n", "--limit", type=int)
-
-    update_parser = subparsers.add_parser("update_status")
-    update_parser.add_argument("-d", "--db_path", type=str, required=True)
-    update_parser.add_argument("-i", "--ids", type=int, nargs="*")
-    update_parser.add_argument("-r", "--id_range", type=int, nargs=2)
-    update_parser.add_argument("-s", "--status", type=int, required=True)
-
-    kwargs = vars(parser.parse_args())
-    globals()[kwargs.pop("subparser")](**kwargs)
+        csv_f.close()
+        return {
+            "res_save_path": res_save_path
+        }
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    opts = experiment.parse_args(parser, DEFAULT_PROBING_OPTS)
+    e = ProbingExperiment()
+    e.run(opts)

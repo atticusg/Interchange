@@ -1,7 +1,7 @@
 import torch
 import argparse
 
-from train import DEFAULT_LSTM_OPTS
+from train_manager import DEFAULT_LSTM_OPTS
 from modeling.lstm import LSTMModule
 from trainer import Trainer
 import experiment.manager

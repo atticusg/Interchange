@@ -87,11 +87,12 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
 
     low_batch_dim = 1 if low_model_type == "lstm" and not getattr(low_model, "batch_first", True) else 0
     for i, input_tuple in enumerate(dataloader):
-        if low_model_type == "bert":
-            high_input_tensor = input_tuple[-2]
-        elif low_model_type == "lstm":
-            high_input_tensor = torch.cat((input_tuple[0][:,:9],
-                                          input_tuple[0][:,10:]), dim=1)
+        high_input_tensor = input_tuple[-2]
+        # if low_model_type == "bert":
+        #     high_input_tensor = input_tuple[-2]
+        # elif low_model_type == "lstm":
+        #     high_input_tensor = torch.cat((input_tuple[0][:,:9],
+        #                                   input_tuple[0][:,10:]), dim=1)
 
         high_base_key = [serialize(x) for x in high_input_tensor]
         high_input = intervention.GraphInput.batched(
@@ -102,11 +103,12 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         high_hidden = high_model.get_result(high_node, high_input)
 
         low_key = [serialize(x) for x in input_tuple[0]]
-        if low_model_type == "bert":
-            low_input_tuple_for_graph = [x.to(device) for x in input_tuple]
-        elif low_model_type == "lstm":
-            low_input_tuple_for_graph = [input_tuple[0].T.to(device),
-                                         input_tuple[-1].to(device)]
+        low_input_tuple_for_graph = [x.to(device) for x in input_tuple]
+        # if low_model_type == "bert":
+        #     low_input_tuple_for_graph = [x.to(device) for x in input_tuple]
+        # elif low_model_type == "lstm":
+        #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
+        #                                  input_tuple[-1].to(device)]
 
         low_input = intervention.GraphInput.batched(
             {"input": low_input_tuple_for_graph}, low_key, batch_dim=low_batch_dim)
@@ -151,11 +153,12 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         low_input_tensor = input_tuple[0]
         low_interv_value = input_tuple[icd.idx_low_hidden]
         low_base_key = [serialize(x) for x in low_input_tensor]
-        if low_model_type == "bert":
-            low_input_tuple_for_graph = [x.to(device) for x in input_tuple[:5]]
-        elif low_model_type == "lstm":
-            low_input_tuple_for_graph = [input_tuple[0].T.to(device),
-                                         input_tuple[-1].to(device)]
+        low_input_tuple_for_graph = [x.to(device) for x in input_tuple[:icd.idx_low_hidden]]
+        # if low_model_type == "bert":
+        #     low_input_tuple_for_graph = [x.to(device) for x in input_tuple[:5]]
+        # elif low_model_type == "lstm":
+        #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
+        #                                  input_tuple[-1].to(device)]
 
         low_base = intervention.GraphInput.batched(
             {"input": low_input_tuple_for_graph}, low_base_key,
@@ -191,12 +194,13 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
 
 
 
-def find_abstractions_batch(low_model, high_model, low_model_type, dataset, num_inputs, batch_size,
+def find_abstractions_batch(low_model, high_model, low_model_type,
+                            dataset, num_inputs, batch_size,
                             fixed_assignments, unwanted_low_nodes=None):
     print("Creating possible mappings")
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments,
                                         unwanted_low_nodes)
-
+    print(f"Got {len(mappings)} different mappings")
     result = []
     with torch.no_grad():
         for mapping in mappings:

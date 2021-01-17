@@ -1,265 +1,234 @@
 import os
 import argparse
+import pickle
+import json
 from datetime import datetime
-from experiment import ExperimentManager
+import time
 
-DEFAULT_SCRIPT = "python expt_interchange.py"
-HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb",
-              "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp",
-              "subj"]
-META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
+import torch
+from torch.utils.data import DataLoader
 
-INTERCHANGE_DEFAULT_OPTS = {
-    "data_path": "",
-    "model_path": "",
-    "model_type": "",
-    "log_path": "",
-    "res_save_dir": "",
-    "abstraction": "",
-    "num_inputs": 500,
-    "graph_alpha": 100,
-    "interchange_batch_size": 128,
-    "loc_mapping_type": "",
+import intervention
+import interchange_manager
+import datasets.mqnli
+import modeling
+from trainer import load_model
+import experiment
+from interchange_analysis import Analysis
+
+import compgraphs
+from compgraphs import mqnli_logic as logic
+from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
+from modeling.utils import get_target_locs
+
+from typing import List, Dict
+
+SAMPLE_RES_DICT = {
+    'runtime': 0.,
+    'save_path': "",
 }
 
 
-def setup(db_path, model_path, data_path):
-    opts = INTERCHANGE_DEFAULT_OPTS.copy()
-    opts["data_path"] = data_path,
-    opts["model_path"] = model_path
-    ExperimentManager(db_path, INTERCHANGE_DEFAULT_OPTS)
+
+class InterchangeExperiment(experiment.Experiment):
+    def experiment(self, opts: Dict) -> Dict:
+        res, duration, high_model, low_model, hi2lo_dict = self.run_interchanges(opts)
+        save_path = self.save_interchange_results(opts, res)
+        res_dict = {"runtime": duration, "save_path": save_path}
+        analysis_res = self.analyze_interchanges(res, high_model, low_model,
+                                                 hi2lo_dict, opts)
+        res_dict.update(analysis_res)
+        print("final res_dict", res_dict)
+        return res_dict
+
+    def run_interchanges(self, opts: Dict):
+        # load low level model
+        model_type = opts.get("model_type", "lstm")
+        model_class = modeling.get_module_class_by_name(opts.get("model_type", "lstm"))
+        device = torch.device("cuda")
+        module, _ = load_model(model_class, opts["model_path"], device=device)
+        module.eval()
+
+        # load data
+        data = torch.load(opts["data_path"])
+
+        # get intervention information based on model type and data variant
+        abstraction = json.loads(opts["abstraction"])
+        high_intermediate_node = abstraction[0]
+        low_intermediate_nodes = abstraction[1]
+        high_intermediate_nodes = [high_intermediate_node]
+
+        data_variant = datasets.mqnli.get_data_variant(data)
+        print("data_variant", data_variant)
+        loc_mapping_type = opts.get("loc_mapping_type", "")
+        loc_mapping_type = loc_mapping_type if loc_mapping_type else data_variant
+        interv_info = {
+            "target_locs": get_target_locs(high_intermediate_node, loc_mapping_type)
+        }
+        print(f"high node: {high_intermediate_node}, low_locs: {interv_info['target_locs']}")
+
+        # set up models
+        low_compgraph_class = compgraphs.get_compgraph_class_by_name(model_type)
+        low_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name(model_type)
+        low_base_compgraph = low_compgraph_class(module)
+        low_model = low_abstr_compgraph_class(low_base_compgraph,
+                                              low_intermediate_nodes,
+                                              interv_info=interv_info,
+                                              root_output_device=torch.device("cpu"))
+        low_model.set_cache_device(torch.device("cpu"))
+        high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
 
-def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
-    import torch
-    from trainer import load_model
-    from modeling import get_module_class_by_name
-    import experiment.db_utils as db
+        # set up to get examples from dataset
+        if opts.get("interchange_batch_size", 0):
+            # ------ Batched interchange experiment ------ #
+            start_time = time.time()
+            batch_results = intervention.find_abstractions_batch(
+                low_model=low_model,
+                high_model=high_model,
+                low_model_type=model_type,
+                dataset=data.dev,
+                num_inputs=opts["num_inputs"],
+                batch_size=opts["interchange_batch_size"],
+                fixed_assignments={x: {x: intervention.LOC[:]} for x in
+                                   ["root", "input"]},
+                unwanted_low_nodes={"root", "input"}
+            )
+            duration = time.time() - start_time
+            print(f"Interchange experiment took {duration:.2f}s")
+            return batch_results, duration, high_model, low_model, None
+        else:
+            # ------ Original interchange experiment ------ #
+            low_inputs, high_interventions, hi2lo_dict = \
+                self.prepare_inputs(data=data,
+                                    num_inputs=opts["num_inputs"],
+                                    model_type=model_type,
+                                    high_intermediate_node=high_intermediate_node,
+                                    device=device)
 
-    model_class = get_module_class_by_name(model_type)
+            # setup for find_abstractions
+            fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
+            if model_type == "lstm":
+                input_mapping = lambda x: x  # identity function
+            elif model_type == "bert":
+                input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
+            unwanted_nodes = {"root", "input"}
 
-    manager = ExperimentManager(db_path)
-    device = torch.device("cpu")
-    module, _ = load_model(model_class, model_path, device=device)
+            # find abstractions
+            start_time = time.time()
+            with torch.no_grad():
+                print("Finding abstractions")
+                res = intervention.find_abstractions_torch(
+                    low_model=low_model,
+                    high_model=high_model,
+                    high_inputs=low_inputs,
+                    total_high_interventions=high_interventions,
+                    fixed_assignments=fixed_assignments,
+                    input_mapping=input_mapping,
+                    unwanted_low_nodes=unwanted_nodes
+                )
 
-    if model_type == "lstm":
-        num_layers = module.num_lstm_layers - 1
-        layer_name = "lstm"
-        graph_alpha = 0
-    elif model_type == "bert":
-        num_layers = len(module.bert.encoder.layer) - 1
-        layer_name = "bert_layer"
-        graph_alpha = 100
-        if loc_mapping_type:
-            db.add_cols(db_path, "results", {"loc_mapping_type": ""})
-    else:
-        raise ValueError("Invalid model type")
+            duration = time.time() - start_time
+            print(f"Finished finding abstractions, took {duration:.2f} s")
+            return res, duration, high_model, low_model, hi2lo_dict
 
-    time_str = datetime.now().strftime("%m%d-%H%M%S")
-    for high_node in HIGH_NODES:
-        for layer in range(num_layers):
-            for n in num_inputs:
-                abstraction = f'["{high_node}",["{layer_name}_{layer}"]]'
-                insert_dict = {"abstraction": abstraction,
-                               "num_inputs": n,
-                               "model_type": model_type,
-                               "interchange_batch_size": 100,
-                               "graph_alpha": graph_alpha}
-                if loc_mapping_type:
-                    insert_dict["loc_mapping_type"] = loc_mapping_type
-                id = manager.insert(insert_dict)
-                res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
-                manager.update({"model_path": model_path,
-                                "res_save_dir": res_save_dir}, id)
+    def prepare_inputs(self, data, num_inputs, model_type, high_intermediate_node, device):
+        # set up to get examples from dataset
+        hi2lo_dict = {}
+        if model_type == "lstm":
+            collate_fn = lambda batch: datasets.utils.lstm_collate(batch,
+                                                                   batch_first=False)
+            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
+                                    collate_fn=collate_fn)
+        elif model_type == "bert":
+            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
 
+        # get examples from dataset
+        low_inputs = []
+        high_interventions = []
+        print("Preparing inputs")
+        for i, input_tuple in enumerate(dataloader):
+            if i == num_inputs: break
+            orig_input = input_tuple[-2]
+            input_tuple = [x.to(device) for x in input_tuple]
+            if model_type == "bert":
+                orig_input = orig_input.T
+                hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
 
-def run(db_path, script, n, detach, metascript, metascript_batch_size,
-        metascript_log_dir,
-        ready_status, started_status):
-    manager = ExperimentManager(db_path, INTERCHANGE_DEFAULT_OPTS)
+            low_inputs.append(
+                intervention.Intervention({"input": orig_input}, {}))
 
-    if os.path.exists(script):
-        with open(script, "r") as f:
-            script = f.read().strip()
+            high_interventions += self.get_interventions(high_intermediate_node,
+                                                         orig_input)
+        return low_inputs, high_interventions, hi2lo_dict
 
-    if metascript and os.path.exists(metascript):
-        with open(metascript, "r") as f:
-            metascript = f.read().strip()
+    def get_interventions(self, high_node: str, base_input: torch.Tensor) \
+            -> List[intervention.Intervention]:
+        if high_node in {"subj_adj", "v_adv", "obj_adj"}:
+            intervention_values = logic.intersective_projections
+        elif high_node in {"subj_noun", "v_verb", "obj_noun"}:
+            intervention_values = torch.tensor([logic.INDEP, logic.EQUIV],
+                                               dtype=torch.long)
+        elif high_node in {"sentence_q", "vp_q"}:
+            intervention_values = logic.quantifier_signatures
+        elif high_node == "neg":
+            intervention_values = logic.negation_signatures
+        elif high_node in {"subj", "v_bar", "obj"}:
+            intervention_values = torch.tensor(
+                [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL],
+                dtype=torch.long
+            )
+        elif high_node in {"vp", "negp"}:
+            intervention_values = torch.tensor(
+                [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL,
+                 logic.CONTRADICT, logic.ALTER, logic.COVER],
+                dtype=torch.long
+            )
+        else:
+            raise ValueError(f"Invalid high-level node: {high_node}")
 
-    manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript,
-                metascript_batch_size=metascript_batch_size,
-                metascript_log_dir=metascript_log_dir,
-                ready_status=ready_status, started_status=started_status)
+        res = [intervention.Intervention({"input": base_input},
+                                         {high_node: value.unsqueeze(0)})
+               for value in intervention_values]
 
-
-def analyze(db_path, script, n, detach, metascript,
-            metascript_batch_size, metascript_log_dir,
-            ready_status, started_status):
-    # expt_opts = ["data_path", "model_path", "save_path", "abstraction",
-    #              "num_inputs", "res_save_dir"]
-    expt_opts = ["save_path", "res_save_dir"]
-    manager = ExperimentManager(db_path, expt_opts)
-
-    if metascript and os.path.exists(metascript):
-        with open(metascript, "r") as f:
-            metascript = f.read().strip()
-
-    manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript,
-                metascript_batch_size=metascript_batch_size,
-                metascript_log_dir=metascript_log_dir,
-                ready_status=ready_status, started_status=started_status)
-
-
-def add_graph(db_path, ids, alphas, all):
-    from experiment import db_utils as db
-
-    db.add_cols(db_path, "results", {"graph_alpha": 1})
-    if all:
-        assert len(alphas) == 1
-        rows = db.select(db_path, "results", cols=["id"],
-                         cond_dict={"status": 2})
-        for row in rows:
-            id = row["id"]
-            db.update(db_path, "results",
-                      {"graph_alpha": alphas[0], "status": 3}, id=id)
-
-    elif ids:
-        for id in ids:
-            dup_ids = db.duplicate_rows(db_path, "results", id, len(alphas))
-            for i, a in zip(dup_ids, alphas):
-                db.update(db_path, "results", {"graph_alpha": a, "status": 3},
-                          id=i)
-
-
-def analyze_graph(db_path, script, n, detach, metascript, ready_status,
-                  started_status):
-    expt_opts = ["save_path", "graph_alpha", "res_save_dir"]
-    manager = ExperimentManager(db_path, expt_opts)
-
-    if metascript and os.path.exists(metascript):
-        with open(metascript, "r") as f:
-            metascript = f.read().strip()
-
-    manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, ready_status=ready_status,
-                started_status=started_status)
+        return res
 
 
-def query(db_path, id=None, status=None, abstraction=None, limit=None):
-    manager = ExperimentManager(db_path)
-    cols = ["id", "log_path", "res_save_dir", "abstraction", "num_inputs",
-            "status"]
-    rows = manager.query(cols=cols, status=status, abstraction=abstraction,
-                         id=id, limit=limit)
-    if len(rows) == 0:
-        return "No data found"
-    s = ", ".join(col for col in cols)
-    print(s)
-    print("-" * len(s))
-    for row in rows:
-        print(row)
-        print("-------")
+    def save_interchange_results(self, opts: Dict, res: List) -> str:
+        save_dir = opts.get("res_save_dir", "")
 
+        if save_dir and opts["save_intermediate_results"]:
+            abstraction = json.loads(opts["abstraction"])
+            high_intermediate_node = abstraction[0]
 
-def update_status(db_path, ids, id_range, status):
-    from experiment import db_utils as db
-    if id_range:
-        ids = list(range(id_range[0], id_range[1] + 1))
-    for i in ids:
-        db.update(db_path, "results", {"status": status}, id=i)
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            time_str = datetime.now().strftime("%m%d-%H%M%S")
+            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}"
 
+            if opts.get("interchange_batch_size", 0):
+                res_file_name += ".pt"
+                save_path = os.path.join(save_dir, res_file_name)
+                torch.save(res, save_path)
+            else:
+                res_file_name += ".pkl"
+                save_path = os.path.join(save_dir, res_file_name)
+                with open(save_path, "wb") as f:
+                    pickle.dump(res, f)
+            return save_path
+        else:
+            return ""
+
+    def analyze_interchanges(self, res: List, high_model, low_model, hi2lo_dict,
+                             opts: Dict) -> Dict:
+        a = Analysis(res, high_model, low_model, hi2lo_dict=hi2lo_dict, **opts)
+        return a.analyze()
 
 def main():
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="subparser")
-
-    setup_parser = subparsers.add_parser("setup")
-    setup_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
-    setup_parser.add_argument("-m", "--model_path", type=str,
-                              help="Trained torch.nn.module")
-    setup_parser.add_argument("-i", "--data_path", type=str,
-                              help="Path to pickled dataset")
-
-    add_parser = subparsers.add_parser("add")
-    add_parser.add_argument("-d", "--db_path", type=str, required=True,
-                            help="Pickled dataset file")
-    add_parser.add_argument("-t", "--model_type", type=str, required=True,
-                            help="Model type, currently only supports lstm")
-    add_parser.add_argument("-m", "--model_path", type=str, required=True,
-                            help="Trained torch.nn.module")
-    add_parser.add_argument("-o", "--res_dir", type=str, required=True,
-                            help="Directory to save stored results")
-    add_parser.add_argument("-n", "--num_inputs", type=int, nargs="+")
-    add_parser.add_argument("-l", "--loc_mapping_type", type=str, default="",
-                            help="Specify the set of hidden vector locations for intervention")
-
-    add_graph_parser = subparsers.add_parser("add_graph")
-    add_graph_parser.add_argument("-d", "--db_path", type=str, required=True,
-                                  help="Pickled dataset file")
-    add_graph_parser.add_argument("-i", "--ids", type=int, nargs="*")
-    add_graph_parser.add_argument("-a", "--alphas", type=int, nargs="+")
-    add_graph_parser.add_argument("--all", action="store_true")
-
-    run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("-d", "--db_path", type=str, required=True)
-    run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
-    run_parser.add_argument("-n", "--n", type=int, default=None)
-    run_parser.add_argument("-x", "--detach", action="store_true")
-    run_parser.add_argument("-m", "--metascript", type=str, default=None)
-    run_parser.add_argument("-b", "--metascript_batch_size", type=int,
-                            default=0)
-    run_parser.add_argument("-l", "--metascript_log_dir", type=str)
-    run_parser.add_argument("-r", "--ready_status", type=int, default=0)
-    run_parser.add_argument("-s", "--started_status", type=int, default=None)
-
-    analyze_parser = subparsers.add_parser("analyze")
-    analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
-    analyze_parser.add_argument("-i", "--script", type=str,
-                                default="python expt_interchange_analysis.py")
-    analyze_parser.add_argument("-n", "--n", type=int, required=True)
-    analyze_parser.add_argument("-x", "--detach", action="store_true")
-    analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
-    analyze_parser.add_argument("-b", "--metascript_batch_size", type=int,
-                                default=0)
-    analyze_parser.add_argument("-l", "--metascript_log_dir", type=str)
-    analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
-    analyze_parser.add_argument("-s", "--started_status", type=int,
-                                default=None)
-
-    analyze_graph_parser = subparsers.add_parser("analyze_graph")
-    analyze_graph_parser.add_argument("-d", "--db_path", type=str,
-                                      required=True)
-    analyze_graph_parser.add_argument("-i", "--script", type=str,
-                                      default="python expt_viz_cliques.py")
-    analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
-    analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
-    analyze_graph_parser.add_argument("-m", "--metascript", type=str,
-                                      default=None)
-    analyze_graph_parser.add_argument("-r", "--ready_status", type=int,
-                                      default=0)
-    analyze_graph_parser.add_argument("-s", "--started_status", type=int,
-                                      default=None)
-
-    query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
-    query_parser.add_argument("-i", "--id", type=int)
-    query_parser.add_argument("-s", "--status", type=int)
-    query_parser.add_argument("-a", "--abstraction", type=str)
-    query_parser.add_argument("-n", "--limit", type=int)
-
-    update_parser = subparsers.add_parser("update_status")
-    update_parser.add_argument("-d", "--db_path", type=str, required=True)
-    update_parser.add_argument("-i", "--ids", type=int, nargs="*")
-    update_parser.add_argument("-r", "--id_range", type=int, nargs=2)
-    update_parser.add_argument("-s", "--status", type=int, required=True)
-
-    kwargs = vars(parser.parse_args())
-    globals()[kwargs.pop("subparser")](**kwargs)
-
+    opts = experiment.parse_args(parser, interchange_manager.INTERCHANGE_DEFAULT_OPTS)
+    e = InterchangeExperiment()
+    e.run(opts)
 
 if __name__ == "__main__":
     main()

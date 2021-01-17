@@ -1,7 +1,7 @@
 import torch
 import argparse
 
-from train import DEFAULT_BERT_OPTS
+from train_manager import DEFAULT_BERT_OPTS
 from modeling.pretrained_bert import PretrainedBertModule
 from trainer import Trainer
 import experiment

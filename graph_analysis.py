@@ -37,14 +37,14 @@ def analyze_graph_results(G, causal_edges, input_to_id, cliques):
 
 
 def save_graph_analysis(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
-    res = {
-        "alpha": graph_alpha,
-        "graph": G,
-        "causal_edges": causal_edges,
-        "input_to_id": input_to_id,
-        "cliques": cliques
-    }
     if res_save_dir:
+        res = {
+            "alpha": graph_alpha,
+            "graph": G,
+            "causal_edges": causal_edges,
+            "input_to_id": input_to_id,
+            "cliques": cliques
+        }
         time_str = datetime.now().strftime("%m%d-%H%M%S")
         if id:
             res_file_name = f"graph-id{id}-{time_str}.pkl"

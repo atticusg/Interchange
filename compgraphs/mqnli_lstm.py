@@ -1,7 +1,7 @@
 import torch
 import re
 
-from intervention import ComputationGraph, GraphNode
+from intervention import ComputationGraph, GraphNode, LOC
 from compgraphs.abstractable import AbstractableCompGraph
 
 from typing import List, Any, Optional
@@ -16,8 +16,6 @@ def generate_lstm_fxn(lstm_layer):
 
 class MQNLI_LSTM_CompGraph(ComputationGraph):
     def __init__(self, lstm_model, root_output_device=None):
-        if lstm_model.task != "mqnli":
-            raise ValueError("The LSTM model must be for MQNLI!")
         self.model = lstm_model
 
         @GraphNode()
@@ -28,7 +26,7 @@ class MQNLI_LSTM_CompGraph(ComputationGraph):
 
         @GraphNode(input)
         def embed(x):
-            assert x[0].shape[0] == 19, f"x.shape is {x.shape}"
+            # assert x[0].shape[0] == 19, f"x.shape is {x.shape}"
             # print("embedding input shape", x.shape)
             res = self.model.embedding(x)
             # print("embedding output shape", res.shape)
@@ -108,6 +106,6 @@ class Abstr_MQNLI_LSTM_CompGraph(AbstractableCompGraph):
 
     def get_indices(self, node: str):
         if re.match(r".*lstm_[0-9]*", node):
-            return self.interv_info["target_locs"]
+            return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
         else:
             return super().get_indices(node)
