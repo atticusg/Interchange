@@ -3,5 +3,5 @@ shift
 DIFFICULTY=$1
 shift
 python interchange_manager.py query \
-    -d "data/interchange/${MODEL}/${MODEL}-${DIFFICULTY}.db" \
+    -d "data/interchange/${MODEL}-${DIFFICULTY}.db" \
     "$@"

@@ -3,7 +3,6 @@ import argparse
 from datetime import datetime
 from experiment import ExperimentManager
 
-DEFAULT_SCRIPT = "python interchange.py"
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb",
               "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp",
               "subj"]
@@ -20,7 +19,7 @@ INTERCHANGE_DEFAULT_OPTS = {
     "graph_alpha": 100,
     "interchange_batch_size": 128,
     "loc_mapping_type": "",
-    "save_intermediate_results": False,
+    "save_intermediate_results": True,
 }
 
 
@@ -46,11 +45,13 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
     if model_type == "lstm":
         num_layers = module.num_lstm_layers - 1
         layer_name = "lstm"
+        interchange_batch_size = 1000
     elif model_type == "bert":
         num_layers = len(module.bert.encoder.layer) - 1
         layer_name = "bert_layer"
         if loc_mapping_type:
             db.add_cols(db_path, "results", {"loc_mapping_type": ""})
+        interchange_batch_size = 500
     else:
         raise ValueError("Invalid model type")
 
@@ -62,7 +63,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
                 insert_dict = {"abstraction": abstraction,
                                "num_inputs": n,
                                "model_type": model_type,
-                               "interchange_batch_size": 100}
+                               "interchange_batch_size": interchange_batch_size}
                 if loc_mapping_type:
                     insert_dict["loc_mapping_type"] = loc_mapping_type
                 id = manager.insert(insert_dict)
@@ -132,6 +133,7 @@ def add_graph(db_path, ids, alphas, all):
 
 
 def analyze_graph(db_path, script, n, detach, metascript, ready_status,
+                  metascript_batch_size, metascript_log_dir,
                   started_status):
     expt_opts = ["save_path", "graph_alpha", "res_save_dir"]
     manager = ExperimentManager(db_path, expt_opts)
@@ -141,7 +143,10 @@ def analyze_graph(db_path, script, n, detach, metascript, ready_status,
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript, ready_status=ready_status,
+                metascript=metascript,
+                metascript_batch_size=metascript_batch_size,
+                metascript_log_dir=metascript_log_dir,
+                ready_status=ready_status,
                 started_status=started_status)
 
 
@@ -202,7 +207,7 @@ def main():
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-d", "--db_path", type=str, required=True)
-    run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
+    run_parser.add_argument("-i", "--script", type=str, default="python interchange.py")
     run_parser.add_argument("-n", "--n", type=int, default=None)
     run_parser.add_argument("-x", "--detach", action="store_true")
     run_parser.add_argument("-m", "--metascript", type=str, default=None)
@@ -212,29 +217,18 @@ def main():
     run_parser.add_argument("-r", "--ready_status", type=int, default=0)
     run_parser.add_argument("-s", "--started_status", type=int, default=None)
 
-    analyze_parser = subparsers.add_parser("analyze")
-    analyze_parser.add_argument("-d", "--db_path", type=str, required=True)
-    analyze_parser.add_argument("-i", "--script", type=str,
-                                default="python interchange_analysis.py")
-    analyze_parser.add_argument("-n", "--n", type=int, required=True)
-    analyze_parser.add_argument("-x", "--detach", action="store_true")
-    analyze_parser.add_argument("-m", "--metascript", type=str, default=None)
-    analyze_parser.add_argument("-b", "--metascript_batch_size", type=int,
-                                default=0)
-    analyze_parser.add_argument("-l", "--metascript_log_dir", type=str)
-    analyze_parser.add_argument("-r", "--ready_status", type=int, default=1)
-    analyze_parser.add_argument("-s", "--started_status", type=int,
-                                default=None)
-
     analyze_graph_parser = subparsers.add_parser("analyze_graph")
     analyze_graph_parser.add_argument("-d", "--db_path", type=str,
                                       required=True)
     analyze_graph_parser.add_argument("-i", "--script", type=str,
-                                      default="python visualize_cliques.py")
+                                      default="python graph_analysis.py")
     analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
     analyze_graph_parser.add_argument("-m", "--metascript", type=str,
                                       default=None)
+    analyze_graph_parser.add_argument("-b", "--metascript_batch_size", type=int,
+                            default=0)
+    analyze_graph_parser.add_argument("-l", "--metascript_log_dir", type=str)
     analyze_graph_parser.add_argument("-r", "--ready_status", type=int,
                                       default=0)
     analyze_graph_parser.add_argument("-s", "--started_status", type=int,

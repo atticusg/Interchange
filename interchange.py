@@ -155,11 +155,9 @@ class InterchangeExperiment(experiment.Experiment):
                 orig_input = orig_input.T
                 hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
 
-            low_inputs.append(
-                intervention.Intervention({"input": orig_input}, {}))
+            low_inputs.append(intervention.Intervention({"input": orig_input}, {}))
 
-            high_interventions += self.get_interventions(high_intermediate_node,
-                                                         orig_input)
+            high_interventions += self.get_interventions(high_intermediate_node, orig_input)
         return low_inputs, high_interventions, hi2lo_dict
 
     def get_interventions(self, high_node: str, base_input: torch.Tensor) \
@@ -204,7 +202,11 @@ class InterchangeExperiment(experiment.Experiment):
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             time_str = datetime.now().strftime("%m%d-%H%M%S")
-            res_file_name = f"res-id{opts['id']}-{high_intermediate_node}-{time_str}"
+
+            if opts["id"]:
+                res_file_name = f"interx-res-id{opts['id']}-{high_intermediate_node}-{time_str}"
+            else:
+                res_file_name = f"interx-res-{high_intermediate_node}-{time_str}"
 
             if opts.get("interchange_batch_size", 0):
                 res_file_name += ".pt"

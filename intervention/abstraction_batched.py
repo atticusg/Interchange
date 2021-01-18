@@ -54,6 +54,10 @@ class InterchangeDataset(IterableDataset):
                      [low_interv_value, low_base_output, high_base_input,
                       high_interv_value, high_base_output, base_i, interv_i])
 
+    def del_hidden_values(self):
+        del self.low_hidden_values
+        del self.high_hidden_values
+
     def __iter__(self):
         for (base_i, interv_i) in product(range(self.num_examples), repeat=2):
             yield self.get_intervention_tuple(base_i, interv_i)
@@ -187,6 +191,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         res_dict["high_interv_res"].extend(high_interv_res.tolist())
         count += len(input_tuple[icd.idx_base_i].tolist())
 
+    icd.del_hidden_values() # delete hidden values to save space
     res_dict["interchange_dataset"] = icd
     res_dict["mapping"] = mapping
 

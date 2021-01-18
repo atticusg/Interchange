@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 
 from experiment import Experiment
-from graph_analysis import analyze_graph_results, save_graph_analysis
+from graph_analysis import analyze_graph_results, save_single_graph_analysis
 
 from intervention import Intervention, GraphInput
 from intervention.analysis import construct_graph, construct_graph_batch, find_cliques
@@ -103,8 +103,8 @@ class Analysis:
     def analyze_one_experiment(self, results, realizations_to_inputs, mapping):
         res_dict = {}
         res_dict.update(self.analyze_counts(results, mapping))
-        if self.graph_alpha > 0:
-            res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
+        # if self.graph_alpha > 0:
+        #     res_dict.update(self.analyze_graph(results, realizations_to_inputs, mapping))
         return res_dict
 
     def analyze_counts(self, results, mapping):
@@ -226,7 +226,7 @@ class Analysis:
         res_save_dir = self.res_save_dir
         if not self.save_intermediate_results:
             res_save_dir = ""
-        graph_save_path = save_graph_analysis(
+        graph_save_path = save_single_graph_analysis(
             G, causal_edges, input_to_id, cliques,
             self.graph_alpha, res_save_dir, self.expt_id
         )

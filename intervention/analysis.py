@@ -93,7 +93,7 @@ def construct_graph_batch(data_dict):
                 G.add_edge(node, node2)
             if (node, node2) in causal_edges and (node2,node) in causal_edges:
                 new_causal_edges.add((node,node2))
-    return G, causal_edges, None
+    return G, new_causal_edges, None
 
 def find_cliques(G, causal_edges, alpha):
     original_G = G
