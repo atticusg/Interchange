@@ -57,7 +57,7 @@ def construct_graph(low_model, high_model, mapping, result, realizations_to_inpu
                 G.add_edge(node, node2)
             if (node, node2) in causal_edges and (node2,node) in causal_edges:
                 new_causal_edges.add((node,node2))
-    return G, causal_edges, input_to_id
+    return G, new_causal_edges, input_to_id
 
 def construct_graph_batch(data_dict):
     G = nx.Graph()

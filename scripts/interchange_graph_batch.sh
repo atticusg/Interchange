@@ -4,7 +4,7 @@ DIFFICULTY=$1
 shift
 python interchange_manager.py analyze_graph \
     -d "data/interchange/${MODEL}-${DIFFICULTY}.db" \
-    -i "python expt_graph.py" \
+    -i "python graph_analysis.py" \
     -x \
     -m "nlprun -q john -a hanson-intervention" \
     -r 1 \
