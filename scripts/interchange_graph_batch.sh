@@ -8,7 +8,7 @@ python interchange_manager.py analyze_graph \
     -x \
     -m "nlprun -q john -a hanson-intervention" \
     -r 1 \
-    -b 7
+    -b 7 \
     "$@"
 # -n <NUMBER> -s <STARTED_STATUS>
 

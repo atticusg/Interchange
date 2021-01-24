@@ -44,7 +44,7 @@ def add_grid_search(db_path, res_save_dir):
     manager = ExperimentManager(db_path)
 
     grid_dict = {
-        "probe_max_rank": [2, 4, 8, 32, 128],
+        "probe_max_rank": [8, 32],
         "probe_train_lr": [0.001, 0.01],
         "probe_dropout": [0.1],
         "probe_train_weight_norm": [0.01, 0.1],

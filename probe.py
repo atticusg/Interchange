@@ -9,7 +9,7 @@ from trainer import load_model
 
 import compgraphs
 import modeling
-from modeling.utils import get_target_loc_dict
+import modeling.utils
 
 from probing.modules import Probe
 from probing.dataset import ProbingData
@@ -55,7 +55,8 @@ class ProbingExperiment(experiment.Experiment):
             # lo_abstr_compgraph.set_cache_device(torch.device("cpu"))
             probe_data = ProbingData(data, hi_compgraph, lo_abstr_compgraph,
                                      low_node, opts["model_type"], **opts)
-            loc_dict = get_target_loc_dict(opts["model_type"])
+            loc_dict = modeling.utils.get_model_loc_dict(opts["model_type"])
+
             print(f"=== Training probes")
             for high_node in loc_dict.keys():
                 probe_output_classes = probing.utils.get_num_classes(high_node)
@@ -73,7 +74,7 @@ class ProbingExperiment(experiment.Experiment):
                         train_acc = best_probe_checkpoint["train_acc"]
                         dev_acc = best_probe_checkpoint["dev_acc"]
                         dev_loss = best_probe_checkpoint["dev_loss"]
-                        save_path = best_probe_checkpoint["model_save_path"]
+                        # save_path = best_probe_checkpoint["model_save_path"]
                         writer.writerow({"high_node": high_node,
                                          "low_node": low_node,
                                          "low_loc": low_loc,
@@ -81,7 +82,8 @@ class ProbingExperiment(experiment.Experiment):
                                          "train_acc": train_acc,
                                          "dev_acc": dev_acc,
                                          "dev_loss": dev_loss,
-                                         "save_path": save_path})
+                                         # "save_path": save_path
+                                         })
                         del probe
                         del trainer
                     # break  # for testing

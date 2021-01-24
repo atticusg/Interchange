@@ -23,6 +23,7 @@ class ProbeTrainer:
                  probe_train_lr_anneal_factor: float = 0.5,
                  res_save_dir: str = "",
                  device: Union[str, torch.device] = "cuda",
+                 verbose=False,
                  **kwargs):
         if isinstance(device, str):
             device = torch.device(device)
@@ -39,6 +40,7 @@ class ProbeTrainer:
         self.probe_train_lr_patience_epochs = probe_train_lr_patience_epochs
         self.probe_train_lr_anneal_factor = probe_train_lr_anneal_factor
         self.res_save_dir = res_save_dir
+        self.verbose = verbose
 
         self.optimizer = optim.Adam(
             probe.parameters(),
@@ -106,24 +108,26 @@ class ProbeTrainer:
                     'dev_acc': dev_acc,
                     'model_config': self.probe.config(),
                 }
-                if epoch % 5 == 0: print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
+                if epoch % 5 == 0 and self.verbose:
+                    print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
             else:
-                if epoch % 5 == 0: print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
+                if epoch % 5 == 0 and self.verbose:
+                    print_stats(epoch, train_acc, train_loss, dev_acc, dev_loss, better=False)
                 epochs_without_increase += 1
                 if self.probe_early_stopping_epochs > 0 and epochs_without_increase >= self.probe_early_stopping_epochs:
-                    print("    EARLY STOPPING")
+                    if self.verbose: print("    EARLY STOPPING")
                     break
 
         print(f"==== Finished training probe {self.probe.name}")
         print(f"    best train acc: {best_model_checkpoint['train_acc']: .2%}")
         print(f"    best dev acc: {best_model_checkpoint['dev_acc']: .2%}")
 
-        if self.res_save_dir:
-            time_str = datetime.now().strftime('%m%d_%H%M%S')
-            model_save_path = os.path.join(self.res_save_dir, f"{self.probe.name}-{time_str}.pt")
-            best_model_checkpoint["model_save_path"] = model_save_path
-            torch.save(best_model_checkpoint, model_save_path)
-            print(f"    saved model to: {model_save_path}")
+        # if self.res_save_dir:
+        #     time_str = datetime.now().strftime('%m%d_%H%M%S')
+        #     model_save_path = os.path.join(self.res_save_dir, f"{self.probe.name}-{time_str}.pt")
+        #     best_model_checkpoint["model_save_path"] = model_save_path
+        #     torch.save(best_model_checkpoint, model_save_path)
+        #     print(f"    saved model to: {model_save_path}")
 
         print(f"===============\n")
         return best_model_checkpoint

@@ -59,7 +59,7 @@ def modularize(forward_fxn, init_fxn=None, name=None):
 
     return SubModule()
 
-def get_target_loc_dict(data_variant):
+def get_model_loc_dict(data_variant):
     if "lstm" in data_variant:
         d = {"sentence_q": [0, 10],
              "subj_adj": [1, 11],
@@ -76,25 +76,26 @@ def get_target_loc_dict(data_variant):
              "negp": [3, 13],
              "subj": [1, 2, 11, 12]}
     elif "bert" in data_variant:
-        d = {"sentence_q": [0, 1, 2, 14, 15],
-             "subj_adj": [0, 3, 16],
-             "subj_noun": [0, 4, 17],
-             "neg": [0, 5, 6, 18, 19],
-             "v_adv": [0, 7, 20],
-             "v_verb": [0, 8, 21],
-             "vp_q": [0, 9, 10, 22, 23],
-             "obj_adj": [0, 11, 24],
-             "obj_noun": [0, 12, 25],
-             "obj": [0, 11, 12, 24, 25],
-             "vp": [0, 8, 9, 10, 21, 22, 23],
-             "v_bar": [0, 7, 8, 20, 21],
-             "negp": [0, 5, 6, 18, 19],
-             "subj": [0, 3, 4, 16, 17]}
+        d = {"sentence_q": [0, 1, 2, 13, 14, 15, 26],
+             "subj_adj": [0, 3, 13, 16, 26],
+             "subj_noun": [0, 4, 13, 17, 26],
+             "neg": [0, 5, 6, 13, 18, 19, 26],
+             "v_adv": [0, 7, 13, 20, 26],
+             "v_verb": [0, 8, 13, 21, 26],
+             "vp_q": [0, 9, 10, 13, 22, 23, 26],
+             "obj_adj": [0, 11, 13, 24, 26],
+             "obj_noun": [0, 12, 13, 25, 26],
+             "obj": [0, 11, 12, 13, 24, 25, 26],
+             "vp": [0, 8, 9, 10, 13, 21, 22, 23, 26],
+             "v_bar": [0, 7, 8, 13, 20, 21, 26],
+             "negp": [0, 5, 6, 13, 18, 19, 26],
+             "subj": [0, 3, 4, 13, 16, 17, 26]
+             }
     else:
         raise ValueError(f"Cannot recognize data variant {data_variant}")
     return d
 
-def get_target_locs(high_node_name: str, loc_mapping_type: str= "lstm"):
+def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm"):
     """ Get list of indices for locations to intervene given type of model
 
     :param high_node_name:
@@ -118,9 +119,7 @@ def get_target_locs(high_node_name: str, loc_mapping_type: str= "lstm"):
              "negp":[3, 13],
              "subj": [1, 2, 11, 12]}
 
-        return d[high_node_name]
-
-    if loc_mapping_type == "bert_cls_only":
+    elif loc_mapping_type == "bert_cls_only":
         d = {"sentence_q": [0],
              "subj_adj": [0],
              "subj_noun": [0],
@@ -134,10 +133,29 @@ def get_target_locs(high_node_name: str, loc_mapping_type: str= "lstm"):
              "vp": [0],
              "v_bar": [0],
              "negp": [0],
-             "subj": [0]}
+             "subj": [0]
+        }
         return d[high_node_name]
 
-    if "bert" in loc_mapping_type:
+    elif loc_mapping_type == "bert_sep_only":
+        d = {
+            "sentence_q": [13, 26],
+            "subj_adj": [13, 26],
+            "subj_noun": [13, 26],
+            "neg": [13, 26],
+            "v_adv": [13, 26],
+            "v_verb": [13, 26],
+            "vp_q": [13, 26],
+            "obj_adj": [13, 26],
+            "obj_noun": [13, 26],
+            "obj": [13, 26],
+            "vp": [13, 26],
+            "v_bar": [13, 26],
+            "negp": [13, 26],
+            "subj": [13, 26]
+        }
+
+    elif "bert" in loc_mapping_type:
         # mapping for bert model
         # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
         #  0        1     2       3     4        5      6     7       8       9     10      11     12
@@ -155,5 +173,12 @@ def get_target_locs(high_node_name: str, loc_mapping_type: str= "lstm"):
              "vp": [0, 8, 9, 10, 13, 21, 22, 23, 26],
              "v_bar": [0, 7, 8, 13, 20, 21, 26],
              "negp": [0, 5, 6, 13, 18, 19, 26],
-             "subj": [0, 3, 4, 13, 16, 17, 26]}
+             "subj": [0, 3, 4, 13, 16, 17, 26]
+             }
+    else:
+        raise ValueError(f"Invalid mapping type {loc_mapping_type}")
+
+    if high_node_name:
         return d[high_node_name]
+    else:
+        return d

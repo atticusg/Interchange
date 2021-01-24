@@ -14,7 +14,7 @@ from trainer import load_model
 
 from itertools import product
 
-from interchange import get_target_locs
+from interchange import get_model_locs
 
 data_path = "data/mqnli/preprocessed/bert-easy.pt"
 model_path = "data/models/bert-easy-best.pt"
@@ -156,7 +156,7 @@ def test_intervention():
     save_path = "experiment_data/bert/test-batch-sentence_q.pkl"
     if get_and_save_results:
         interv_info = {
-            "target_locs": get_target_locs(high_node, loc_mapping_type="bert")
+            "target_locs": get_model_locs(high_node, loc_mapping_type="bert")
         }
         mqnli_bert_data = torch.load("data/mqnli/preprocessed/bert-easy.pt")
         mqnli_bert_model, _ = load_model(PretrainedBertModule,

@@ -19,7 +19,7 @@ from interchange_analysis import Analysis
 import compgraphs
 from compgraphs import mqnli_logic as logic
 from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
-from modeling.utils import get_target_locs
+from modeling.utils import get_model_locs
 
 from typing import List, Dict
 
@@ -63,7 +63,7 @@ class InterchangeExperiment(experiment.Experiment):
         loc_mapping_type = opts.get("loc_mapping_type", "")
         loc_mapping_type = loc_mapping_type if loc_mapping_type else data_variant
         interv_info = {
-            "target_locs": get_target_locs(high_intermediate_node, loc_mapping_type)
+            "target_locs": get_model_locs(high_intermediate_node, loc_mapping_type)
         }
         print(f"high node: {high_intermediate_node}, low_locs: {interv_info['target_locs']}")
 
