@@ -8,7 +8,7 @@ from collections import defaultdict
 from typing import Union
 
 from probing.utils import get_num_classes
-from datasets.mqnli import get_collate_fxn
+import datasets.mqnli
 
 excluded_high_nodes = {"input", "root", "get_p", "get_h"}
 
@@ -85,7 +85,7 @@ SUBTREE_IDXS = {
 }
 
 class ProbingData:
-    def __init__(self, data, high_compgraph, low_compgraph, low_node, low_model_type,
+    def __init__(self, data, high_compgraph, low_compgraph, low_node,
                  probe_train_num_examples: int=6000,
                  probe_train_num_dev_examples: int=600,
                  probe_preprocessing_device: Union[str, torch.device]= "cuda",
@@ -98,9 +98,10 @@ class ProbingData:
                            n not in excluded_high_nodes]
         self.ctrl_mapping = {n: {} for n in self.high_nodes}
 
+        data_variant = datasets.mqnli.get_data_variant(data)
         self.train = ProbingDataset(
             data.train, probe_train_num_examples, high_compgraph,
-            low_compgraph, low_node, low_model_type,
+            low_compgraph, low_node, data_variant,
             ctrl_mapping=self.ctrl_mapping,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
@@ -109,7 +110,7 @@ class ProbingData:
 
         self.dev = ProbingDataset(
             data.dev, probe_train_num_dev_examples, high_compgraph,
-            low_compgraph, low_node, low_model_type,
+            low_compgraph, low_node, data_variant,
             ctrl_mapping=self.ctrl_mapping,
             preprocessing_device=probe_preprocessing_device,
             preprocessing_batch_size=probe_preprocessing_batch_size,
@@ -120,13 +121,13 @@ class ProbingDataset(Dataset):
     def __init__(self, dataset, num_examples: int,
                  high_compgraph: intervention.ComputationGraph,
                  low_compgraph: intervention.ComputationGraph,
-                 low_node: str, low_model_type: str,
+                 low_node: str, data_variant: str,
                  ctrl_mapping=None,
                  preprocessing_device: Union[str, torch.device]="cuda",
                  preprocessing_batch_size: int=128,
                  probe_correct_examples_only: bool=False):
-
         super(ProbingDataset, self).__init__()
+
         dataloader = DataLoader(dataset, batch_size=preprocessing_batch_size, shuffle=False)
 
         if isinstance(preprocessing_device, str):
@@ -150,9 +151,9 @@ class ProbingDataset(Dataset):
                 for input_tuple in dataloader:
                     if len(self.inputs) == self.num_examples:
                         break
-                    if low_model_type == "bert":
+                    if "bert" in data_variant:
                         high_input_tensor = input_tuple[-2]
-                    elif low_model_type == "lstm":
+                    elif "lstm" in data_variant:
                         high_input_tensor = torch.cat((input_tuple[0][:, :9],
                                                        input_tuple[0][:, 10:]),
                                                       dim=1)
@@ -167,15 +168,15 @@ class ProbingDataset(Dataset):
                     high_output = high_compgraph.compute(high_input).cpu()
 
                     key = [serialize(x) for x in input_tuple[0]]
-                    if low_model_type == "bert":
+                    if "bert" in data_variant:
                         input_tuple_for_graph = [x.to(device) for x in input_tuple]
-                    elif low_model_type == "lstm":
+                    elif "lstm" in data_variant:
                         input_tuple_for_graph = [input_tuple[0].T.to(device),
                                                  input_tuple[1].to(device)]
 
                     low_input = intervention.GraphInput.batched(
                         {"input": input_tuple_for_graph}, key,
-                        batch_dim=(1 if low_model_type == "lstm" else 0)
+                        batch_dim=(1 if "lstm" in data_variant else 0)
                     )
                     low_output = low_compgraph.compute(low_input)
                     low_output = low_output.to(torch.device("cpu"))
@@ -224,7 +225,7 @@ class ProbingDataset(Dataset):
                             self.ctrl_labels[high_node].append(ctrl_label)
 
                     low_hidden_values = low_compgraph.get_result(low_node, low_input)
-                    if low_model_type == "lstm": # make batch first
+                    if "lstm" in data_variant: # make batch first
                         low_hidden_values = low_hidden_values.transpose(0,1)
                     low_hidden_values = low_hidden_values[correct][:num_new_exs]
                     low_hidden_values = low_hidden_values.to(torch.device("cpu"))

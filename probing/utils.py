@@ -19,9 +19,9 @@ HIGH_NODE_LABEL_SPACE = {
 def get_num_classes(high_node: str) -> int:
     return HIGH_NODE_LABEL_SPACE[high_node]
 
-def get_low_nodes(model_type):
+def get_low_nodes(model_type, model):
     if model_type == "lstm":
-        return ["lstm_0", "lstm_1"]
+        return [f"lstm_{i}" for i in range(model.num_lstm_layers)]
     elif model_type == "bert":
         return [f"bert_layer_{i}" for i in range(12)]
 
