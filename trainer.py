@@ -289,5 +289,5 @@ def load_model(model_class, save_path, device=None, opts: Dict=None):
     model = model_class(**model_config)
     model.load_state_dict(checkpoint['model_state_dict'])
     device = torch.device("cpu") if device is None else device
-    model.to(device)
+    model = model.to(device)
     return model, checkpoint

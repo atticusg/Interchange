@@ -60,40 +60,39 @@ def modularize(forward_fxn, init_fxn=None, name=None):
     return SubModule()
 
 def get_model_loc_dict(data_variant):
-    if "lstm" in data_variant:
-        d = {"sentence_q": [0, 10],
-             "subj_adj": [1, 11],
-             "subj_noun": [2, 12],
-             "neg": [3, 13],
-             "v_adv": [4, 14],
-             "v_verb": [5, 15],
-             "vp_q": [6, 16],
-             "obj_adj": [7, 17],
-             "obj_noun": [8, 18],
-             "obj": [7, 8, 17, 18],
-             "vp": [6, 16],
-             "v_bar": [4, 5, 14, 15],
-             "negp": [3, 13],
-             "subj": [1, 2, 11, 12]}
-    elif "bert" in data_variant:
-        d = {"sentence_q": [0, 1, 2, 13, 14, 15, 26],
-             "subj_adj": [0, 3, 13, 16, 26],
-             "subj_noun": [0, 4, 13, 17, 26],
-             "neg": [0, 5, 6, 13, 18, 19, 26],
-             "v_adv": [0, 7, 13, 20, 26],
-             "v_verb": [0, 8, 13, 21, 26],
-             "vp_q": [0, 9, 10, 13, 22, 23, 26],
-             "obj_adj": [0, 11, 13, 24, 26],
-             "obj_noun": [0, 12, 13, 25, 26],
-             "obj": [0, 11, 12, 13, 24, 25, 26],
-             "vp": [0, 8, 9, 10, 13, 21, 22, 23, 26],
-             "v_bar": [0, 7, 8, 13, 20, 21, 26],
-             "negp": [0, 5, 6, 13, 18, 19, 26],
-             "subj": [0, 3, 4, 13, 16, 17, 26]
-             }
-    else:
-        raise ValueError(f"Cannot recognize data variant {data_variant}")
-    return d
+    return {"sentence_q": [0, 1, 2, 13, 14, 15, 26],
+         "subj_adj": [0, 3, 13, 16, 26],
+         "subj_noun": [0, 4, 13, 17, 26],
+         "neg": [0, 5, 6, 13, 18, 19, 26],
+         "v_adv": [0, 7, 13, 20, 26],
+         "v_verb": [0, 8, 13, 21, 26],
+         "vp_q": [0, 9, 10, 13, 22, 23, 26],
+         "obj_adj": [0, 11, 13, 24, 26],
+         "obj_noun": [0, 12, 13, 25, 26],
+         "obj": [0, 11, 12, 13, 24, 25, 26],
+         "vp": [0, 8, 9, 10, 13, 21, 22, 23, 26],
+         "v_bar": [0, 7, 8, 13, 20, 21, 26],
+         "negp": [0, 5, 6, 13, 18, 19, 26],
+         "subj": [0, 3, 4, 13, 16, 17, 26]
+    }
+    # if "lstm" in data_variant:
+    #     d = {"sentence_q": [0, 10],
+    #          "subj_adj": [1, 11],
+    #          "subj_noun": [2, 12],
+    #          "neg": [3, 13],
+    #          "v_adv": [4, 14],
+    #          "v_verb": [5, 15],
+    #          "vp_q": [6, 16],
+    #          "obj_adj": [7, 17],
+    #          "obj_noun": [8, 18],
+    #          "obj": [7, 8, 17, 18],
+    #          "vp": [6, 16],
+    #          "v_bar": [4, 5, 14, 15],
+    #          "negp": [3, 13],
+    #          "subj": [1, 2, 11, 12]}
+    # else:
+    #     raise ValueError(f"Cannot recognize data variant {data_variant}")
+    # return d
 
 def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm"):
     """ Get list of indices for locations to intervene given type of model
