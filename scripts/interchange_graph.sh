@@ -8,4 +8,5 @@ python interchange_manager.py analyze_graph \
     -r 1 \
     "$@"
 # -n num_expts -s -2
-# -x -m "nlprun -q john -a hanson-intervention" \
+# -x
+# -m <metascript>  \

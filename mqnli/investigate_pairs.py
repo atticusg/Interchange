@@ -15,5 +15,5 @@ def test_pair(data_path, premise1, hypothesis1, premise2, hypothesis2):
         partition[high_node].add(nlm.compute_simple_relation_intervention(premise1, hypothesis1, premise2, hypothesis2, high_node))
     return partition
 
-
-print(test_pair("C:\\Users\\attic\\Documents\\GitHub\\Interchange\\mqnli\\data","notevery bad singer doesnot badly hears every good tree", "every bad singer doesnot badly hears every good tree", "notevery bad singer doesnot badly hears every good tree","notevery bad singer doesnot badly hears every good tree"))
+path="data/"
+print(test_pair(path,"notevery bad singer doesnot badly hears every good tree", "every bad singer doesnot badly hears every good tree", "notevery bad singer doesnot badly hears every good tree","notevery bad singer doesnot badly hears every good tree"))
