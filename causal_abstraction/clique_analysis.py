@@ -1,7 +1,14 @@
+import os
+import pickle
+from datetime import datetime
+
 import networkx as nx
 import copy
 import numpy as np
 from intervention.utils import serialize
+
+import torch
+
 
 def get_input(intervention, serialize_fxn=serialize):
     return tuple(sorted((k, serialize_fxn(intervention.base.values[k])) for k in intervention.base.values))
@@ -132,3 +139,68 @@ def find_cliques(G, causal_edges, alpha):
                     final_result.append(clique)
                     seen = True
     return final_result
+
+
+def analyze_graph_results(G, causal_edges, input_to_id, cliques):
+    if len(cliques) == 0:
+        res_dict = {"max_clique_size": 0,
+                    "avg_clique_size": 0,
+                    "sum_clique_size": 0,
+                    "clique_count": 0}
+        return res_dict
+    max_clique_size = max(len(c) for c in cliques)
+    avg_clique_size = sum(len(c) for c in cliques) / len(cliques) if len(cliques) > 0 else 0
+    num_nodes_in_cliques = sum(len(c) for c in cliques)
+    # find percentage of causal edges
+
+    res_dict = {"max_clique_size": max_clique_size,
+                "avg_clique_size": avg_clique_size,
+                "sum_clique_size": num_nodes_in_cliques,
+                "clique_count": len(cliques)}
+    return res_dict
+
+
+def save_single_graph_analysis(G, causal_edges, input_to_id, cliques, graph_alpha, res_save_dir, id=None):
+    if res_save_dir:
+        res = {
+            "alpha": graph_alpha,
+            "graph": G,
+            "causal_edges": causal_edges,
+            "input_to_id": input_to_id,
+            "cliques": cliques
+        }
+        time_str = datetime.now().strftime("%m%d-%H%M%S")
+        if id:
+            res_file_name = f"graph-id{id}-{time_str}.pkl"
+        else:
+            res_file_name = f"graph-{time_str}.pkl"
+        graph_save_path = os.path.join(res_save_dir, res_file_name)
+
+        with open(graph_save_path, "wb") as f:
+            pickle.dump(res, f)
+        print("Saved graph analysis data to", graph_save_path)
+        return graph_save_path
+    else:
+        return ""
+
+
+def save_graph_analysis(graphs, graph_alpha, res_save_dir, id=None):
+    if res_save_dir:
+        res = {
+            "alpha": graph_alpha,
+            "graphs": graphs
+        }
+        time_str = datetime.now().strftime("%m%d-%H%M%S")
+        if id:
+            res_file_name = f"graph-id{id}-{time_str}.pkl"
+            res["id"] = id
+        else:
+            res_file_name = f"graph-{time_str}.pkl"
+        graph_save_path = os.path.join(res_save_dir, res_file_name)
+
+        with open(graph_save_path, "wb") as f:
+            pickle.dump(res, f)
+        print("Saved graph analysis data to", graph_save_path)
+        return graph_save_path
+    else:
+        return ""

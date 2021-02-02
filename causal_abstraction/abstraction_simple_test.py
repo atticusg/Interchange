@@ -1,5 +1,5 @@
-from intervention import ComputationGraph, GraphNode, GraphInput, Intervention, Location
-from intervention.abstraction import create_possible_mappings, find_abstractions
+from intervention import ComputationGraph, GraphNode, Intervention, Location
+from causal_abstraction.abstraction import find_abstractions
 import numpy as np
 
 class BooleanLogicProgram(ComputationGraph):

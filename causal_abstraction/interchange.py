@@ -1,11 +1,8 @@
-# This script is the same as `causal_abstraction/interchange.py`.
-# It is duplicated here to support old pickled experiment result files.
-
 import torch
 
 import intervention
-from .utils import serialize
-from .abstraction_torch import create_possible_mappings
+from intervention.utils import serialize
+from causal_abstraction.abstraction_torch import create_possible_mappings
 
 from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product
