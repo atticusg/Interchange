@@ -1,7 +1,7 @@
 from intervention import ComputationGraph, GraphNode, Intervention, Location
 from causal_abstraction.abstraction import find_abstractions
 import numpy as np
-from causal_abstraction.cliques import construct_graph, find_cliques
+from causal_abstraction.clique_analysis import construct_graph, find_cliques
 
 class BooleanLogicProgram(ComputationGraph):
     def __init__(self):

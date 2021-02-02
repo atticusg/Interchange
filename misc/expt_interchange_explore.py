@@ -13,7 +13,7 @@ from intervention.utils import serialize
 from typing import Dict
 import pickle
 
-from trainer import load_model
+from modeling.utils import load_model
 from modeling.lstm import LSTMModule
 from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 from compgraphs.mqnli_lstm import MQNLI_LSTM_CompGraph, Abstr_MQNLI_LSTM_CompGraph

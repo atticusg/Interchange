@@ -2,7 +2,7 @@ from intervention import ComputationGraph, GraphNode, Intervention, Location
 from causal_abstraction.abstraction import find_abstractions
 import numpy as np
 from sklearn.neural_network import MLPClassifier
-from causal_abstraction.cliques import construct_graph
+from causal_abstraction.clique_analysis import construct_graph
 
 
 class BooleanLogicProgram(ComputationGraph):

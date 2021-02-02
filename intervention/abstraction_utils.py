@@ -1,4 +1,4 @@
-# This script is the same as `causal_abstraction/abstraction_torch.py`.
+# This script is the same as `causal_abstraction/abstraction_utils.py`.
 # This script is depended on by abstraction_batched.py
 # It is duplicated here to support old pickled experiment result files.
 

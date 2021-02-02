@@ -2,7 +2,7 @@ import time
 
 import torch
 from torch.utils.data import DataLoader
-from trainer import load_model
+from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 
 from intervention import LOC

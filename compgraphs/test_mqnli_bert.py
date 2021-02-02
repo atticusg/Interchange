@@ -6,7 +6,7 @@ from tqdm import tqdm
 from compgraphs.mqnli_bert import MQNLI_Bert_CompGraph
 from compgraphs.mqnli_bert import Abstr_MQNLI_Bert_CompGraph
 from intervention import GraphInput
-from trainer import load_model
+from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 
 @pytest.fixture

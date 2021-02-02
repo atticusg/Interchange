@@ -5,7 +5,7 @@ import torch
 
 import intervention
 from .utils import serialize
-from .abstraction_torch import create_possible_mappings
+from .abstraction_utils import create_possible_mappings
 
 from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product

@@ -12,14 +12,14 @@ import intervention
 import interchange_manager
 import datasets.mqnli
 import modeling
-from trainer import load_model
 import experiment
-from interchange_analysis import Analysis
+
+from causal_abstraction.interchange import find_abstractions_batch
+from causal_abstraction.success_rates import analyze_counts
 
 import compgraphs
-from compgraphs import mqnli_logic as logic
 from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
-from modeling.utils import get_model_locs
+from modeling.utils import get_model_locs, load_model
 
 from typing import List, Dict
 
@@ -28,15 +28,13 @@ SAMPLE_RES_DICT = {
     'save_path': "",
 }
 
-
-
 class InterchangeExperiment(experiment.Experiment):
     def experiment(self, opts: Dict) -> Dict:
         res, duration, high_model, low_model, hi2lo_dict = self.run_interchanges(opts)
         save_path = self.save_interchange_results(opts, res)
         res_dict = {"runtime": duration, "save_path": save_path}
-        analysis_res = self.analyze_interchanges(res, high_model, low_model,
-                                                 hi2lo_dict, opts)
+        # analysis_res = self.analyze_interchanges(res, high_model, low_model, hi2lo_dict, opts)
+        analysis_res = analyze_counts(res)
         res_dict.update(analysis_res)
         print("final res_dict", res_dict)
         return res_dict
@@ -79,118 +77,57 @@ class InterchangeExperiment(experiment.Experiment):
         high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
 
-        # set up to get examples from dataset
-        if opts.get("interchange_batch_size", 0):
-            # ------ Batched interchange experiment ------ #
-            start_time = time.time()
-            batch_results = intervention.find_abstractions_batch(
-                low_model=low_model,
-                high_model=high_model,
-                low_model_type=model_type,
-                dataset=data.dev,
-                num_inputs=opts["num_inputs"],
-                batch_size=opts["interchange_batch_size"],
-                fixed_assignments={x: {x: intervention.LOC[:]} for x in
-                                   ["root", "input"]},
-                unwanted_low_nodes={"root", "input"}
-            )
-            duration = time.time() - start_time
-            print(f"Interchange experiment took {duration:.2f}s")
-            return batch_results, duration, high_model, low_model, None
-        else:
-            # ------ Original interchange experiment ------ #
-            low_inputs, high_interventions, hi2lo_dict = \
-                self.prepare_inputs(data=data,
-                                    num_inputs=opts["num_inputs"],
-                                    model_type=model_type,
-                                    high_intermediate_node=high_intermediate_node,
-                                    device=device)
 
-            # setup for find_abstractions
-            fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
-            if model_type == "lstm":
-                input_mapping = lambda x: x  # identity function
-            elif model_type == "bert":
-                input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
-            unwanted_nodes = {"root", "input"}
+        # ------ Batched causal_abstraction experiment ------ #
+        start_time = time.time()
+        batch_results = find_abstractions_batch(
+            low_model=low_model,
+            high_model=high_model,
+            low_model_type=model_type,
+            dataset=data.dev,
+            num_inputs=opts["num_inputs"],
+            batch_size=opts["interchange_batch_size"],
+            fixed_assignments={x: {x: intervention.LOC[:]} for x in
+                               ["root", "input"]},
+            unwanted_low_nodes={"root", "input"}
+        )
+        duration = time.time() - start_time
+        print(f"Interchange experiment took {duration:.2f}s")
+        return batch_results, duration, high_model, low_model, None
 
-            # find abstractions
-            start_time = time.time()
-            with torch.no_grad():
-                print("Finding abstractions")
-                res = intervention.find_abstractions_torch(
-                    low_model=low_model,
-                    high_model=high_model,
-                    high_inputs=low_inputs,
-                    total_high_interventions=high_interventions,
-                    fixed_assignments=fixed_assignments,
-                    input_mapping=input_mapping,
-                    unwanted_low_nodes=unwanted_nodes
-                )
-
-            duration = time.time() - start_time
-            print(f"Finished finding abstractions, took {duration:.2f} s")
-            return res, duration, high_model, low_model, hi2lo_dict
-
-    def prepare_inputs(self, data, num_inputs, model_type, high_intermediate_node, device):
-        # set up to get examples from dataset
-        hi2lo_dict = {}
-        if model_type == "lstm":
-            collate_fn = lambda batch: datasets.utils.lstm_collate(batch,
-                                                                   batch_first=False)
-            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
-                                    collate_fn=collate_fn)
-        elif model_type == "bert":
-            dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
-
-        # get examples from dataset
-        low_inputs = []
-        high_interventions = []
-        print("Preparing inputs")
-        for i, input_tuple in enumerate(dataloader):
-            if i == num_inputs: break
-            orig_input = input_tuple[-2]
-            input_tuple = [x.to(device) for x in input_tuple]
-            if model_type == "bert":
-                orig_input = orig_input.T
-                hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
-
-            low_inputs.append(intervention.Intervention({"input": orig_input}, {}))
-
-            high_interventions += self.get_interventions(high_intermediate_node, orig_input)
-        return low_inputs, high_interventions, hi2lo_dict
-
-    def get_interventions(self, high_node: str, base_input: torch.Tensor) \
-            -> List[intervention.Intervention]:
-        if high_node in {"subj_adj", "v_adv", "obj_adj"}:
-            intervention_values = logic.intersective_projections
-        elif high_node in {"subj_noun", "v_verb", "obj_noun"}:
-            intervention_values = torch.tensor([logic.INDEP, logic.EQUIV],
-                                               dtype=torch.long)
-        elif high_node in {"sentence_q", "vp_q"}:
-            intervention_values = logic.quantifier_signatures
-        elif high_node == "neg":
-            intervention_values = logic.negation_signatures
-        elif high_node in {"subj", "v_bar", "obj"}:
-            intervention_values = torch.tensor(
-                [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL],
-                dtype=torch.long
-            )
-        elif high_node in {"vp", "negp"}:
-            intervention_values = torch.tensor(
-                [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL,
-                 logic.CONTRADICT, logic.ALTER, logic.COVER],
-                dtype=torch.long
-            )
-        else:
-            raise ValueError(f"Invalid high-level node: {high_node}")
-
-        res = [intervention.Intervention({"input": base_input},
-                                         {high_node: value.unsqueeze(0)})
-               for value in intervention_values]
-
-        return res
-
+        # # ------ Original causal_abstraction experiment ------ #
+        # low_inputs, high_interventions, hi2lo_dict = \
+        #     self.prepare_inputs(data=data,
+        #                         num_inputs=opts["num_inputs"],
+        #                         model_type=model_type,
+        #                         high_intermediate_node=high_intermediate_node,
+        #                         device=device)
+        #
+        # # setup for find_abstractions
+        # fixed_assignments = {x: {x: intervention.LOC[:]} for x in ["root", "input"]}
+        # if model_type == "lstm":
+        #     input_mapping = lambda x: x  # identity function
+        # elif model_type == "bert":
+        #     input_mapping = lambda x: hi2lo_dict[intervention.utils.serialize(x)]
+        # unwanted_nodes = {"root", "input"}
+        #
+        # # find abstractions
+        # start_time = time.time()
+        # with torch.no_grad():
+        #     print("Finding abstractions")
+        #     res = intervention.find_abstractions_torch(
+        #         low_model=low_model,
+        #         high_model=high_model,
+        #         high_inputs=low_inputs,
+        #         total_high_interventions=high_interventions,
+        #         fixed_assignments=fixed_assignments,
+        #         input_mapping=input_mapping,
+        #         unwanted_low_nodes=unwanted_nodes
+        #     )
+        #
+        # duration = time.time() - start_time
+        # print(f"Finished finding abstractions, took {duration:.2f} s")
+        # return res, duration, high_model, low_model, hi2lo_dict
 
     def save_interchange_results(self, opts: Dict, res: List) -> str:
         save_dir = opts.get("res_save_dir", "")
@@ -221,10 +158,69 @@ class InterchangeExperiment(experiment.Experiment):
         else:
             return ""
 
-    def analyze_interchanges(self, res: List, high_model, low_model, hi2lo_dict,
-                             opts: Dict) -> Dict:
-        a = Analysis(res, high_model, low_model, hi2lo_dict=hi2lo_dict, **opts)
-        return a.analyze()
+    # def prepare_inputs(self, data, num_inputs, model_type, high_intermediate_node, device):
+    #     # set up to get examples from dataset
+    #     hi2lo_dict = {}
+    #     if model_type == "lstm":
+    #         collate_fn = lambda batch: datasets.utils.lstm_collate(batch,
+    #                                                                batch_first=False)
+    #         dataloader = DataLoader(data.dev, batch_size=1, shuffle=False,
+    #                                 collate_fn=collate_fn)
+    #     elif model_type == "bert":
+    #         dataloader = DataLoader(data.dev, batch_size=1, shuffle=False)
+    #
+    #     # get examples from dataset
+    #     low_inputs = []
+    #     high_interventions = []
+    #     print("Preparing inputs")
+    #     for i, input_tuple in enumerate(dataloader):
+    #         if i == num_inputs: break
+    #         orig_input = input_tuple[-2]
+    #         input_tuple = [x.to(device) for x in input_tuple]
+    #         if model_type == "bert":
+    #             orig_input = orig_input.T
+    #             hi2lo_dict[intervention.utils.serialize(orig_input)] = input_tuple
+    #
+    #         low_inputs.append(intervention.Intervention({"input": orig_input}, {}))
+    #
+    #         high_interventions += self.get_interventions(high_intermediate_node, orig_input)
+    #     return low_inputs, high_interventions, hi2lo_dict
+    #
+    # def get_interventions(self, high_node: str, base_input: torch.Tensor) \
+    #         -> List[intervention.Intervention]:
+    #     if high_node in {"subj_adj", "v_adv", "obj_adj"}:
+    #         intervention_values = logic.intersective_projections
+    #     elif high_node in {"subj_noun", "v_verb", "obj_noun"}:
+    #         intervention_values = torch.tensor([logic.INDEP, logic.EQUIV],
+    #                                            dtype=torch.long)
+    #     elif high_node in {"sentence_q", "vp_q"}:
+    #         intervention_values = logic.quantifier_signatures
+    #     elif high_node == "neg":
+    #         intervention_values = logic.negation_signatures
+    #     elif high_node in {"subj", "v_bar", "obj"}:
+    #         intervention_values = torch.tensor(
+    #             [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL],
+    #             dtype=torch.long
+    #         )
+    #     elif high_node in {"vp", "negp"}:
+    #         intervention_values = torch.tensor(
+    #             [logic.INDEP, logic.EQUIV, logic.ENTAIL, logic.REV_ENTAIL,
+    #              logic.CONTRADICT, logic.ALTER, logic.COVER],
+    #             dtype=torch.long
+    #         )
+    #     else:
+    #         raise ValueError(f"Invalid high-level node: {high_node}")
+    #
+    #     res = [intervention.Intervention({"input": base_input},
+    #                                      {high_node: value.unsqueeze(0)})
+    #            for value in intervention_values]
+    #
+    #     return res
+    #
+    # def analyze_interchanges(self, res: List, high_model, low_model, hi2lo_dict,
+    #                          opts: Dict) -> Dict:
+    #     a = InterchangeAnalysis(res, high_model, low_model, hi2lo_dict=hi2lo_dict, **opts)
+    #     return a.analyze()
 
 def main():
     parser = argparse.ArgumentParser()

@@ -32,7 +32,7 @@ def setup(db_path, model_path, data_path):
 
 def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
     import torch
-    from trainer import load_model
+    from modeling.utils import load_model
     from modeling import get_module_class_by_name
     import experiment.db_utils as db
 
@@ -72,33 +72,13 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
                                 "res_save_dir": res_save_dir}, id)
 
 
-def run(db_path, script, n, detach, metascript, metascript_batch_size,
-        metascript_log_dir,
+def run(db_path, script, n, detach, metascript, metascript_batch_size, metascript_log_dir,
         ready_status, started_status):
     manager = ExperimentManager(db_path, INTERCHANGE_DEFAULT_OPTS)
 
     if os.path.exists(script):
         with open(script, "r") as f:
             script = f.read().strip()
-
-    if metascript and os.path.exists(metascript):
-        with open(metascript, "r") as f:
-            metascript = f.read().strip()
-
-    manager.run(launch_script=script, n=n, detach=detach,
-                metascript=metascript,
-                metascript_batch_size=metascript_batch_size,
-                metascript_log_dir=metascript_log_dir,
-                ready_status=ready_status, started_status=started_status)
-
-
-def analyze(db_path, script, n, detach, metascript,
-            metascript_batch_size, metascript_log_dir,
-            ready_status, started_status):
-    # expt_opts = ["data_path", "model_path", "save_path", "abstraction",
-    #              "num_inputs", "res_save_dir"]
-    expt_opts = ["save_path", "res_save_dir"]
-    manager = ExperimentManager(db_path, expt_opts)
 
     if metascript and os.path.exists(metascript):
         with open(metascript, "r") as f:
@@ -221,7 +201,7 @@ def main():
     analyze_graph_parser.add_argument("-d", "--db_path", type=str,
                                       required=True)
     analyze_graph_parser.add_argument("-i", "--script", type=str,
-                                      default="python graph_analysis.py")
+                                      default="python clique_analysis.py")
     analyze_graph_parser.add_argument("-n", "--n", type=int, required=True)
     analyze_graph_parser.add_argument("-x", "--detach", action="store_true")
     analyze_graph_parser.add_argument("-m", "--metascript", type=str,

@@ -3,7 +3,7 @@ import argparse
 
 from train_manager import DEFAULT_LSTM_OPTS
 from modeling.lstm import LSTMModule
-from trainer import Trainer
+from modeling.trainer import Trainer
 import experiment.manager
 
 from typing import Dict

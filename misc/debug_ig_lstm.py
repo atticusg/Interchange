@@ -2,7 +2,7 @@ from datasets.mqnli import get_collate_fxn
 from modeling.pretrained_bert import PretrainedBertModule
 from modeling.lstm import LSTMModule
 import os
-from trainer import load_model
+from modeling.utils import load_model
 import torch
 from torch.utils.data import DataLoader
 

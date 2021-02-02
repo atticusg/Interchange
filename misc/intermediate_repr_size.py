@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
-from trainer import load_model
+from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 
 import intervention

@@ -1,5 +1,5 @@
 import torch
-from trainer import load_model
+from modeling.utils import load_model
 
 import compgraphs
 import modeling

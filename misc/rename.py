@@ -21,7 +21,7 @@ def rename_experiment(path):
             if col not in row: continue
             p = row[col]
             if p:
-                p = p.replace("experiment_data/", "data/interchange/")
+                p = p.replace("experiment_data/", "data/causal_abstraction/")
                 p = p.replace("hard-nov3", "hard")
                 update_dict[col] = p
 
@@ -95,7 +95,7 @@ def main():
     for path in paths:
         if "training" in path:
             rename_training(path)
-        if "data/interchange" in path:
+        if "data/causal_abstraction" in path:
             rename_experiment(path)
         if "data/probing" in path:
             rename_probing(path)

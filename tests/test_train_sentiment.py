@@ -1,10 +1,7 @@
 import pytest
-import torch
 
-from trainer import *
+from modeling.trainer import *
 from datasets.sentiment import SentimentData
-from datasets.mqnli import MQNLIData, MQNLIBertData
-from modeling.pretrained_bert import PretrainedBertModule
 from modeling.lstm import LSTMModule, LSTMSelfAttnModule
 from modeling.transformer import TransformerModule
 from modeling.cbow import CBOWModule

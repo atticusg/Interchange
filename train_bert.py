@@ -3,7 +3,7 @@ import argparse
 
 from train_manager import DEFAULT_BERT_OPTS
 from modeling.pretrained_bert import PretrainedBertModule
-from trainer import Trainer
+from modeling.trainer import Trainer
 import experiment
 
 from typing import Dict

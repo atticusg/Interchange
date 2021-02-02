@@ -1,5 +1,5 @@
 from modeling.pretrained_bert import PretrainedBertModule
-from trainer import load_model
+from modeling.utils import load_model
 import torch
 from torch.utils.data import DataLoader
 
