@@ -1,8 +1,7 @@
 import pytest
-import torch
 
-from trainer import *
-from modeling.lstm import LSTMModule, LSTMSelfAttnModule
+from modeling.trainer import *
+from modeling.lstm import LSTMModule
 from modeling.transformer import TransformerModule
 from modeling.cbow import CBOWModule
 

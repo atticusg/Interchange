@@ -10,11 +10,11 @@ from intervention.utils import serialize
 
 import compgraphs
 from modeling.pretrained_bert import PretrainedBertModule
-from trainer import load_model
+from modeling.utils import load_model
 
 from itertools import product
 
-from interchange import get_model_locs
+from causal_abstraction import get_model_locs
 
 data_path = "data/mqnli/preprocessed/bert-easy.pt"
 model_path = "data/models/bert-easy-best.pt"
@@ -169,7 +169,7 @@ def test_intervention():
         low_model = compgraphs.Abstr_MQNLI_Bert_CompGraph(low_model, [low_node],
                                                           interv_info=interv_info)
         start_time = time.time()
-        batch_results = intervention.abstraction_batched.find_abstractions_batch(
+        batch_results = interchange.abstraction_batched.find_abstractions_batch(
             low_model=low_model,
             high_model=high_model,
             low_model_type="bert",

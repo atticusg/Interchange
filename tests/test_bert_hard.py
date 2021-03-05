@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-from trainer import load_model, evaluate_and_predict
+from modeling.trainer import evaluate_and_predict
+from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 from tqdm import tqdm
 

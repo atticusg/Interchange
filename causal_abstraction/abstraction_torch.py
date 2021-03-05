@@ -240,7 +240,7 @@ def test_mapping(low_model,high_model,high_inputs,total_high_interventions,mappi
             realizations_to_inputs[realization] = new_realizations_to_inputs[realization]
         counter +=1
         if counter > 100 and False:
-            print(awefawefawefawe)
+            raise RuntimeError
     #print(mapping)
     #for key in total_realizations:
         #print(key, len(total_realizations[key]))

@@ -1,4 +1,6 @@
 import math
+from typing import Dict
+
 import torch
 import torch.nn as nn
 
@@ -181,3 +183,19 @@ def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm"):
         return d[high_node_name]
     else:
         return d
+
+
+def load_model(model_class, save_path, device=None, opts: Dict=None):
+    if device is not None:
+        checkpoint = torch.load(save_path, map_location=device)
+    else:
+        checkpoint = torch.load(save_path)
+    assert 'model_config' in checkpoint
+    model_config = checkpoint['model_config']
+    if opts:
+        model_config.update(opts)
+    model = model_class(**model_config)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    device = torch.device("cpu") if device is None else device
+    model = model.to(device)
+    return model, checkpoint

@@ -1,8 +1,9 @@
-from intervention import ComputationGraph, GraphNode, GraphInput, Intervention, Location
-from intervention.abstraction import create_possible_mappings, find_abstractions
+from intervention import ComputationGraph, GraphNode, Intervention, Location
+from causal_abstraction.abstraction import find_abstractions
 import numpy as np
 from sklearn.neural_network import MLPClassifier
-from intervention.analysis import construct_graph, find_clusters
+from causal_abstraction.clique_analysis import construct_graph
+
 
 class BooleanLogicProgram(ComputationGraph):
     def __init__(self):
