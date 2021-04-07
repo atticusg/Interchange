@@ -4,8 +4,7 @@ from modeling.utils import load_model
 import compgraphs
 import modeling
 
-from probing.dataset import ProbingData
-import probing.utils
+from interchange.probing import ProbingData
 
 opts = {
     "model_path": "",
@@ -48,10 +47,10 @@ def main():
     lo_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name("bert")
     hi_compgraph = compgraphs.MQNLI_Logic_CompGraph(data)
 
-    probe_input_dim = probing.utils.get_low_hidden_dim("bert", module)
+    probe_input_dim = interchange.probing.utils.get_low_hidden_dim("bert", module)
 
     with torch.no_grad():
-        for low_node in probing.utils.get_low_nodes("bert"):
+        for low_node in interchange.probing.utils.get_low_nodes("bert"):
             print(f"\n=== Getting hidden vectors for low node {low_node}")
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph,
                                                           [low_node])

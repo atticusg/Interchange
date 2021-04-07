@@ -5,14 +5,12 @@ from torch.utils.data import DataLoader
 from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 
-from intervention import LOC
 from compgraphs import MQNLI_Logic_CompGraph
 from compgraphs import MQNLI_Bert_CompGraph, Abstr_MQNLI_Bert_CompGraph
 
-import probing.utils
-from probing.modules import Probe
-from probing.trainer import ProbeTrainer
-from probing.dataset import ProbingData, ProbingDataset
+from interchange.probing import Probe
+from interchange.probing import ProbeTrainer
+from interchange.probing import ProbingData, ProbingDataset
 
 
 
@@ -146,7 +144,7 @@ def test_train():
     ctrl_train_accs = []
     for probe_max_rank in probe_max_ranks:
         probe = Probe(high_node, low_node, low_loc, is_control=False,
-                      probe_output_classes=probing.utils.get_num_classes(high_node),
+                      probe_output_classes=interchange.probing.utils.get_num_classes(high_node),
                       probe_input_dim=probe_input_dim, probe_max_rank=probe_max_rank,
                       probe_dropout=probe_dropout)
         trainer = ProbeTrainer(probe_data, probe,
@@ -163,10 +161,10 @@ def test_train():
         print("training control probe")
 
         ctrl_probe = Probe(high_node, low_node, low_loc, is_control=True,
-                      probe_output_classes=probing.utils.get_num_classes(high_node),
-                      probe_input_dim=probe_input_dim,
-                      probe_max_rank=probe_max_rank,
-                      probe_dropout=probe_dropout)
+                           probe_output_classes=interchange.probing.utils.get_num_classes(high_node),
+                           probe_input_dim=probe_input_dim,
+                           probe_max_rank=probe_max_rank,
+                           probe_dropout=probe_dropout)
         ctrl_trainer = ProbeTrainer(probe_data, ctrl_probe,
                                probe_train_batch_size=128,
                                res_save_dir=probe_save_dir,

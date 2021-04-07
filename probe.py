@@ -11,10 +11,9 @@ import compgraphs
 import modeling
 import modeling.utils
 
-from probing.modules import Probe
-from probing.dataset import ProbingData
-from probing.trainer import ProbeTrainer
-import probing.utils
+from interchange.probing import Probe
+from interchange.probing import ProbingData
+from interchange.probing import ProbeTrainer
 
 from probe_manager import DEFAULT_PROBING_OPTS
 
@@ -45,10 +44,10 @@ class ProbingExperiment(experiment.Experiment):
         writer = csv.DictWriter(csv_f, fieldnames)
         writer.writeheader()
 
-        probe_input_dim = probing.utils.get_low_hidden_dim(opts["model_type"], module)
+        probe_input_dim = interchange.probing.utils.get_low_hidden_dim(opts["model_type"], module)
 
         # do probing by low node
-        for low_node in probing.utils.get_low_nodes(opts["model_type"], module):
+        for low_node in interchange.probing.utils.get_low_nodes(opts["model_type"], module):
             start_time = time.time()
             print(f"\n=== Getting hidden vectors for low node {low_node}")
             lo_abstr_compgraph = lo_abstr_compgraph_class(lo_base_compgraph, [low_node])
@@ -59,7 +58,7 @@ class ProbingExperiment(experiment.Experiment):
 
             print(f"=== Training probes")
             for high_node in loc_dict.keys():
-                probe_output_classes = probing.utils.get_num_classes(high_node)
+                probe_output_classes = interchange.probing.utils.get_num_classes(high_node)
                 for low_loc in loc_dict[high_node]:
                     for is_control in [False, True]:
                         probe = Probe(

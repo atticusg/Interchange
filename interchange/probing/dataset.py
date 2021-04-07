@@ -7,7 +7,7 @@ from tqdm import tqdm
 from collections import defaultdict
 from typing import Union
 
-from probing.utils import get_num_classes
+from interchange.probing import get_num_classes
 import datasets.mqnli
 
 excluded_high_nodes = {"input", "root", "get_p", "get_h"}
