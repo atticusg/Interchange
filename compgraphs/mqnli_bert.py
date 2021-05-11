@@ -1,8 +1,9 @@
+import antra
 import torch
 import re
 
-from intervention import ComputationGraph, GraphNode, LOC
-from compgraphs.abstractable import AbstractableCompGraph
+from antra import ComputationGraph, GraphNode, LOC
+from antra.abstractable import AbstractableCompGraph
 from typing import List, Any, Optional
 
 def generate_bert_layer_fxn(layer_module, i):
@@ -33,9 +34,7 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
 
         self.model = bert_model
 
-        @GraphNode()
-        def input(x):
-            return x
+        input = antra.GraphNode.leaf("input")
 
         bert = self.model.bert
 
@@ -81,7 +80,7 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
         def root(x):
             return torch.argmax(x, dim=1)
         
-        super(MQNLI_Bert_CompGraph, self).__init__(root, root_output_device=root_output_device)
+        super(MQNLI_Bert_CompGraph, self).__init__(root)
 
     @property
     def device(self):
@@ -95,18 +94,15 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
         self.base = base_compgraph
         self.interv_info = interv_info
 
-        full_graph = {node_name: [child.name for child in node.children]
-                      for node_name, node in base_compgraph.nodes.items()}
-
-        forward_functions = {node_name: node.forward
-                        for node_name, node in base_compgraph.nodes.items()}
+        # full_graph = {node_name: [child.name for child in node.children]
+        #               for node_name, node in base_compgraph.nodes.items()}
+        #
+        # forward_functions = {node_name: node.forward
+        #                 for node_name, node in base_compgraph.nodes.items()}
 
         super(Abstr_MQNLI_Bert_CompGraph, self).__init__(
-            full_graph=full_graph,
-            root_node_name="root",
+            graph=base_compgraph,
             abstract_nodes=intermediate_nodes,
-            forward_functions=forward_functions,
-            root_output_device=root_output_device
         )
 
     @property

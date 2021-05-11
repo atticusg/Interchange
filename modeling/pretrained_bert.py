@@ -45,3 +45,9 @@ class PretrainedBertModule(nn.Module):
         pooled_output = self.dropout(pooled_output)
         logits = self.logits(pooled_output)
         return logits
+
+    @property
+    def device(self):
+        # all of the parameters in the module are guaranteed to be on the same
+        # device, just get the device of one of them
+        return next(self.parameters()).device

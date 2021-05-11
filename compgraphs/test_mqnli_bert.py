@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from compgraphs.mqnli_bert import MQNLI_Bert_CompGraph
 from compgraphs.mqnli_bert import Abstr_MQNLI_Bert_CompGraph
-from intervention import GraphInput
+from antra import GraphInput
 from modeling.utils import load_model
 from modeling.pretrained_bert import PretrainedBertModule
 
@@ -17,6 +17,7 @@ def mqnli_data():
 def mqnli_bert_model():
     opts = {"tokenizer_vocab_path": "../data/tokenization/bert-vocab.txt"}
     model, _ = load_model(PretrainedBertModule, "../data/models/bert-easy-best.pt", opts=opts)
+    # print(f"Loading model, {type(model)=}")
     model.eval()
     return model
 
@@ -51,11 +52,11 @@ def test_bert_compgraph_batch_match(mqnli_data, mqnli_bert_model, mqnli_bert_com
     graph = mqnli_bert_compgraph
     with torch.no_grad():
         dataloader = DataLoader(mqnli_data.dev, batch_size=32, shuffle=False)
-        for i, input_tuple in enumerate(tqdm(dataloader)):
+        for i, input_tuple in enumerate(tqdm(dataloader, total=100)):
             input_tuple = [x.to(model.device) for x in input_tuple]
 
-            graph_input = GraphInput({"input": input_tuple})
-            graph_pred = graph.compute(graph_input, store_cache=False)
+            graph_input = GraphInput({"input": input_tuple}, cache_results=False)
+            graph_pred = graph.compute(graph_input)
 
             logits = model(input_tuple)
             model_pred = torch.argmax(logits, dim=1)
@@ -69,11 +70,11 @@ def test_bert_compgraph_single_match(mqnli_data, mqnli_bert_model, mqnli_bert_co
     graph = mqnli_bert_compgraph
     with torch.no_grad():
         dataloader = DataLoader(mqnli_data.dev, batch_size=1, shuffle=False)
-        for i, input_tuple in enumerate(tqdm(dataloader)):
+        for i, input_tuple in enumerate(tqdm(dataloader, total=100)):
             input_tuple = [x.to(model.device) for x in input_tuple]
 
-            graph_input = GraphInput({"input": input_tuple})
-            graph_pred = graph.compute(graph_input, store_cache=False)
+            graph_input = GraphInput({"input": input_tuple}, cache_results=False)
+            graph_pred = graph.compute(graph_input)
 
             logits = model(input_tuple)
             model_pred = torch.argmax(logits, dim=1)
@@ -99,11 +100,11 @@ def test_bert_abstractable(mqnli_data, mqnli_bert_model, mqnli_bert_compgraph):
 
     with torch.no_grad():
         dataloader = DataLoader(mqnli_data.dev, batch_size=1, shuffle=False)
-        for i, input_tuple in enumerate(tqdm(dataloader)):
+        for i, input_tuple in enumerate(tqdm(dataloader, total=100)):
             input_tuple = [x.to(model.device) for x in input_tuple]
 
-            graph_input = GraphInput({"input": input_tuple})
-            graph_pred = g.compute(graph_input, store_cache=False)
+            graph_input = GraphInput({"input": input_tuple}, cache_results=False)
+            graph_pred = g.compute(graph_input)
 
             logits = model(input_tuple)
             model_pred = torch.argmax(logits, dim=1)
