@@ -1,6 +1,6 @@
-from data_util import sentence
-from data_util import parse_simple_sentence
-import natural_logic_model as nlm
+from mqnli.data_util import sentence
+from mqnli.data_util import parse_simple_sentence
+import mqnli.natural_logic_model as nlm
 import os
 import argparse
 import random

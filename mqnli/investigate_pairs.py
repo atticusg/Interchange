@@ -1,6 +1,6 @@
-import data_util as du
-import natural_logic_model as nlm
-from generate_data import process_data
+import mqnli.data_util as du
+import mqnli.natural_logic_model as nlm
+from mqnli.generate_data import process_data
 
 
 def test_pair(data_path, premise1, hypothesis1, premise2, hypothesis2):

@@ -1,7 +1,7 @@
 import json
 import copy
 import random
-from data_util import sentence
+from mqnli.data_util import sentence
 
 def strong_composition(signature1, signature2, relation1, relation2):
     #returns the stronger relation of the first relation/signature composed

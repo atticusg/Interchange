@@ -1,4 +1,4 @@
-import pytest
+import pytest # cd Interchange && pytest compgraphs/test_mqnli_logic.py
 import torch
 import time
 from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
@@ -6,15 +6,14 @@ from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
 from mqnli.make_subphrase_labels import get_intermediate_labels
 
 from intervention import GraphInput
-from datasets.utils import my_collate
-from datasets.mqnli import MQNLIData
+# from datasets.utils import lstm_collate
+from datasets.mqnli import MQNLIData, lstm_collate
 from torch.utils.data import DataLoader
 
 
-mqnli_mini_data = MQNLIData("../data/mqnli/raw/easy_mini/train.txt",
-                     "../data/mqnli/raw/easy_mini/dev.txt",
-                     "../data/mqnli/raw/easy_mini/test.txt", store_text=True)
-
+mqnli_mini_data = MQNLIData("data/mqnli/raw/easy_mini/train.txt",
+                     "data/mqnli/raw/easy_mini/dev.txt",
+                     "data/mqnli/raw/easy_mini/test.txt", store_text=True)
 
 
 # dummy_compgraph = MQNLI_Logic_CompGraph(mqnli_mini_data)
@@ -302,7 +301,7 @@ def test_whole_graph(mqnli_data):
     intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
     graph = Abstr_MQNLI_Logic_CompGraph(mqnli_data, intermediate_nodes)
     with torch.no_grad():
-        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        collate_fn = lambda batch: lstm_collate(batch, batch_first=False)
         dataloader = DataLoader(mqnli_data.train, batch_size=2048, shuffle=False,
                                 collate_fn=collate_fn)
         start_time = time.time()
@@ -320,7 +319,7 @@ def test_whole_graph_single_batch():
     intermediate_nodes = ["subj", "negp", "vp", "v_bar", "obj"]
     graph = Abstr_MQNLI_Logic_CompGraph(mqnli_mini_data, intermediate_nodes)
     with torch.no_grad():
-        collate_fn = lambda batch: my_collate(batch, batch_first=False)
+        collate_fn = lambda batch: lstm_collate(batch, batch_first=False)
         dataloader = DataLoader(mqnli_mini_data.train, batch_size=1, shuffle=False,
                                 collate_fn=collate_fn)
         start_time = time.time()

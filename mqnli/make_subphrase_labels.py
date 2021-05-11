@@ -2,9 +2,9 @@ import os
 import json
 import random
 import argparse
-import natural_logic_model as nlm
-import data_util as du
-import generate_data as gd
+import mqnli.natural_logic_model as nlm
+import mqnli.data_util as du
+import mqnli.generate_data as gd
 from tqdm import tqdm
 
 # copied from MultiplyQuantifiedData repo, for debugging mqnli_logic compgraph

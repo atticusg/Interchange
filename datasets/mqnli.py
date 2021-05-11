@@ -22,7 +22,7 @@ def get_collate_fxn(dataset, batch_first: bool=False) -> Optional[Callable]:
             return None
 
 class MQNLIData:
-    def __init__(self, train_file, dev_file, test_file, variant="lstm"):
+    def __init__(self, train_file, dev_file, test_file, variant="lstm", store_text=False):
         self.output_classes = 10 if "subphrase" in variant else 3
         self.word_to_id = {}
         self.id_to_word = {}
@@ -46,19 +46,19 @@ class MQNLIData:
 
         print("--- Loading Dataset ---")
         self.train = MQNLIDataset(train_file, self.word_to_id, self.id_to_word,
-                                  max_info, variant)
+                                  max_info, variant, store_text=store_text)
         train_ids = max_info["id"]
         print(f"--- loaded train set, {train_ids} unique tokens up to now")
 
         if variant == "lstm-subphrase": variant = "lstm"
 
         self.dev = MQNLIDataset(dev_file, self.word_to_id, self.id_to_word,
-                                max_info, variant)
+                                max_info, variant, store_text=store_text)
         dev_ids = max_info["id"]
         print(f"--- loaded dev set, {dev_ids} unique tokens up to now")
 
         self.test = MQNLIDataset(test_file, self.word_to_id, self.id_to_word,
-                                 max_info, variant)
+                                 max_info, variant, store_text=store_text)
         test_ids = max_info["id"]
         print(f"--- loaded test set, {test_ids} unique tokens up to now")
 
@@ -126,7 +126,7 @@ lstm_subphrase_lengths = [3,3,3,3,3,3,5,5,5,11,13,19]
 
 class MQNLIDataset(Dataset):
     def __init__(self, file_name, word_to_id, id_to_word, max_info,
-                 variant="lstm"):
+                 variant="lstm", store_text=False):
         print("--- Loading sentences from " + file_name)
         self.variant = variant
         if "subphrase" in variant:
@@ -139,10 +139,14 @@ class MQNLIDataset(Dataset):
         raw_x = []
         raw_y = []
 
+        example_text = []
+
         curr_id = max_info['id']
         with open(file_name, 'r') as f:
             for line in f:
                 example = json.loads(line.strip())
+                if store_text:
+                    example_text.append(example)
                 sentence1 = example["sentence1"].split()
                 sentence2 = example["sentence2"].split()
 
@@ -181,6 +185,7 @@ class MQNLIDataset(Dataset):
         self.raw_x = raw_x
         self.raw_y = raw_y
         self.num_examples = len(raw_x)
+        self.example_text = example_text
         max_info['id'] = curr_id
         print("--- Loaded {} sentences".format(self.num_examples))
 
@@ -301,6 +306,7 @@ class MQNLIBertData(MQNLIData):
         return word_to_id, id_to_word
 
 """
+<P> : pad
    [CLS] | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
     0     1      2       3      4       5      6     7       8       9     10      11     12     13 14 15 16
 [0]      | <P> | <P>   | bad | <P>    | <P>  | ...
@@ -383,12 +389,14 @@ class MQNLIBertDataset(Dataset):
     def remap_and_shift(self, example: Dict, is_p: bool=True) -> (List[str], List[str], List[int]):
         """ map words to other words that won't be split up by BERT, and shift
         them into new positions according to the following schema:
+        ```
              0          1     2        3         4       5       6       7      8
            [ notevery | bad | singer | doesnot | badly | sings | every | good | song ]
              /   \                       |   \                     |   \
             /     \                      |    \                    |    \
         [ not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
           0     1       2     3        4      5     6       7       8     9       10     11
+        ```
         """
         s = example["sentence1"].split() if is_p else example["sentence2"].split()
         remapped_words = [self.vocab_remapping.get(w.lower(), w) for w in s]
