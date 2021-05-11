@@ -1,8 +1,9 @@
 import torch
 
 from datasets.mqnli import MQNLIData
-from intervention import ComputationGraph, GraphNode, LOC
-from compgraphs.abstractable import AbstractableCompGraph
+from antra import ComputationGraph, GraphNode, LOC
+from antra.abstractable import AbstractableCompGraph
+from compgraphs.abstractable import AbstractableCompGraph as OldAbstractableCompGraph
 from typing import Any, Dict, List, Callable, Set
 
 INDEP, EQUIV, ENTAIL, REV_ENTAIL, CONTRADICT, ALTER, COVER = range(7)
@@ -297,7 +298,7 @@ class MQNLI_Logic_CompGraph(ComputationGraph):
             res = output_remapping[res]
             return res
 
-        super(MQNLI_Logic_CompGraph, self).__init__(root, root_output_device=root_output_device)
+        super(MQNLI_Logic_CompGraph, self).__init__(root)
 
     def __getattr__(self, item):
         """ Used to retrieve keywords, relations or positions"""
@@ -341,9 +342,193 @@ class MQNLI_Logic_CompGraph(ComputationGraph):
         idx_tensor = p_idx_tensor * 2 + h_idx_tensor
         return negation_signatures.index_select(0, idx_tensor)
 
+nodes2idxs = {
+    "obj_noun": IDX_N_O,
+    "obj_adj": IDX_A_O,
+    "obj_q": IDX_Q_O,
+    "verb": IDX_V,
+    "adv": IDX_ADV,
+    "neg": IDX_NEG,
+    "subj_noun": IDX_N_S,
+    "subj_adj": IDX_A_S,
+    "subj_q": IDX_Q_S
+}
+
+def _generate_leaf_fn(idx):
+    def _leaf_fn(x):
+        return x[:, idx]
+    return _leaf_fn
+
+class Full_MQNLI_Logic_CompGraph(ComputationGraph):
+    def __init__(self, data: MQNLIData, root_output_device=None):
+        self.word_to_id = data.word_to_id
+        self.id_to_word = data.id_to_word
+        self.keyword_dict = {w: self.word_to_id[w] for w in [
+            "emptystring", "no", "some", "every", "notevery", "doesnot"
+        ]}
+
+        @GraphNode()
+        def input(x):
+            return x
+
+        leaf_nodes = {}
+        for leaf_name, idx in nodes2idxs.items():
+            p_forward_fn = _generate_leaf_fn(idx)
+            p_leaf_name = "p_" + leaf_name
+            p_leaf_node = GraphNode(input, name=p_leaf_name, forward=p_forward_fn)
+            leaf_nodes[p_leaf_name] = p_leaf_node
+
+            h_forward_fn = _generate_leaf_fn(9 + idx)
+            h_leaf_name = "h_" + leaf_name
+            h_leaf_node = GraphNode(input, name=h_leaf_name, forward=h_forward_fn)
+            leaf_nodes[h_leaf_name] = h_leaf_node
+
+        # @GraphNode(input)
+        # def get_p(x: torch.Tensor) -> torch.Tensor:
+        #     # (18, batch_size) ->  (9, batch_size)
+        #     return x[:9, :]
+        #
+        # get_p.cache_results = False
+        #
+        # @GraphNode(input)
+        # def get_h(x: torch.Tensor) -> torch.Tensor:
+        #     # (18, batch_size) ->  (9, batch_size)
+        #     return x[9:, :]
+        #
+        # get_h.cache_results = False
+
+        @GraphNode(leaf_nodes["p_obj_noun"], leaf_nodes["h_obj_noun"])
+        def obj_noun(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size,)
+            return (p == h).type(torch.long)
+
+        @GraphNode(leaf_nodes["p_obj_adj"], leaf_nodes["h_obj_adj"])
+        def obj_adj(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,)  -> (batch_size, 2)
+            return self._intersective_projection(p, h)
+
+        @GraphNode(obj_adj, obj_noun)
+        def obj(a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
+            # (batch_size, 2), (batch_size,) -> (batch_size,)
+            return torch.gather(a, 1, n.unsqueeze(1)).view(n.shape[0])
+
+        @GraphNode(leaf_nodes["p_obj_q"], leaf_nodes["h_obj_q"])
+        def vp_q(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,)  -> (batch_size, 4*7)
+            return self._merge_quantifiers(p, h)
+
+        @GraphNode(leaf_nodes["p_verb"], leaf_nodes["h_verb"])
+        def v_verb(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size,)
+            return (p == h).type(torch.long)
+
+        @GraphNode(leaf_nodes["p_adv"], leaf_nodes["h_adv"])
+        def v_adv(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size, 2)
+            return self._intersective_projection(p, h)
+
+        @GraphNode(v_adv, v_verb)
+        def v_bar(a: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+            # (batch_size, 2), (batch_size,) -> (batch_size,)
+            return torch.gather(a, 1, v.unsqueeze(1)).view(v.shape[0])
+
+        @GraphNode(v_bar, vp_q, obj)
+        def vp(v: torch.Tensor, q: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size, 4*7), (batch_size,) -> (batch_size,)
+            idxs = (o * 7 + v).unsqueeze(1)  # note that o is the first argument
+            return torch.gather(q, 1, idxs).view(v.shape[0])
+
+        @GraphNode(leaf_nodes["p_neg"], leaf_nodes["h_neg"])
+        def neg(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size, 7)
+            return self._merge_negation(p, h)
+
+        @GraphNode(neg, vp)
+        def negp(n: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+            # (batch_size, 7), (batch_size,) -> (batch_size,)
+            return torch.gather(n, 1, v.unsqueeze(1)).view(v.shape[0])
+
+        @GraphNode(leaf_nodes["p_subj_noun"], leaf_nodes["h_subj_noun"])
+        def subj_noun(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size,)
+            return (p == h).type(torch.long)
+
+        @GraphNode(leaf_nodes["p_subj_adj"], leaf_nodes["h_subj_adj"])
+        def subj_adj(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size, 2)
+            return self._intersective_projection(p, h)
+
+        @GraphNode(subj_adj, subj_noun)
+        def subj(a: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
+            # (batch_size, 2), (batch_size,) -> (batch_size,)
+            return torch.gather(a, 1, n.unsqueeze(1)).view(n.shape[0])
+
+        @GraphNode(leaf_nodes["p_subj_q"], leaf_nodes["h_subj_q"])
+        def sentence_q(p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+            # (batch_size,), (batch_size,) -> (batch_size, 4*7)
+            return self._merge_quantifiers(p, h)
+
+        @GraphNode(sentence_q, subj, negp)
+        def root(q: torch.Tensor, s: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
+            # (batch_size, 4*7), (batch_size,), (batch_size,) -> (batch_size,)
+            idxs = (s * 7 + n).unsqueeze(1)
+            res = torch.gather(q, 1, idxs).view(n.shape[0])
+            res = output_remapping[res]
+            return res
+
+        super(Full_MQNLI_Logic_CompGraph, self).__init__(root)
+
+    def __getattr__(self, item):
+        """ Used to retrieve keywords, relations or positions"""
+        if item in self.keyword_dict:
+            return self.keyword_dict[item]
+        else:
+            raise KeyError
+
+    def _intersective_projection(self, p: torch.Tensor, h: torch.Tensor) \
+            -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 2)
+        eq = (p == h)
+        p_is_empty = (p == self.emptystring)
+        h_is_empty = (h == self.emptystring)
+        forward_entail = (~p_is_empty & h_is_empty)
+        backward_entail = (p_is_empty & ~h_is_empty)
+
+        res = torch.zeros(p.size(0), 2, dtype=torch.long)
+        res[eq] = torch.tensor([INDEP, EQUIV], dtype=torch.long)
+        res[forward_entail] = torch.tensor([INDEP, ENTAIL], dtype=torch.long)
+        res[backward_entail] = torch.tensor([INDEP, REV_ENTAIL], dtype=torch.long)
+        return res
+
+    def _merge_quantifiers(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4*7)
+        p_idx_tensor = torch.zeros(p.size(0), dtype=torch.long)
+        h_idx_tensor = torch.zeros(h.size(0), dtype=torch.long)
+        for q_idx, q_token in enumerate([self.some, self.every, self.no, self.notevery]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 4 + h_idx_tensor
+        return quantifier_signatures.index_select(0, idx_tensor)
+
+    def _merge_negation(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4, 7)
+        p_idx_tensor = torch.zeros(p.size(0), dtype=torch.long)
+        h_idx_tensor = torch.zeros(h.size(0), dtype=torch.long)
+        for q_idx, q_token in enumerate([self.emptystring, self.doesnot]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 2 + h_idx_tensor
+        return negation_signatures.index_select(0, idx_tensor)
+
+class Full_Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
+    def __init__(self, graph: Full_MQNLI_Logic_CompGraph,
+                 intermediate_nodes: List[str]):
+        super(Full_Abstr_MQNLI_Logic_CompGraph, self).__init__(
+            graph=graph, abstract_nodes=intermediate_nodes
+        )
 
 
-class Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
+class Abstr_MQNLI_Logic_CompGraph(OldAbstractableCompGraph):
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
         self.word_to_id = data.word_to_id
         self.id_to_word = data.id_to_word
