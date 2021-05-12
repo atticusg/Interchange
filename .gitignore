@@ -2,8 +2,7 @@ __pycache__/
 .idea/
 .pytest_cache/
 *.egg-info/
-/compgraph_cpp/build
-/compgraph_cpp/dist
+
 /sentiment_data
 /sentiment_models
 /mqnli_models

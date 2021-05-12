@@ -158,9 +158,9 @@ def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm"):
 
     elif "bert" in loc_mapping_type:
         # mapping for bert model
-        # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song ]
-        #  0        1     2       3     4        5      6     7       8       9     10      11     12
-
+        # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song | <SEP> | ]
+        #  0        1     2       3     4        5      6     7       8       9     10      11     12     13
+        #           14    15      16    17       18     19    20      21      22    23      24     25     26
         d = {"sentence_q": [0, 1, 2, 13, 14, 15, 26],
              "subj_adj": [0, 3, 13, 16, 26],
              "subj_noun": [0, 4, 13, 17, 26],
