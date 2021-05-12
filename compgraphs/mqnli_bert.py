@@ -4,6 +4,7 @@ import re
 
 from antra import ComputationGraph, GraphNode, LOC
 from antra.abstractable import AbstractableCompGraph
+from antra.compgraphs.bert import generate_bert_compgraph
 from typing import List, Any, Optional
 
 def generate_bert_layer_fxn(layer_module, i):
@@ -114,3 +115,29 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
             return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
         else:
             raise ValueError(f"Cannot get indices for node {node}")
+
+
+
+class Full_MQNLI_Bert_CompGraph(ComputationGraph):
+    def __init__(self, bert_model):
+        if bert_model.task != "mqnli":
+            raise ValueError("The model must be for MQNLI!")
+
+        self.model = bert_model
+        bert = self.model.bert
+
+        pool = generate_bert_compgraph(bert, final_node="pool")
+
+        @GraphNode(pool)
+        def logits(x):
+            return self.model.logits(x)
+
+        @GraphNode(logits)
+        def root(x):
+            return torch.argmax(x, dim=1)
+
+        super(Full_MQNLI_Bert_CompGraph, self).__init__(root)
+
+    @property
+    def device(self):
+        return self.model.device
