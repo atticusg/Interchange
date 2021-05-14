@@ -25,8 +25,9 @@ def print_stats(epoch, step, loss, acc, better=True, lr=None):
 
 
 
-class Trainer:
-    def __init__(self, data, low_model, high_model, low_base_model=None,
+class CounterfactualTrainer:
+    def __init__(self, base_data, counterfactual_dataset,
+                 low_model, high_model, low_base_model=None,
                  batch_size=64, eval_batch_size=64, batch_first=True,
                  optimizer_type="adam", weight_norm=0., lr=0.01,
                  lr_scheduler_type="", lr_warmup_ratio=0.05,
@@ -35,7 +36,8 @@ class Trainer:
                  device="cuda",
                  model_save_path=None, res_save_dir=None,
                  **kwargs):
-        self.data = data
+        self.base_data = base_data
+        self.cf_dataset = counterfactual_dataset
         self.high_model = high_model
         self.low_model = low_model
         self.model = getattr(low_model, "model", low_base_model)
@@ -97,7 +99,7 @@ class Trainer:
                 raise ValueError(f"Unsupported lr scheduler type: "
                                  f"{self.lr_scheduler_type}")
 
-        self.collate_fn = datasets.mqnli.get_collate_fxn(self.data.train, batch_first=self.batch_first)
+        self.collate_fn = datasets.mqnli.get_collate_fxn(self.base_data.train, batch_first=self.batch_first)
 
         if self.collate_fn is not None:
             self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
@@ -106,7 +108,7 @@ class Trainer:
             self.dataloader = DataLoader(data.train, batch_size=self.batch_size,
                                          shuffle=True)
 
-        if "subphrase" in getattr(self.data.train, "variant", ""):
+        if "subphrase" in getattr(self.base_data.train, "variant", ""):
             print("Using weighted loss function")
             self.loss_fxn = nn.CrossEntropyLoss(reduction='none')
         else:
@@ -143,7 +145,7 @@ class Trainer:
         logits = self.model(input_tuple)
         loss = self.loss_fxn(logits, labels)
 
-        if "subphrase" in getattr(self.data.train, "variant", ""):
+        if "subphrase" in getattr(self.base_data.train, "variant", ""):
             loss = torch.mean(loss * input_tuple[-3])
 
         return loss
@@ -197,7 +199,7 @@ class Trainer:
                     break
 
                 if step % self.eval_steps == 0:
-                    corr, total = evaluate_and_predict(self.data.dev, self.model,
+                    corr, total = evaluate_and_predict(self.base_data.dev, self.model,
                                                        eval_batch_size=self.eval_batch_size,
                                                        batch_first=self.batch_first,
                                                        device=self.device)

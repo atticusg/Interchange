@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from antra import LOC
-from counterfactual.dataset import IsolatedPairFinder
+from counterfactual.pair_finder import IsolatedPairFinder
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 
 seed = 39
