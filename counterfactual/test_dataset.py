@@ -1,10 +1,13 @@
 import torch
 import numpy as np
-
+from collections import Counter
 import torch.utils.data as torch_data
+
 from antra import LOC
 from counterfactual.dataset import MQNLIRandomIterableCfDataset
+from counterfactual.multidataloader import MultiTaskDataLoader
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
+
 
 # def test_dataset_constructor():
 #     seed = 39
@@ -66,3 +69,56 @@ def test_dataset_constructor():
             for k, arg in enumerate(["input_ids", "token_type_ids", "attention_mask"]):
                 assert torch.allclose(base_ex[k], low_base[arg][j])
                 assert torch.allclose(ivn_src_ex[k], low_ivn_src[arg][j])
+
+
+def mYSchEDule(epoch):
+    warmup = [6, 0, 0]
+    phase1 = [5, 1, 1]
+    phase2 = [4, 3, 2]
+
+    if epoch == 0:
+        return warmup
+    elif 1 <= epoch <= 2:
+        return phase1
+    else:
+        return phase2
+
+
+def test_multi_dataloader():
+    data0 = [0, 1, 2, 3, 4, 5]
+    data1 = [10, 11, 12]
+    data2 = [20, 21]
+
+    dl0 = torch_data.DataLoader(data0, shuffle=True)
+    dl1 = torch_data.DataLoader(data1, shuffle=True)
+    dl2 = torch_data.DataLoader(data2, shuffle=True)
+
+    mtdl = MultiTaskDataLoader([dl0, dl1, dl2], mYSchEDule, return_task_name=True)
+    task_cnt = Counter()
+    d0cnt = Counter()
+    d1cnt = Counter()
+    d2cnt = Counter()
+    num_elems = [6, 3, 2]
+    rescnt = [d0cnt, d1cnt, d2cnt]
+    n_epochs = 6
+
+    for epoch in range(n_epochs):
+        for ex in mtdl:
+            res, task = ex
+            task_cnt[task] += 1
+            rescnt[task][res.item()] += 1
+
+    assert task_cnt[0] == 6 + 5 * 2 + (n_epochs - 3) * 4
+    assert task_cnt[1] == 1 * 2 + (n_epochs - 3) * 3
+    assert task_cnt[2] == 1 * 2 + (n_epochs - 3) * 2
+
+    print(f"{rescnt=}")
+
+    for task, cnts in enumerate(rescnt):
+        tasklen = num_elems[task]
+        full_cycles = task_cnt[task] // tasklen
+
+        for elem, cnt in cnts.items():
+            assert cnt == full_cycles or cnt == full_cycles + 1
+
+
