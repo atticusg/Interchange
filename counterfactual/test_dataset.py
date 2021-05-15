@@ -6,6 +6,7 @@ import torch.utils.data as torch_data
 from antra import LOC
 from counterfactual.dataset import MQNLIRandomIterableCfDataset
 from counterfactual.multidataloader import MultiTaskDataLoader
+from counterfactual.scheduling import LinearCfTrainingSchedule
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 
 
@@ -121,4 +122,15 @@ def test_multi_dataloader():
         for elem, cnt in cnts.items():
             assert cnt == full_cycles or cnt == full_cycles + 1
 
+
+def test_lin_schedule():
+    base_dataset = torch.zeros((240002,))
+    batch_size = 32
+
+    s = LinearCfTrainingSchedule(
+        base_dataset, batch_size,
+    )
+
+    for epoch in range(40):
+        print(f"Epoch {epoch}, schedule {s(epoch)}")
 
