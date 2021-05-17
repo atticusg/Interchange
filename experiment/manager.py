@@ -1,3 +1,5 @@
+from dataclasses import is_dataclass, asdict
+
 import experiment.db_utils as db
 import os
 import stat
@@ -226,17 +228,32 @@ def recover_boolean_args(opts: Dict, reference: Dict):
         if k in reference and isinstance(reference[k], bool):
             opts[k] = bool(opts[k])
 
-def parse_args(parser: argparse.ArgumentParser, default_opts: Dict):
-    for arg_name, default_val in default_opts.items():
-        arg_type = type(default_val)
+def parse_args(parser: argparse.ArgumentParser, default_opts):
+    if is_dataclass(default_opts):
+        default_dict = asdict(default_opts)
+    else:
+        assert isinstance(default_opts, dict)
+        default_dict = default_opts
+
+    for arg_name, default_val in default_dict.items():
+        if is_dataclass(default_opts):
+            arg_type = default_opts.__annotations__[arg_name]
+        else:
+            # determine type by default value
+            if default_val is None:
+                default_val = ""
+            arg_type = type(default_val)
+        print(f"{arg_name}, {arg_type}")
         arg_type = int if arg_type == bool else arg_type
         parser.add_argument(f"--{arg_name}", type=arg_type, default=default_val)
 
-    parser.add_argument("--id", type=int)
-    parser.add_argument("--db_path", type=str)
+    if "id" not in default_dict:
+        parser.add_argument("--id", type=int)
+    if "db_path" not in default_dict:
+        parser.add_argument("--db_path", type=str)
 
     args = parser.parse_args()
     args = vars(args)
-    recover_boolean_args(args, default_opts)
+    recover_boolean_args(args, default_dict)
 
     return args
