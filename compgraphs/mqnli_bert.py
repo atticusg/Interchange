@@ -117,7 +117,6 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
             raise ValueError(f"Cannot get indices for node {node}")
 
 
-
 class Full_MQNLI_Bert_CompGraph(ComputationGraph):
     def __init__(self, bert_model):
         if bert_model.task != "mqnli":
@@ -132,11 +131,11 @@ class Full_MQNLI_Bert_CompGraph(ComputationGraph):
         def logits(x):
             return self.model.logits(x)
 
-        @GraphNode(logits)
-        def root(x):
-            return torch.argmax(x, dim=1)
+        # @GraphNode(logits)
+        # def root(x):
+        #     return torch.argmax(x, dim=1)
 
-        super(Full_MQNLI_Bert_CompGraph, self).__init__(root)
+        super(Full_MQNLI_Bert_CompGraph, self).__init__(logits)
 
     @property
     def device(self):
