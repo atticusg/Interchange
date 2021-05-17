@@ -39,3 +39,16 @@ class LinearCfTrainingSchedule:
             cf_ratio = min(1.0, (epoch - self.warmup_subepochs) * self.ratio_step_size)
             num_cf_examples = math.ceil(cf_ratio * num_base_examples)
             return [num_base_examples, num_cf_examples]
+
+class FixedRatioSchedule:
+    def __init__(
+        self,
+        dataset_sizes,
+        batch_size
+    ):
+        self.total_num_batches = [
+            math.ceil(dataset_size / batch_size) for dataset_size in dataset_sizes
+        ]
+
+    def __call__(self, epoch):
+        return self.total_num_batches
