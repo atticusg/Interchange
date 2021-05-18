@@ -16,7 +16,7 @@ class CounterfactualTrainingConfig:
     optimizer_type: str = "adamw"
     lr: float = 0.01
     lr_scheduler_type: str = ""
-    lr_warmup_subepochs: int = 1 # changed
+    lr_warmup_subepochs: int = 5 # changed
     weight_norm: float = 0.
 
     num_subepochs_per_epoch: int = 20
@@ -31,13 +31,13 @@ class CounterfactualTrainingConfig:
 
     max_subepochs: int = 200 # changed
     run_steps: int = -1
-    eval_subepochs: int = 1 # changed
+    eval_subepochs: int = 5 # changed
     patient_subepochs: int = 20 # changed
 
     model_save_path: str = "cf_bert"
-    res_save_dir: str = None
-    log_path: str = None
+    res_save_dir: str = ""
+    log_path: str = ""
     mapping: str = ""
 
-    id: int = None
-    db_path: str = None
+    id: int = -1
+    db_path: str = ""
