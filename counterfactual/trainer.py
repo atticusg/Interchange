@@ -1,13 +1,15 @@
 # trainer.py
 from typing import *
-import math
+import shutil
+from pprint import pprint
 from tqdm import tqdm
 import os
 import time
 from datetime import datetime
+from dataclasses import asdict
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
-
 import torch.nn as nn
 
 import antra
@@ -151,7 +153,7 @@ class CounterfactualTrainer:
         model_save_path = None
         conf = self.configs
         print("using configs---")
-        print(conf)
+        pprint(asdict(conf))
 
         if conf.model_save_path or conf.res_save_dir:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
@@ -167,6 +169,9 @@ class CounterfactualTrainer:
 
         # setup summary writer
         writer_dir = os.path.join(conf.res_save_dir, "tensorboard")
+        if os.path.exists(writer_dir):
+            shutil.rmtree(writer_dir)
+
         writer = SummaryWriter(log_dir=writer_dir)
 
         train_start_time = time.time()
@@ -230,7 +235,7 @@ class CounterfactualTrainer:
                         'epoch': subepoch,
                         'duration': best_model_duration,
                         'model_state_dict': self.low_base_model.state_dict(),
-                        'loss': avg_loss,
+                        'avg_train_loss': avg_loss,
                         'best_dev_acc': best_dev_acc,
                         'dev_total_acc': total_acc,
                         'train_config': self.configs,

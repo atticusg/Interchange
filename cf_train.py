@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 import argparse
 import json
 from typing import Dict
-from dataclasses import asdict
+from pprint import pprint
 
 from antra.location import parse_str
 
@@ -100,14 +100,18 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         )
         ckpt, model_save_path = trainer.train()
 
-        return {
+        res_dict = {
             "model_save_path": model_save_path,
             "epoch": ckpt["epoch"],
-            "step": ckpt["step"],
-            "duration": ckpt["duration"],
-            "loss": ckpt["loss"],
-            "best_dev_acc": ckpt["best_dev_acc"]
+            "avg_train_loss": ckpt["avg_train_loss"],
+            "best_dev_acc": ckpt["best_dev_acc"],
+            "best_dev_total_acc": ckpt["best_dev_total_acc"]
         }
+
+        print("======= Finished Training =======")
+        pprint(res_dict)
+
+        return res_dict
 
 def main():
     parser = argparse.ArgumentParser()
