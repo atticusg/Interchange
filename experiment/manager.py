@@ -243,7 +243,6 @@ def parse_args(parser: argparse.ArgumentParser, default_opts):
             if default_val is None:
                 default_val = ""
             arg_type = type(default_val)
-        print(f"{arg_name}, {arg_type}")
         arg_type = int if arg_type == bool else arg_type
         parser.add_argument(f"--{arg_name}", type=arg_type, default=default_val)
 
