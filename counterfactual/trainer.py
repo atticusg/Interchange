@@ -6,6 +6,7 @@ import os
 import time
 from datetime import datetime
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 import torch.nn as nn
 
@@ -91,6 +92,7 @@ class CounterfactualTrainer:
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
 
+
     def inference_step(self, batch) -> Tuple:
         """ Do basic forward pass or intervention to get logits and labels.
 
@@ -136,13 +138,14 @@ class CounterfactualTrainer:
             labels = inputs["labels"].to(low_device)
             logits = self.low_model.compute(model_inputs)
 
-        return logits, labels
+        return logits, labels, task_name
 
 
     def train(self):
         """ Train the model """
         early_stopping = False
         best_dev_acc = 0.
+        best_dev_total_acc = 0.
         epochs_without_increase = 0
         best_model_checkpoint = {}
         model_save_path = None
@@ -162,16 +165,19 @@ class CounterfactualTrainer:
                 model_save_path = os.path.join(conf.res_save_dir,
                                          f"{model_save_path}_{train_start_time_str}.pt")
 
+        # setup summary writer
+        writer_dir = os.path.join(conf.res_save_dir, "tensorboard")
+        writer = SummaryWriter(log_dir=writer_dir)
 
         train_start_time = time.time()
 
         print("========= Start training =========")
-
+        total_step = 0
         for subepoch in range(conf.max_subepochs):
             epoch_start_time = time.time()
 
             total_loss = 0.
-            subepoch_steps = 0
+            subepoch_step = 0
 
             curr_schedule = self.train_dataloader.schedule_fn(subepoch)
             schedule_str = ",".join(f"{task}={n}" for task, n in zip(self.train_dataloader.task_names, curr_schedule))
@@ -181,11 +187,14 @@ class CounterfactualTrainer:
                 self.low_base_model.train()
                 self.low_base_model.zero_grad()
 
-                logits, labels = self.inference_step(batch)
+                logits, labels, task_name = self.inference_step(batch)
 
                 loss = self.loss_fxn(logits, labels)
                 loss.backward()
                 total_loss += loss.item()
+
+                writer.add_scalar("Train/loss", loss.item(), total_step)
+                writer.add_scalar(f"Train/{task_name}/loss", loss.item(), total_step)
 
                 self.optimizer.step()
 
@@ -193,18 +202,26 @@ class CounterfactualTrainer:
                     self.lr_scheduler.step()
 
                 # run only a few steps for testing
-                subepoch_steps += 1
+                subepoch_step += 1
+                total_step += 1
                 if conf.run_steps > 0 and step == conf.run_steps - 1:
                     early_stopping = True
                     break
 
-            if (subepoch + 1) % conf.eval_subepochs == 0:
-                corr, total = self.evaluate_and_predict()
+            avg_loss = total_loss / subepoch_step
+            writer.add_scalar("Train/avg_loss", avg_loss, subepoch)
 
-                acc = corr / total
-                avg_loss = total_loss / subepoch_steps
-                if acc > best_dev_acc:
-                    best_dev_acc = acc
+            if (subepoch + 1) % conf.eval_subepochs == 0:
+                eval_res_dict = self.evaluate_and_predict()
+
+                total_acc = eval_res_dict["total_correct_cnt"] / eval_res_dict["total_cnt"]
+                base_acc = eval_res_dict["base_correct_cnt"] / eval_res_dict["base_cnt"]
+                writer.add_scalar("Eval/total_acc", total_acc, subepoch)
+                writer.add_scalar("Eval/base_acc", base_acc, subepoch)
+
+                best_dev_total_acc = max(best_dev_total_acc, total_acc)
+                if base_acc > best_dev_acc:
+                    best_dev_acc = base_acc
                     epochs_without_increase = 0
                     best_model_duration = time.time() - train_start_time
 
@@ -215,17 +232,18 @@ class CounterfactualTrainer:
                         'model_state_dict': self.low_base_model.state_dict(),
                         'loss': avg_loss,
                         'best_dev_acc': best_dev_acc,
+                        'dev_total_acc': total_acc,
                         'train_config': self.configs,
                         'model_config': self.low_base_model.config(),
                     }
                     if model_save_path:
                         torch.save(best_model_checkpoint, model_save_path)
 
-                    log_stats(subepoch, avg_loss, acc,
+                    log_stats(subepoch, avg_loss, base_acc,
                               lr=self.lr_scheduler.get_lr()[0] if self.lr_scheduler else None)
 
                 else:
-                    log_stats(subepoch, avg_loss, acc, better=False,
+                    log_stats(subepoch, avg_loss, base_acc, better=False,
                               lr=self.lr_scheduler.get_lr()[0] if self.lr_scheduler else None)
 
                     epochs_without_increase += conf.eval_subepochs
@@ -252,6 +270,8 @@ class CounterfactualTrainer:
             if conf.model_save_path:
                 print(f"Best model saved in {model_save_path}")
 
+        best_model_checkpoint["best_dev_total_acc"] = best_dev_total_acc
+        writer.close()
         return best_model_checkpoint, model_save_path
 
     def evaluate_and_predict(self):
@@ -261,18 +281,31 @@ class CounterfactualTrainer:
             total_preds = 0
             correct_preds = 0
 
+            total_base_preds = 0
+            correct_base_preds = 0
+
             curr_schedule = self.eval_dataloader.schedule_fn(0)
             schedule_str = ",".join(f"{task}={n}" for task, n in zip(self.eval_dataloader.task_names, curr_schedule))
             print(f"Evaluation schedule {schedule_str}")
             curr_epoch_len = sum(curr_schedule)
             for batch in tqdm(self.eval_dataloader, desc="Evaluate", total=curr_epoch_len):
-                logits, labels = self.inference_step(batch)
+                logits, labels, task_name = self.inference_step(batch)
                 pred = torch.argmax(logits, dim=1)
                 correct_in_batch = torch.sum(torch.eq(pred, labels)).item()
+
+                if task_name == "base":
+                    total_base_preds += labels.shape[0]
+                    correct_base_preds += correct_in_batch
+
                 total_preds += labels.shape[0]
                 correct_preds += correct_in_batch
 
             # bad_sentences = sorted(bad_sentences, key=lambda p: p[1], reverse=True)
-            return correct_preds, total_preds
+            return {
+                "total_correct_cnt": correct_preds,
+                "total_cnt": total_preds,
+                "base_correct_cnt": correct_base_preds,
+                "base_cnt": total_base_preds
+            }
 
 
