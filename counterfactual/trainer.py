@@ -51,6 +51,26 @@ class CounterfactualTrainer:
         self.configs: CounterfactualTrainingConfig = configs
         self.device = torch.device(configs.device)
 
+        self.model_save_path = None
+        if configs.model_save_path or configs.res_save_dir:
+            train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
+            model_save_path = configs.model_save_path
+            if configs.res_save_dir:
+                if not os.path.exists(configs.res_save_dir):
+                    os.mkdir(configs.res_save_dir)
+
+                if model_save_path.endswith(".pt"):
+                    model_save_path = model_save_path[:-len(".pt")]
+                self.model_save_path = os.path.join(
+                    configs.res_save_dir, f"{model_save_path}.pt")
+
+        self.eval_only = configs.eval_only
+        if self.eval_only:
+            assert self.model_save_path
+            # load base model
+            checkpoint = torch.load(self.model_save_path)
+            self.low_base_model.load_state_dict(checkpoint["model_state_dict"])
+
         # setup for early stopping
         # steps_per_epoch = math.ceil(data.train.num_examples / self.batch_size)
         # self.eval_steps = steps_per_epoch // self.evals_per_epoch
@@ -92,7 +112,6 @@ class CounterfactualTrainer:
         #     self.loss_fxn = nn.CrossEntropyLoss(reduction='none')
         # else:
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
-
 
 
     def inference_step(self, batch) -> Tuple:
@@ -150,22 +169,10 @@ class CounterfactualTrainer:
         best_dev_total_acc = 0.
         epochs_without_increase = 0
         best_model_checkpoint = {}
-        model_save_path = None
         conf = self.configs
         print("using configs---")
         pprint(asdict(conf))
 
-        if conf.model_save_path or conf.res_save_dir:
-            train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
-            model_save_path = conf.model_save_path
-            if conf.res_save_dir:
-                if not os.path.exists(conf.res_save_dir):
-                    os.mkdir(conf.res_save_dir)
-
-                if model_save_path.endswith(".pt"):
-                    model_save_path = model_save_path[:-len(".pt")]
-                model_save_path = os.path.join(conf.res_save_dir,
-                                         f"{model_save_path}_{train_start_time_str}.pt")
 
         # setup summary writer
         writer_dir = os.path.join(conf.res_save_dir, "tensorboard")
@@ -241,8 +248,8 @@ class CounterfactualTrainer:
                         'train_config': self.configs,
                         'model_config': self.low_base_model.config(),
                     }
-                    if model_save_path:
-                        torch.save(best_model_checkpoint, model_save_path)
+                    if self.model_save_path:
+                        torch.save(best_model_checkpoint, self.model_save_path)
 
                     log_stats(subepoch, avg_loss, base_acc,
                               lr=self.lr_scheduler.get_lr()[0] if self.lr_scheduler else None)
@@ -273,11 +280,11 @@ class CounterfactualTrainer:
             print(f"Finished training. Total time is {train_duration:.1}s. Got final acc of {best_dev_acc:.2%}")
             print(f"Best model was obtained after {subepoch + 1} epochs, in {best_model_duration:.1} seconds")
             if conf.model_save_path:
-                print(f"Best model saved in {model_save_path}")
+                print(f"Best model saved in {self.model_save_path}")
 
         best_model_checkpoint["best_dev_total_acc"] = best_dev_total_acc
         writer.close()
-        return best_model_checkpoint, model_save_path
+        return best_model_checkpoint, self.model_save_path
 
     def evaluate_and_predict(self):
         """ Evaluate the current low model """

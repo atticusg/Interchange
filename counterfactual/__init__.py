@@ -28,6 +28,7 @@ class CounterfactualTrainingConfig:
     cf_eval_num_random_bases: int = 1000
     cf_eval_num_random_ivn_srcs: int = 10
 
+    eval_only: bool = False
 
     max_subepochs: int = 200 # changed
     run_steps: int = -1

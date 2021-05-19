@@ -70,7 +70,7 @@ class CounterfactualTrainExperiment(experiment.Experiment):
 
         # setup eval dataset and dataloaders
         eval_base_dataset = MQNLIBertGraphInputDataset(base_data.dev)
-        eval_base_dataloader = train_base_dataset.get_dataloader(
+        eval_base_dataloader = eval_base_dataset.get_dataloader(
             shuffle=False, batch_size=conf.eval_batch_size)
         eval_cf_dataset = MQNLIRandomIterableCfDataset(
             base_data.dev, high_model, mapping,
@@ -98,15 +98,23 @@ class CounterfactualTrainExperiment(experiment.Experiment):
             high_model=high_model,
             configs=conf
         )
-        ckpt, model_save_path = trainer.train()
-
-        res_dict = {
-            "model_save_path": model_save_path,
-            "epoch": ckpt["epoch"],
-            "avg_train_loss": ckpt["avg_train_loss"],
-            "best_dev_acc": ckpt["best_dev_acc"],
-            "best_dev_total_acc": ckpt["best_dev_total_acc"]
-        }
+        if not conf.eval_only:
+            ckpt, model_save_path = trainer.train()
+            res_dict = {
+                "model_save_path": model_save_path,
+                "epoch": ckpt["epoch"],
+                "avg_train_loss": ckpt["avg_train_loss"],
+                "best_dev_base_acc": ckpt["best_dev_acc"],
+                "best_dev_total_acc": ckpt["best_dev_total_acc"]
+            }
+        else:
+            eval_res = trainer.evaluate_and_predict()
+            dev_base_acc = eval_res["base_correct_cnt"] / eval_res["base_cnt"]
+            dev_total_acc = eval_res["total_correct_cnt"]  / eval_res["total_cnt"]
+            res_dict = {
+                "best_dev_base_acc": dev_base_acc,
+                "best_dev_total_acc": dev_total_acc
+            }
 
         print("======= Finished Training =======")
         pprint(res_dict)
