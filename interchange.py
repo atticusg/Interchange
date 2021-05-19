@@ -14,11 +14,13 @@ import datasets.mqnli
 import modeling
 import experiment
 
+from antra import LOC
+
 from causal_abstraction.interchange import find_abstractions_batch
 from causal_abstraction.success_rates import analyze_counts
 
 import compgraphs
-from compgraphs.mqnli_logic import Abstr_MQNLI_Logic_CompGraph
+import compgraphs.mqnli_logic as logic_compgraph
 from modeling.utils import get_model_locs, load_model
 
 from typing import List, Dict
@@ -60,23 +62,28 @@ class InterchangeExperiment(experiment.Experiment):
         print("data_variant", data_variant)
         loc_mapping_type = opts.get("loc_mapping_type", "")
         loc_mapping_type = loc_mapping_type if loc_mapping_type else data_variant
-        interv_info = {
-            "target_locs": get_model_locs(high_intermediate_node, loc_mapping_type)
-        }
-        print(f"high node: {high_intermediate_node}, low_locs: {interv_info['target_locs']}")
+        low_locs = get_model_locs(high_intermediate_node, loc_mapping_type)
+
+        # interv_info = {
+        #     "target_locs": get_model_locs(high_intermediate_node, loc_mapping_type)
+        # }
+        print(f"high node: {high_intermediate_node}, low_locs: {low_locs}")
 
         # set up models
         low_compgraph_class = compgraphs.get_compgraph_class_by_name(model_type)
         low_abstr_compgraph_class = compgraphs.get_abstr_compgraph_class_by_name(model_type)
         low_base_compgraph = low_compgraph_class(module)
-        low_model = low_abstr_compgraph_class(low_base_compgraph,
-                                              low_intermediate_nodes,
-                                              interv_info=interv_info,
-                                              root_output_device=torch.device("cpu"))
+        low_model = low_abstr_compgraph_class(low_base_compgraph, low_intermediate_nodes)
         low_model.set_cache_device(torch.device("cpu"))
-        high_model = Abstr_MQNLI_Logic_CompGraph(data, high_intermediate_nodes)
 
+        base_high_model = logic_compgraph.Full_MQNLI_Logic_CompGraph(data)
+        high_model = logic_compgraph.Full_Abstr_MQNLI_Logic_CompGraph(
+            base_high_model, high_intermediate_nodes)
 
+        low_nodes_to_indices = {
+            low_node: [LOC[:,x,:] for x in low_locs]
+            for low_node in low_intermediate_nodes
+        }
 
         # ------ Batched causal_abstraction experiment ------ #
         start_time = time.time()
@@ -84,6 +91,7 @@ class InterchangeExperiment(experiment.Experiment):
             low_model=low_model,
             high_model=high_model,
             low_model_type=model_type,
+            low_nodes_to_indices=low_nodes_to_indices,
             dataset=data.dev,
             num_inputs=opts["num_inputs"],
             batch_size=opts["interchange_batch_size"],

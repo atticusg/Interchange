@@ -29,7 +29,7 @@ def generate_bert_layer_fxn(layer_module, i):
     return _bert_layer_fxn
 
 class MQNLI_Bert_CompGraph(ComputationGraph):
-    def __init__(self, bert_model, root_output_device=None):
+    def __init__(self, bert_model):
         if bert_model.task != "mqnli":
             raise ValueError("The model must be for MQNLI!")
 
@@ -90,10 +90,9 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
 
 class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
     def __init__(self, base_compgraph: MQNLI_Bert_CompGraph,
-                 intermediate_nodes: List[str], interv_info: Any = None,
-                 root_output_device: Optional[torch.device]=None):
+                 intermediate_nodes: List[str]):
         self.base = base_compgraph
-        self.interv_info = interv_info
+        # self.interv_info = interv_info
 
         # full_graph = {node_name: [child.name for child in node.children]
         #               for node_name, node in base_compgraph.nodes.items()}
@@ -110,11 +109,11 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
     def device(self):
         return self.base.device
 
-    def get_indices(self, node: str):
-        if re.match(r".*bert_layer_[0-9]*", node):
-            return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
-        else:
-            raise ValueError(f"Cannot get indices for node {node}")
+    # def get_indices(self, node: str):
+    #     if re.match(r".*bert_layer_[0-9]*", node):
+    #         return [LOC[:,i,:] for i in self.interv_info["target_locs"]]
+    #     else:
+    #         raise ValueError(f"Cannot get indices for node {node}")
 
 
 class Full_MQNLI_Bert_CompGraph(ComputationGraph):

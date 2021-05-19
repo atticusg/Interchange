@@ -1,11 +1,14 @@
 import torch
-
-import intervention
-from intervention.utils import serialize
-from causal_abstraction.abstraction_torch import create_possible_mappings
+import math
+from pprint import pprint
+import antra
+from antra.interchange.mapping import create_possible_mappings
+from antra.utils import serialize
+# from causal_abstraction.abstraction_torch import create_possible_mappings
 
 from torch.utils.data import IterableDataset, DataLoader, Subset
 from itertools import product
+from tqdm import tqdm
 
 class InterchangeDataset(IterableDataset):
     def __init__(self, low_input_tuple_len, low_hidden_loc):
@@ -97,14 +100,12 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         # elif low_model_type == "lstm":
         #     high_input_tensor = torch.cat((input_tuple[0][:,:9],
         #                                   input_tuple[0][:,10:]), dim=1)
-
-        high_base_key = [serialize(x) for x in high_input_tensor]
-        high_input = intervention.GraphInput.batched(
-            {"input": high_input_tensor.T}, high_base_key)
+        # print(f"{high_input_tensor.shape=}")
+        high_input = antra.GraphInput.batched({"input": high_input_tensor})
         # high model uses batch_dim = 0 because all intermediate outputs are
         # in batch-first order.
         high_output = high_model.compute(high_input)
-        high_hidden = high_model.get_result(high_node, high_input)
+        high_hidden = high_model.compute_node(high_node, high_input)
 
         low_key = [serialize(x) for x in input_tuple[0]]
         low_input_tuple_for_graph = [x.to(device) for x in input_tuple]
@@ -114,10 +115,10 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
         #                                  input_tuple[-1].to(device)]
 
-        low_input = intervention.GraphInput.batched(
-            {"input": low_input_tuple_for_graph}, low_key, batch_dim=low_batch_dim)
+        low_input = antra.GraphInput.batched(
+            {"input": low_input_tuple_for_graph}, keys=low_key, batch_dim=low_batch_dim)
         low_output = low_model.compute(low_input)
-        low_hidden = low_model.get_result(low_node, low_input)
+        low_hidden = low_model.compute_node(low_node, low_input)
 
         icd.add_example(low_input_tuple=input_tuple,
                         low_outputs=low_output.tolist(),
@@ -133,26 +134,28 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
     res_dict = {"base_i": [], "interv_i": [],
                 "high_base_res": [], "low_base_res": [],
                 "high_interv_res": [], "low_interv_res": []}
+    total_num_batches = math.ceil(num_inputs ** 2 // batch_size)
     count = 0
-    for i, input_tuple in enumerate(intervention_dataloader):
-        if i % 100 == 0:
-            print(f"    > {count} / {num_inputs ** 2}")
+    for i, input_tuple in enumerate(tqdm(intervention_dataloader, total=total_num_batches)):
+        # if i % 100 == 0:
+        #     print(f"    > {count} / {num_inputs ** 2}")
         high_input = input_tuple[icd.idx_high_inputs]
         high_interv_value = input_tuple[icd.idx_high_hidden]
 
-        high_base_key = [serialize(x) for x in high_input]
-        high_base = intervention.GraphInput.batched(
-            {"input": high_input.T}, high_base_key, cache_results=False
+        # high_base_key = [serialize(x) for x in high_input]
+
+        high_base = antra.GraphInput.batched(
+            {"input": high_input}, cache_results=False
         )
-        high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
-                           zip(high_input, high_interv_value)]
-        high_intervention = intervention.Intervention.batched(
-            high_base, high_interv_key,
+        # high_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
+        #                    zip(high_input, high_interv_value)]
+        high_intervention = antra.Intervention.batched(
+            high_base,
             intervention={high_node: high_interv_value},
+            cache_results=False
         )
 
-        high_base_res, high_interv_res = \
-            high_model.intervene(high_intervention, store_cache=False)
+        high_base_res, high_interv_res = high_model.intervene(high_intervention)
 
         low_input_tensor = input_tuple[0]
         low_interv_value = input_tuple[icd.idx_low_hidden]
@@ -164,21 +167,21 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
         #                                  input_tuple[-1].to(device)]
 
-        low_base = intervention.GraphInput.batched(
-            {"input": low_input_tuple_for_graph}, low_base_key,
-            cache_results=False, batch_dim=low_batch_dim)
+        low_base = antra.GraphInput.batched(
+            {"input": low_input_tuple_for_graph},
+            keys=low_base_key, cache_results=False, batch_dim=low_batch_dim)
 
-        low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
-                          zip(low_input_tensor, low_interv_value)]
+        # low_interv_key = [(serialize(x), serialize(interv)) for x, interv in \
+        #                    zip(low_input_tensor, low_interv_value)]
 
-        low_intervention = intervention.Intervention.batched(
-            low_base, low_interv_key,
+        low_intervention = antra.Intervention.batched(
+            low_base,
             intervention={low_node: low_interv_value.to(device)},
-            location={low_node: low_loc}, batch_dim=low_batch_dim
+            location={low_node: low_loc}, batch_dim=low_batch_dim,
+            cache_results=False
         )
 
-        low_base_res, low_interv_res = \
-            low_model.intervene(low_intervention, store_cache=False)
+        low_base_res, low_interv_res = low_model.intervene(low_intervention)
 
         # assert torch.all(low_base_res.to(torch.device("cpu")) == input_tuple[icd.idx_low_outputs])
         # assert torch.all(high_base_res == input_tuple[icd.idx_high_outputs])
@@ -200,12 +203,15 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
 
 
 def find_abstractions_batch(low_model, high_model, low_model_type,
+                            low_nodes_to_indices,
                             dataset, num_inputs, batch_size,
                             fixed_assignments, unwanted_low_nodes=None):
     print("Creating possible mappings")
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments,
-                                        unwanted_low_nodes)
+                                        unwanted_low_nodes, low_nodes_to_indices)
     print(f"Got {len(mappings)} different mappings")
+    # pprint(mappings)
+    # raise NotImplementedError
     result = []
     with torch.no_grad():
         for mapping in mappings:
