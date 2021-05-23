@@ -1,10 +1,16 @@
+import math
 import torch
 import numpy as np
 from collections import Counter
 import torch.utils.data as torch_data
 
+from tqdm import tqdm
+
+import antra
 from antra import LOC
-from counterfactual.dataset import MQNLIRandomIterableCfDataset
+from counterfactual.augmentation import MQNLIRandomAugmentationDataset
+from counterfactual.augmentation import high_node_to_bert_idx
+from counterfactual.dataset import MQNLIRandomCfDataset
 from counterfactual.multidataloader import MultiTaskDataLoader
 from counterfactual.scheduling import LinearCfTrainingSchedule
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
@@ -48,7 +54,7 @@ def test_dataset_constructor():
         "vp": {"bert_layer_3": LOC[:,10,:]}
     }
     high_model = Full_MQNLI_Logic_CompGraph(data)
-    dataset = MQNLIRandomIterableCfDataset(
+    dataset = MQNLIRandomCfDataset(
         base_dataset, high_model, mapping
     )
     # sampler = torch_data.RandomSampler(dataset)
@@ -134,3 +140,60 @@ def test_lin_schedule():
     for epoch in range(40):
         print(f"Epoch {epoch}, schedule {s(epoch)}")
 
+
+
+def test_aug_dataset():
+    """ Test augmented counterfactual examples has the correct labels as doing
+    the equivalent intervention at each node
+    """
+    dataset_path = "data/mqnli/preprocessed/bert-hard_abl.pt"
+    num_random_bases = 1000
+    num_random_ivn_srcs = 8
+    batch_size = 4
+    seed = 39
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    base_data = torch.load(dataset_path)
+    high_model = Full_MQNLI_Logic_CompGraph(base_data)
+    base_dataset = base_data.train
+    dummy_bert_loc = {"bert_layer_3": LOC[:,10,:]}
+
+    for high_node in high_node_to_bert_idx.keys():
+        mapping =  {high_node: dummy_bert_loc}
+        cf_aug_dataset = MQNLIRandomAugmentationDataset(
+            base_dataset=base_dataset,
+            high_model=high_model,
+            mapping=mapping,
+            fix_examples=True,
+            num_random_bases=num_random_bases,
+            num_random_ivn_srcs=num_random_ivn_srcs
+        )
+        cf_aug_dataloader = cf_aug_dataset.get_dataloader(batch_size=batch_size)
+
+        label_counts = Counter()
+        total_num_batches = math.ceil(num_random_bases * num_random_ivn_srcs / batch_size)
+
+        for batch in tqdm(cf_aug_dataloader, desc=high_node,total=total_num_batches):
+            labels = batch["labels"]
+            label_counts.update(labels.tolist())
+
+            hi_bases = []
+            hi_ivn_srcs = []
+            for i in range(len(labels)):
+                base_idx, ivn_src_idx = batch["base_idxs"][i], batch["ivn_src_idxs"][i]
+                hi_bases.append(base_dataset[base_idx][-2])
+                hi_ivn_srcs.append(base_dataset[ivn_src_idx][-2])
+
+            hi_base_tsr = torch.stack(hi_bases, dim=0)
+            hi_ivn_src_tsr = torch.stack(hi_ivn_srcs, dim=0)
+
+            hi_base_gi = antra.GraphInput.batched({"input": hi_base_tsr}, cache_results=False)
+            hi_ivn_src_gi = antra.GraphInput.batched({"input": hi_ivn_src_tsr}, cache_results=False)
+            hi_ivn_vals = high_model.compute_node(high_node, hi_ivn_src_gi)
+            ivn = antra.Intervention.batched(
+                hi_base_gi, {high_node: hi_ivn_vals}, cache_base_results=False, cache_results=False
+            )
+            _, ivn_res = high_model.intervene(ivn)
+
+            assert torch.allclose(labels, ivn_res)
