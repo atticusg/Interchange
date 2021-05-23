@@ -21,6 +21,16 @@ def construct_bert_input(example):
     }
     return antra.GraphInput(gi_dict, cache_results=False)
 
+def construct_high_intervention(base_ex, ivn_src_ex, high_model, high_node):
+    base_input_tensor = base_ex[-2]
+    ivn_input_tensor = ivn_src_ex[-2]
+    base_gi = antra.GraphInput({"input": base_input_tensor}, cache_results=False)
+    ivn_src_gi = antra.GraphInput({"input": ivn_input_tensor.unsqueeze(0)}, cache_results=False)
+    ivn_val = high_model.compute_node(high_node, ivn_src_gi).squeeze(0)
+    return antra.Intervention(
+        base_gi, {high_model: ivn_val}, cache_results=False
+    )
+
 
 class MQNLIBertGraphInputDataset(Dataset):
     """ Wraps around a basic MQNLI dataset, but outputs batched GraphInput
@@ -111,17 +121,10 @@ class MQNLICounterfactualDataset(antra_cfd.ListCounterfactualDataset):
         return pairs
 
     def construct_intervention(self, base, ivn_source):
-        base_input_tensor = base[-2].unsqueeze(0)
-        ivn_input_tensor = ivn_source[-2].unsqueeze(0)
-        base_gi = antra.GraphInput({"input": base_input_tensor}, cache_results=False)
-        ivn_src_gi = antra.GraphInput({"input": ivn_input_tensor}, cache_results=False)
-        ivn_val = self.high_model.compute_node(self.intervened_high_node, ivn_src_gi)
+        return construct_high_intervention(
+            base, ivn_source, self.high_model, self.intervened_high_node)
 
-        return antra.Intervention(
-            base_gi, {self.intervened_high_node: ivn_val}, cache_results=False
-        )
-
-class MQNLIRandomIterableCfDataset(antra_cfd.RandomCounterfactualDataset):
+class MQNLIRandomCfDataset(antra_cfd.RandomCounterfactualDataset):
     def __init__(
             self,
             base_dataset: MQNLIBertDataset,
@@ -148,7 +151,7 @@ class MQNLIRandomIterableCfDataset(antra_cfd.RandomCounterfactualDataset):
         # assume only one node to intervene on for now
         self.intervened_high_node = list(intervened_nodes)[0]
 
-        super(MQNLIRandomIterableCfDataset, self).__init__(
+        super(MQNLIRandomCfDataset, self).__init__(
             base_dataset=base_dataset,
             mapping = mapping,
             batch_dim = 0,
@@ -158,15 +161,10 @@ class MQNLIRandomIterableCfDataset(antra_cfd.RandomCounterfactualDataset):
         )
 
     def construct_high_intervention(self, base_ex, ivn_src_ex):
-        base_input_tensor = base_ex[-2]
-        ivn_input_tensor = ivn_src_ex[-2]
-        base_gi = antra.GraphInput({"input": base_input_tensor}, cache_results=False)
-        ivn_src_gi = antra.GraphInput({"input": ivn_input_tensor.unsqueeze(0)}, cache_results=False)
-        ivn_val = self.high_model.compute_node(self.intervened_high_node, ivn_src_gi).squeeze(0)
-        return antra.Intervention(
-            base_gi, {self.intervened_high_node: ivn_val}, cache_results=False
-        )
+        return construct_high_intervention(
+            base_ex, ivn_src_ex, self.high_model, self.intervened_high_node)
 
     def construct_low_input(self, example):
         return construct_bert_input(example)
+
 

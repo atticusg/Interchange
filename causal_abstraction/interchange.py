@@ -83,7 +83,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         raise NotImplementedError(
             "Currently does not support more than one intermediate nodes")
 
-    print("--- Testing mapping", relevant_mappings)
+    print("\n--- Testing mapping", relevant_mappings)
     print("    Getting base outputs")
     device = torch.device("cuda")
     subset = Subset(dataset, list(range(num_inputs)))
