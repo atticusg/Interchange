@@ -65,15 +65,19 @@ def preprocess(model_type, train, dev, test, data_path, variant):
     torch.save(data, data_path)
     print(f"Saved preprocessed dataset to {data_path}")
 
-def setup(db_path, data_path):
+def setup(experiment, data_path):
     from dataclasses import asdict
     from counterfactual import CounterfactualTrainingConfig
-    if "bert" in db_path:
-        default_opts = asdict(CounterfactualTrainingConfig())
-    elif "lstm" in db_path:
-        default_opts = DEFAULT_LSTM_OPTS.copy()
-    else:
-        raise ValueError(f"Cannot infer model type from database path {db_path}")
+
+    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+
+    default_opts = asdict(CounterfactualTrainingConfig())
+    # if "bert" in db_path:
+    #     default_opts = asdict(CounterfactualTrainingConfig())
+    # elif "lstm" in db_path:
+    #     default_opts = DEFAULT_LSTM_OPTS.copy()
+    # else:
+    #     raise ValueError(f"Cannot infer model type from database path {db_path}")
 
     default_opts["data_path"] = data_path
     # if "hard" in data_path or "medium" in data_path:
@@ -91,19 +95,29 @@ def add_one(db_path):
     manager = ExperimentManager(db_path)
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
 
-def add_grid_search(db_path, repeat, res_save_dir):
+def add_grid_search(experiment, repeat):
     from datetime import datetime
     from itertools import product
 
+    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+    res_save_dir = os.path.join("data/cf-training", experiment)
+
     manager = ExperimentManager(db_path)
 
-    grid_dict = {
-        "lr": [5e-4, 5e-5],
-        "lr_scheduler_type": ["linear"],
-        "scheduler_warmup_subepochs": [5, 10],
-        "scheduler_warmup_step_size": [0.2, 0.1],
-        "max_subepochs": [50],
-    }
+    if experiment == "ablation":
+        grid_dict = {
+            "cf_type": ["augmented", "random_only"],
+            "train_multitask_scheduler_type": ["fixed", "linear"],
+
+            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
+            "lr": [5e-5],
+            "lr_scheduler_type": ["linear"],
+            "scheduler_warmup_subepochs": [10],
+            "eval_subepochs": [5],
+            "max_subepochs": [80],
+        }
+    else:
+        raise ValueError(f"Invalid experiment name")
 
     var_opt_names = list(grid_dict.keys())
     var_opt_values = list(v if isinstance(v, list) else list(v) \
@@ -116,21 +130,26 @@ def add_grid_search(db_path, repeat, res_save_dir):
             update_dict[name] = val
         for _ in range(repeat):
             id = manager.insert(update_dict)
-            time_str = datetime.now().strftime("%m%d-%H%M%S")
-            curr_save_dir = os.path.join(res_save_dir, f"expt-{id}-{time_str}")
+            # time_str = datetime.now().strftime("%m%d-%H%M%S")
+            cf_type = update_dict["cf_type"]
+            scheduler_type = update_dict["train_multitask_scheduler_type"]
+            curr_save_dir = os.path.join(res_save_dir, f"expt-{id}-c_{cf_type}-s_{scheduler_type}")
             manager.update({"res_save_dir": curr_save_dir}, id)
             print("----inserted example into database:", update_dict)
 
 
-def run(db_path, script, n, detach, metascript, ready_status, started_status):
+def run(experiment, script, n, detach, metascript, ready_status, started_status):
     from dataclasses import asdict
     from counterfactual import CounterfactualTrainingConfig
-    if "lstm" in db_path:
-        expt_opts = list(DEFAULT_LSTM_OPTS.keys())
-    elif "bert" in db_path:
-        expt_opts = list(asdict(CounterfactualTrainingConfig()).keys())
-    else:
-        raise ValueError(f"Cannot infer model type from database path {db_path}")
+
+    expt_opts = list(asdict(CounterfactualTrainingConfig()).keys())
+    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+    # if "lstm" in db_path:
+    #     expt_opts = list(DEFAULT_LSTM_OPTS.keys())
+    # elif "bert" in db_path:
+    #     expt_opts = list(asdict(CounterfactualTrainingConfig()).keys())
+    # else:
+    #     raise ValueError(f"Cannot infer model type from database path {db_path}")
 
     manager = ExperimentManager(db_path, expt_opts)
 
@@ -146,9 +165,10 @@ def run(db_path, script, n, detach, metascript, ready_status, started_status):
                 ready_status=ready_status, started_status=started_status)
 
 
-def query(db_path, id=None, status=None, limit=None):
+def query(experiment, id=None, status=None, limit=None):
+    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
     manager = ExperimentManager(db_path)
-    cols = ["id", "status", "batch_size", "lr", "res_save_dir", "model_save_path"]
+    cols = ["id", "status", "res_save_dir", "model_save_path"]
     rows = manager.query(cols=cols, status=status, id=id, limit=limit)
     if len(rows) == 0:
         return "No data found"
@@ -159,7 +179,8 @@ def query(db_path, id=None, status=None, limit=None):
         print(row)
         print("-------")
 
-def update_status(db_path, ids, id_range, status):
+def update_status(experiment, ids, id_range, status):
+    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
     if id_range:
         ids = list(range(id_range[0], id_range[1] + 1))
     for i in ids:
@@ -181,27 +202,23 @@ def main():
     #                                help="Type of bert realignment variant")
 
     setup_parser = subparsers.add_parser("setup")
-    setup_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
+    setup_parser.add_argument("-e", "--experiment", type=str,
+                              help="name of the experiment")
     setup_parser.add_argument("-i", "--data_path", type=str,
+                              default="data/mqnli/preprocessed/bert-hard_abl.pt",
                               help="Path to pickled dataset")
 
-    add_one_parser = subparsers.add_parser("add_one")
-    add_one_parser.add_argument("-d", "--db_path", type=str, required=True,
-                                help="Experiment database path")
-
     add_gs_parser = subparsers.add_parser("add_grid_search")
-    add_gs_parser.add_argument("-d", "--db_path", type=str, required=True,
-                               help="Experiment database path")
+    add_gs_parser.add_argument("-e", "--experiment", type=str, default="ablation",
+                               help="name of the experiment")
     add_gs_parser.add_argument("-r", "--repeat", type=int, default=1,
                                help="Repeat each grid search config for number "
                                     "of times")
-    add_gs_parser.add_argument("-o", "--res_save_dir", type=str, required=True,
-                               help="Directory to save stored results")
+
 
 
     run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("-d", "--db_path", type=str, required=True)
+    run_parser.add_argument("-e", "--experiment", type=str, required=True)
     run_parser.add_argument("-i", "--script", type=str, default=DEFAULT_SCRIPT)
     run_parser.add_argument("-n", "--n", type=int, default=None)
     run_parser.add_argument("-x", "--detach", action="store_true")
@@ -210,14 +227,13 @@ def main():
     run_parser.add_argument("-s", "--started_status", type=int, default=None)
 
     query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("-d", "--db_path", type=str,
-                              help="Experiment database path")
+    query_parser.add_argument("-e", "--experiment", type=str, required=True)
     query_parser.add_argument("-i", "--id", type=int)
     query_parser.add_argument("-s", "--status", type=int)
     query_parser.add_argument("-n", "--limit", type=int)
 
     update_parser = subparsers.add_parser("update_status")
-    update_parser.add_argument("-d", "--db_path", type=str, required=True)
+    update_parser.add_argument("-e", "--experiment", type=str, required=True)
     update_parser.add_argument("-i", "--ids", type=int, nargs="*")
     update_parser.add_argument("-r", "--id_range", type=int, nargs=2)
     update_parser.add_argument("-s", "--status", type=int, required=True)

@@ -39,6 +39,7 @@ def create_cmd(table_name, opts):
     opts_cols = []
 
     for col, value in opts.items():
+        if col == "id": continue
         opts_cols.append(col)
         type_str = type2str[type(value)]
 
