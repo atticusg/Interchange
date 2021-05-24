@@ -19,9 +19,12 @@ class CounterfactualTrainingConfig:
     lr_warmup_subepochs: int = 5 # changed
     weight_norm: float = 0.
 
+    train_multitask_scheduler_type: str = "fixed"
+    base_to_cf_ratio: float = 1.0
     num_subepochs_per_epoch: int = 20
     scheduler_warmup_subepochs: int = 8
     scheduler_warmup_step_size: float = 0.1
+
     cf_type: str = "random_only"
     cf_train_num_random_bases: int = 50000
     cf_train_num_random_ivn_srcs: int = 20

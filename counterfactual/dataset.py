@@ -28,7 +28,7 @@ def construct_high_intervention(base_ex, ivn_src_ex, high_model, high_node):
     ivn_src_gi = antra.GraphInput({"input": ivn_input_tensor.unsqueeze(0)}, cache_results=False)
     ivn_val = high_model.compute_node(high_node, ivn_src_gi).squeeze(0)
     return antra.Intervention(
-        base_gi, {high_model: ivn_val}, cache_results=False
+        base_gi, {high_node: ivn_val}, cache_results=False
     )
 
 

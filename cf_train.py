@@ -12,7 +12,8 @@ from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 
 from counterfactual import CounterfactualTrainingConfig
 from counterfactual.multidataloader import MultiTaskDataLoader
-from counterfactual.dataset import MQNLIRandomIterableCfDataset, MQNLIBertGraphInputDataset
+from counterfactual.dataset import MQNLIRandomCfDataset, MQNLIBertGraphInputDataset
+from counterfactual.augmented import MQNLIRandomAugmentedDataset
 from counterfactual.trainer import CounterfactualTrainer
 from counterfactual.scheduling import LinearCfTrainingSchedule, FixedRatioSchedule
 
@@ -46,24 +47,51 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         train_base_dataset = MQNLIBertGraphInputDataset(base_data.train)
         train_base_dataloader = train_base_dataset.get_dataloader(
             shuffle=True, batch_size=conf.train_batch_size)
-        train_cf_dataset = MQNLIRandomIterableCfDataset(
-            base_data.train, high_model, mapping,
-            num_random_bases=conf.cf_train_num_random_bases,
-            num_random_ivn_srcs=conf.cf_train_num_random_ivn_srcs,
-            fix_examples=False
-        )
+
+        if conf.cf_type == "random_only":
+            cf_task_name = "cf_random"
+            train_cf_dataset = MQNLIRandomCfDataset(
+                base_data.train, high_model, mapping,
+                num_random_bases=conf.cf_train_num_random_bases,
+                num_random_ivn_srcs=conf.cf_train_num_random_ivn_srcs,
+                fix_examples=False
+            )
+        elif conf.cf_type == "augmented":
+            cf_task_name = "augmented"
+            train_cf_dataset = MQNLIRandomAugmentedDataset(
+                base_data.train, high_model, mapping,
+                num_random_bases=conf.cf_train_num_random_bases,
+                num_random_ivn_srcs=conf.cf_train_num_random_ivn_srcs,
+                fix_examples=False
+            )
+        else:
+            raise ValueError(f"Invalid cf_type {conf.cf_type}")
         train_cf_dataloader = train_cf_dataset.get_dataloader(batch_size=conf.train_batch_size)
-        train_schedule = LinearCfTrainingSchedule(
-            base_dataset=train_base_dataset,
-            batch_size=conf.train_batch_size,
-            num_subepochs=conf.num_subepochs_per_epoch,
-            warmup_subepochs=conf.scheduler_warmup_subepochs,
-            ratio_step_size=conf.scheduler_warmup_step_size
-        )
+
+        if conf.train_multitask_scheduler_type == "fixed":
+            num_train_cf_examples = conf.cf_train_num_random_bases * conf.cf_train_num_random_ivn_srcs
+            train_schedule = FixedRatioSchedule(
+                dataset_sizes=[len(train_base_dataset), num_train_cf_examples],
+                batch_size=conf.train_batch_size,
+                num_subepochs=conf.num_subepochs_per_epoch,
+                ratio=conf.base_to_cf_ratio
+            )
+        elif conf.train_multitask_scheduler_type == "linear":
+            train_schedule = LinearCfTrainingSchedule(
+                base_dataset=train_base_dataset,
+                batch_size=conf.train_batch_size,
+                num_subepochs=conf.num_subepochs_per_epoch,
+                warmup_subepochs=conf.scheduler_warmup_subepochs,
+                ratio_step_size=conf.scheduler_warmup_step_size,
+                final_ratio=conf.base_to_cf_ratio
+            )
+        else:
+            raise ValueError(f"Invalid multitask_scheduler_type {conf.train_multitask_scheduler_type}")
+
         # train_schedule = lambda x: [10, 10]
         train_dataloader = MultiTaskDataLoader(
             tasks=[train_base_dataloader, train_cf_dataloader],
-            task_names=["base", "cf_random"],
+            task_names=["base", cf_task_name],
             return_task_name=True,
             schedule_fn=train_schedule
         )
@@ -72,21 +100,34 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         eval_base_dataset = MQNLIBertGraphInputDataset(base_data.dev)
         eval_base_dataloader = eval_base_dataset.get_dataloader(
             shuffle=False, batch_size=conf.eval_batch_size)
-        eval_cf_dataset = MQNLIRandomIterableCfDataset(
-            base_data.dev, high_model, mapping,
-            num_random_bases=conf.cf_eval_num_random_bases,
-            num_random_ivn_srcs=conf.cf_eval_num_random_ivn_srcs,
-            fix_examples=True
-        )
-        num_cf_examples = conf.cf_eval_num_random_bases * conf.cf_eval_num_random_ivn_srcs
+
+        if conf.cf_type == "random_only":
+            eval_cf_dataset = MQNLIRandomCfDataset(
+                base_data.dev, high_model, mapping,
+                num_random_bases=conf.cf_eval_num_random_bases,
+                num_random_ivn_srcs=conf.cf_eval_num_random_ivn_srcs,
+                fix_examples=True
+            )
+
+        elif conf.cf_type == "augmented":
+            eval_cf_dataset = MQNLIRandomAugmentedDataset(
+                base_data.dev, high_model, mapping,
+                num_random_bases=conf.cf_eval_num_random_bases,
+                num_random_ivn_srcs=conf.cf_eval_num_random_ivn_srcs,
+                fix_examples=False
+            )
+        else:
+            raise ValueError(f"Invalid cf_type {conf.cf_type}")
+
+        num_eval_cf_examples = conf.cf_eval_num_random_bases * conf.cf_eval_num_random_ivn_srcs
         eval_cf_dataloader = eval_cf_dataset.get_dataloader(batch_size=conf.eval_batch_size)
         eval_schedule = FixedRatioSchedule(
-            dataset_sizes=[len(eval_base_dataset), num_cf_examples],
+            dataset_sizes=[len(eval_base_dataset), num_eval_cf_examples],
             batch_size=conf.eval_batch_size
         )
         eval_dataloader = MultiTaskDataLoader(
             tasks=[eval_base_dataloader, eval_cf_dataloader],
-            task_names=["base", "cf_random"],
+            task_names=["base", cf_task_name],
             return_task_name=True,
             schedule_fn=eval_schedule
         )
