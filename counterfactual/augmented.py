@@ -62,7 +62,7 @@ high_node_to_bert_idx = {
 }
 
 
-class MQNLIRandomAugmentationDataset(antra_cfd.RandomCounterfactualDataset):
+class MQNLIRandomAugmentedDataset(antra_cfd.RandomCounterfactualDataset):
     def __init__(
             self,
             base_dataset: MQNLIBertDataset,
@@ -93,7 +93,7 @@ class MQNLIRandomAugmentationDataset(antra_cfd.RandomCounterfactualDataset):
         self.high_replace_idx = torch.tensor(high_node_to_high_model_idx[self.intervened_high_node],
                                             dtype=torch.long)
 
-        super(MQNLIRandomAugmentationDataset, self).__init__(
+        super(MQNLIRandomAugmentedDataset, self).__init__(
             base_dataset=base_dataset,
             mapping = mapping,
             batch_dim = 0,

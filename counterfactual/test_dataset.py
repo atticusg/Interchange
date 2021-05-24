@@ -8,11 +8,12 @@ from tqdm import tqdm
 
 import antra
 from antra import LOC
-from counterfactual.augmentation import MQNLIRandomAugmentationDataset
-from counterfactual.augmentation import high_node_to_bert_idx
+from counterfactual.augmented import MQNLIRandomAugmentedDataset
+from counterfactual.augmented import high_node_to_bert_idx
 from counterfactual.dataset import MQNLIRandomCfDataset
 from counterfactual.multidataloader import MultiTaskDataLoader
-from counterfactual.scheduling import LinearCfTrainingSchedule
+from counterfactual.scheduling import LinearCfTrainingSchedule, \
+    FixedRatioSchedule
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 
 
@@ -161,7 +162,7 @@ def test_aug_dataset():
 
     for high_node in high_node_to_bert_idx.keys():
         mapping =  {high_node: dummy_bert_loc}
-        cf_aug_dataset = MQNLIRandomAugmentationDataset(
+        cf_aug_dataset = MQNLIRandomAugmentedDataset(
             base_dataset=base_dataset,
             high_model=high_model,
             mapping=mapping,
@@ -197,3 +198,25 @@ def test_aug_dataset():
             _, ivn_res = high_model.intervene(ivn)
 
             assert torch.allclose(labels, ivn_res)
+
+def test_fixed_ratio_schedule():
+    dataset_sizes = [203, 190]
+    batch_size = 4
+    num_subepochs = 4
+    ratio = 1.0
+
+    s = FixedRatioSchedule(
+        dataset_sizes,
+        batch_size,
+        num_subepochs,
+        ratio
+    )
+
+    for e in range(20):
+        a, b = s(e)
+
+        assert a == b
+        if e % 4 == 0:
+            assert a == 15
+        else:
+            assert a == 12
