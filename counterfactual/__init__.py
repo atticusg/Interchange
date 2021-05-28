@@ -18,7 +18,7 @@ class CounterfactualTrainingConfig:
     lr_scheduler_type: str = "linear"
     lr_warmup_subepochs: int = 5 # changed
     weight_norm: float = 0.
-    primary_metric: str = "base_dev_avg_acc"
+    primary_metric: str = "eval_avg_acc"
 
     train_multitask_scheduler_type: str = "fixed"
     base_to_cf_ratio: float = 1.0
@@ -31,6 +31,7 @@ class CounterfactualTrainingConfig:
     cf_train_num_random_ivn_srcs: int = 20
     cf_eval_num_random_bases: int = 1000
     cf_eval_num_random_ivn_srcs: int = 10
+    cf_impactful_ratio: float = 0.5
 
     eval_only: bool = False
 

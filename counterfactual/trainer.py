@@ -1,5 +1,6 @@
 # trainer.py
 from typing import *
+from collections import Counter
 import shutil
 from pprint import pprint
 from tqdm import tqdm
@@ -21,13 +22,13 @@ from transformers import get_linear_schedule_with_warmup, \
     get_constant_schedule_with_warmup
 
 
-def log_stats(epoch, loss, acc, better=True, lr=None):
+def log_stats(epoch, loss, primary_metric, metric_name, better=True, lr=None):
     if lr:
-        print(f"Now at subepoch {epoch}, lr {lr:.4}, loss {loss:.4}, "
-              f"got accuracy of {acc:.2%}{', BETTER' if better else ''}")
+        print(f"Epoch {epoch}, lr={lr:.4}, loss={loss:.4}, "
+              f"{metric_name}={primary_metric:.2%}{', BETTER' if better else ''}")
     else:
-        print(f"Now at subepoch {epoch}, loss {loss:.4}, "
-              f"got accuracy of {acc:.2%}{', BETTER' if better else ''}")
+        print(f"Epoch {epoch}, loss={loss:.4}, "
+              f"{metric_name}={primary_metric:.2%}{', BETTER' if better else ''}")
 
 class CounterfactualTrainer:
     def __init__(
@@ -52,7 +53,7 @@ class CounterfactualTrainer:
         self.device = torch.device(configs.device)
 
         self.model_save_path = None
-        if configs.model_save_path or configs.res_save_dir:
+        if configs.model_save_path:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
             model_save_path = configs.model_save_path
             if configs.res_save_dir:
@@ -166,7 +167,7 @@ class CounterfactualTrainer:
         """ Train the model """
         early_stopping = False
         best_dev_acc = 0.
-        best_dev_total_acc = 0.
+        best_primary_metric = 0.
         epochs_without_increase = 0
         best_model_checkpoint = {}
         conf = self.configs
@@ -181,7 +182,6 @@ class CounterfactualTrainer:
 
         writer = SummaryWriter(log_dir=writer_dir)
 
-        train_start_time = time.time()
 
         print("========= Start training =========")
         total_step = 0
@@ -226,36 +226,31 @@ class CounterfactualTrainer:
             if (subepoch + 1) % conf.eval_subepochs == 0:
                 eval_res_dict = self.evaluate_and_predict()
 
-                total_acc = eval_res_dict["total_correct_cnt"] / eval_res_dict["total_cnt"]
-                base_acc = eval_res_dict["base_correct_cnt"] / eval_res_dict["base_cnt"]
-                writer.add_scalar("Eval/total_acc", total_acc, subepoch)
-                writer.add_scalar("Eval/base_acc", base_acc, subepoch)
+                for metric, value in eval_res_dict.items():
+                    writer.add_scalar(f"Eval/{metric}", value, subepoch)
 
-                best_dev_total_acc = max(best_dev_total_acc, total_acc)
-                if base_acc > best_dev_acc:
-                    best_dev_acc = base_acc
+                primary_metric = eval_res_dict[conf.primary_metric]
+                if primary_metric > best_primary_metric:
+                    best_primary_metric = primary_metric
                     epochs_without_increase = 0
-                    best_model_duration = time.time() - train_start_time
 
                     best_model_checkpoint = {
                         'model_name': self.low_base_model.__class__,
                         'epoch': subepoch,
-                        'duration': best_model_duration,
                         'model_state_dict': self.low_base_model.state_dict(),
-                        'avg_train_loss': avg_loss,
-                        'best_dev_acc': best_dev_acc,
-                        'dev_total_acc': total_acc,
                         'train_config': self.configs,
                         'model_config': self.low_base_model.config(),
+                        'metrics': eval_res_dict,
+                        'primary_metric': conf.primary_metric
                     }
                     if self.model_save_path:
                         torch.save(best_model_checkpoint, self.model_save_path)
 
-                    log_stats(subepoch, avg_loss, base_acc,
+                    log_stats(subepoch, avg_loss, primary_metric, conf.primary_metric,
                               lr=self.lr_scheduler.get_lr()[0] if self.lr_scheduler else None)
 
                 else:
-                    log_stats(subepoch, avg_loss, base_acc, better=False,
+                    log_stats(subepoch, avg_loss, primary_metric, conf.primary_metric, better=False,
                               lr=self.lr_scheduler.get_lr()[0] if self.lr_scheduler else None)
 
                     epochs_without_increase += conf.eval_subepochs
@@ -273,28 +268,26 @@ class CounterfactualTrainer:
                 break
 
         if conf.run_steps <= 0:
-            train_duration = time.time() - train_start_time
             # checkpoint = torch.load(save_path)
             # best_model.load_state_dict(checkpoint['model_state_dict'])
             # corr, total, _ = evaluate_and_predict(mydataset.dev, best_model)
-            print(f"Finished training. Total time is {train_duration:.1}s. Got final acc of {best_dev_acc:.2%}")
-            print(f"Best model was obtained after {subepoch + 1} epochs, in {best_model_duration:.1} seconds")
-            if conf.model_save_path:
-                print(f"Best model saved in {self.model_save_path}")
+            print(f"Finished training. Final {conf.primary_metric}={best_model_checkpoint['metrics'][conf.primary_metric]:.2%}")
+            print(f"Best model was obtained after {subepoch + 1} epochs.")
+            if self.model_save_path:
+                print(f"Best model checkpoint saved in {self.model_save_path}")
 
-        best_model_checkpoint["best_dev_total_acc"] = best_dev_total_acc
         writer.close()
         return best_model_checkpoint, self.model_save_path
 
     def evaluate_and_predict(self):
         """ Evaluate the current low model """
         self.low_base_model.eval()
+        correct_counter = Counter()
+        total_counter = Counter()
+
         with torch.no_grad():
             total_preds = 0
             correct_preds = 0
-
-            total_base_preds = 0
-            correct_base_preds = 0
 
             curr_schedule = self.eval_dataloader.schedule_fn(0)
             schedule_str = ",".join(f"{task}={n}" for task, n in zip(self.eval_dataloader.task_names, curr_schedule))
@@ -305,19 +298,21 @@ class CounterfactualTrainer:
                 pred = torch.argmax(logits, dim=1)
                 correct_in_batch = torch.sum(torch.eq(pred, labels)).item()
 
-                if task_name == "base":
-                    total_base_preds += labels.shape[0]
-                    correct_base_preds += correct_in_batch
+                correct_counter[task_name] += correct_in_batch
+                total_counter[task_name] += labels.shape[0]
 
                 total_preds += labels.shape[0]
                 correct_preds += correct_in_batch
 
             # bad_sentences = sorted(bad_sentences, key=lambda p: p[1], reverse=True)
-            return {
-                "total_correct_cnt": correct_preds,
-                "total_cnt": total_preds,
-                "base_correct_cnt": correct_base_preds,
-                "base_cnt": total_base_preds
-            }
+
+        res_dict = {}
+        for task_name in self.eval_dataloader.task_names:
+            res_dict[f"eval_{task_name}_acc"] = correct_counter[task_name] / total_counter[task_name]
+
+        eval_avg_acc = sum(acc for acc in res_dict.values()) / len(res_dict)
+        res_dict["eval_avg_acc"] = eval_avg_acc
+
+        return res_dict
 
 
