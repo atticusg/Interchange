@@ -18,6 +18,7 @@ class CounterfactualTrainingConfig:
     lr_scheduler_type: str = "linear"
     lr_warmup_subepochs: int = 5 # changed
     weight_norm: float = 0.
+    primary_metric: str = "base_dev_avg_acc"
 
     train_multitask_scheduler_type: str = "fixed"
     base_to_cf_ratio: float = 1.0
@@ -37,6 +38,10 @@ class CounterfactualTrainingConfig:
     run_steps: int = -1
     eval_subepochs: int = 5 # changed
     patient_subepochs: int = 20 # changed
+
+    interx_after_train: bool = True
+    interx_num_inputs: int = 1000
+    interx_batch_size: int = 128
 
     model_save_path: str = "cf_bert"
     res_save_dir: str = ""

@@ -1,14 +1,18 @@
 import torch
+import time
 from torch.utils.data import DataLoader
 import argparse
 import json
 from typing import Dict
 from pprint import pprint
 
+from antra import LOC
 from antra.location import parse_str
 
-from compgraphs.mqnli_bert import Full_MQNLI_Bert_CompGraph
-from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
+from compgraphs.mqnli_bert import Full_MQNLI_Bert_CompGraph, \
+    Abstr_MQNLI_Bert_CompGraph, MQNLI_Bert_CompGraph
+from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph, \
+    Full_Abstr_MQNLI_Logic_CompGraph
 
 from counterfactual import CounterfactualTrainingConfig
 from counterfactual.multidataloader import MultiTaskDataLoader
@@ -17,8 +21,12 @@ from counterfactual.augmented import MQNLIRandomAugmentedDataset
 from counterfactual.trainer import CounterfactualTrainer
 from counterfactual.scheduling import LinearCfTrainingSchedule, FixedRatioSchedule
 
+from causal_abstraction.interchange import find_abstractions_batch
+from causal_abstraction.success_rates import analyze_counts
+
 import experiment
 from modeling.pretrained_bert import PretrainedBertModule
+from modeling.utils import get_model_locs
 
 
 class CounterfactualTrainExperiment(experiment.Experiment):
@@ -140,13 +148,16 @@ class CounterfactualTrainExperiment(experiment.Experiment):
             configs=conf
         )
         if not conf.eval_only:
-            ckpt, model_save_path = trainer.train()
+            train_start_time = time.time()
+            best_ckpt, model_save_path = trainer.train()
+            train_duration = time.time() - train_start_time
             res_dict = {
                 "model_save_path": model_save_path,
-                "epoch": ckpt["epoch"],
-                "avg_train_loss": ckpt["avg_train_loss"],
-                "best_dev_base_acc": ckpt["best_dev_acc"],
-                "best_dev_total_acc": ckpt["best_dev_total_acc"]
+                "epoch": best_ckpt["epoch"],
+                "avg_train_loss": best_ckpt["avg_train_loss"],
+                "best_dev_base_acc": best_ckpt["best_dev_acc"],
+                "best_dev_total_acc": best_ckpt["best_dev_total_acc"],
+                "train_duration": train_duration
             }
         else:
             eval_res = trainer.evaluate_and_predict()
@@ -158,9 +169,84 @@ class CounterfactualTrainExperiment(experiment.Experiment):
             }
 
         print("======= Finished Training =======")
-        pprint(res_dict)
 
+        if not conf.interx_after_train:
+            pprint(res_dict)
+            return res_dict
+
+        print("======= Running interchange experiments =======")
+
+        # Conduct interchange experiments from here on
+        assert not conf.eval_only
+        module = PretrainedBertModule(
+            tokenizer_vocab_path=conf.tokenizer_vocab_path,
+            output_classes=conf.output_classes
+        )
+        module.load_state_dict(best_ckpt["model_state_dict"])
+        module = module.to(torch.device("cuda"))
+        module.eval()
+
+
+        # load data
+        data = base_data
+
+        # assume only one high intermediate node and low node
+        high_intermediate_node = None
+        low_intermediate_node = None
+        for high_node, low_dict in mapping.items():
+            high_intermediate_node = high_node
+            for low_node, low_loc in low_dict.items():
+                low_intermediate_node = low_node
+        low_intermediate_nodes = [low_intermediate_node]
+        high_intermediate_nodes = [high_intermediate_node]
+
+        low_locs = get_model_locs(high_intermediate_node, "bert")
+
+        print(f"high node: {high_intermediate_node}, low_locs: {low_locs}")
+
+        # set up models
+        # here we use old bert compgraph class because it has argmax as root node
+        low_base_compgraph = MQNLI_Bert_CompGraph(module)
+        low_abstr_compgraph = Abstr_MQNLI_Bert_CompGraph(low_base_compgraph, low_intermediate_nodes)
+        low_abstr_compgraph.set_cache_device(torch.device("cpu"))
+
+        high_abstr_compgraph = Full_Abstr_MQNLI_Logic_CompGraph(
+            high_model, high_intermediate_nodes)
+
+        low_nodes_to_indices = {
+            low_node: [LOC[:,x,:] for x in low_locs]
+            for low_node in low_intermediate_nodes
+        }
+
+        fixed_assignments = {x: {x: None} for x in ["root", "input"]}
+
+        # ------ Batched causal_abstraction experiment ------ #
+        start_time = time.time()
+        batch_results = find_abstractions_batch(
+            low_model=low_abstr_compgraph,
+            high_model=high_abstr_compgraph,
+            low_model_type="bert",
+            low_nodes_to_indices=low_nodes_to_indices,
+            dataset=data.dev,
+            num_inputs=conf.interx_num_inputs,
+            batch_size=conf.interx_batch_size,
+            fixed_assignments=fixed_assignments,
+            unwanted_low_nodes={"root", "input"}
+        )
+        interx_duration = time.time() - start_time
+        print(f"Interchange experiment took {interx_duration:.2f}s")
+
+        counts_analysis = analyze_counts(batch_results)
+
+        res_dict["interx_duration"] = interx_duration
+        res_dict.update(counts_analysis)
+        res_dict["interx_mappings"] = res_dict["mappings"]
+        del res_dict["mappings"]
+
+        pprint(res_dict)
         return res_dict
+
+
 
 def main():
     parser = argparse.ArgumentParser()
