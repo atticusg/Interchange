@@ -1,3 +1,4 @@
+import logging
 import pickle
 from typing import Sequence, Tuple
 
@@ -6,12 +7,14 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 import antra
+from antra import GraphInput, Intervention
 from antra.interchange.mapping import AbstractionMapping
 import antra.counterfactual.dataset as antra_cfd
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 
 from datasets.mqnli import MQNLIBertDataset
 
+logger = logging.getLogger(__name__)
 
 def construct_bert_input(example):
     gi_dict = {
@@ -168,3 +171,94 @@ class MQNLIRandomCfDataset(antra_cfd.RandomCounterfactualDataset):
         return construct_bert_input(example)
 
 
+class MQNLIImpactfulCFDataset(MQNLIRandomCfDataset):
+    def __init__(
+            self,
+            base_dataset: MQNLIBertDataset,
+            high_model: Full_MQNLI_Logic_CompGraph,
+            mapping: AbstractionMapping,
+            num_random_bases=50000,
+            num_random_ivn_srcs=20,
+            impactful_ratio=0.5,
+            max_attempts=10,
+            fix_examples=False,
+    ):
+        super(MQNLIImpactfulCFDataset, self).__init__(
+            base_dataset=base_dataset,
+            high_model=high_model,
+            mapping=mapping,
+            num_random_bases=num_random_bases,
+            num_random_ivn_srcs=num_random_ivn_srcs,
+            fix_examples=fix_examples
+        )
+        self.max_attempts = max_attempts
+        self.impactful_ratio = impactful_ratio
+
+    def get_ivn_srcs(self, base_idx):
+        # for each base example, find a set of ivn srcs such that a fixed ratio
+        # of them are impactful.
+        if self.fix_examples and base_idx in self.base_idxs_to_ivn_src_idxs:
+            return self.base_idxs_to_ivn_src_idxs[base_idx]
+
+        all_src_idxs = torch.randperm(self.base_dataset_len)
+        res = []
+
+        impactful_accepted = 0
+        impactful_to_accept = round(self.impactful_ratio * self.num_random_ivn_srcs)
+        attempts = 0
+        batch_start = 0
+        batch_size = self.num_random_ivn_srcs
+        # use high model to calculate whether an ivn is impactful
+
+        base_tensor = self.base_dataset[base_idx][-2].repeat(batch_size, 1)
+        base_gi = GraphInput.batched({"input": base_tensor}, cache_results=True)
+
+        while len(res) < self.num_random_ivn_srcs and attempts < self.max_attempts:
+            batch_ivn_src_idxs = all_src_idxs[batch_start:batch_start+batch_size]
+
+            ivn_src_tensors = [self.base_dataset[i.item()][-2] for i in batch_ivn_src_idxs]
+            ivn_src_tensor = torch.stack(ivn_src_tensors, dim=0)
+            ivn_src_gi = GraphInput.batched({"input": ivn_src_tensor}, cache_results=False)
+            ivn_vals = self.high_model.compute_node(self.intervened_high_node, ivn_src_gi)
+
+            ivn = Intervention.batched(base_gi, {self.intervened_high_node: ivn_vals}, cache_results=False)
+            base_res, ivn_res = self.high_model.intervene(ivn)
+
+            for i, eq in enumerate(torch.eq(base_res, ivn_res)):
+                if not eq and impactful_accepted < impactful_to_accept:
+                    impactful_accepted += 1
+                    res.append(batch_ivn_src_idxs[i].item())
+                elif eq and (len(res) - impactful_accepted) < (self.num_random_ivn_srcs - impactful_to_accept):
+                    res.append(batch_ivn_src_idxs[i].item())
+
+            batch_start += batch_size
+            attempts += 1
+
+        # if attempts >= self.max_attempts and len(res) < self.num_random_ivn_srcs:
+        #     logger.warning("Did not get enough examples for base input")
+
+        # clear cache
+        self.high_model.clear_caches(base_gi)
+
+        if self.fix_examples:
+            self.base_idxs_to_ivn_src_idxs[base_idx] = res
+
+        return res
+
+    def __iter__(self):
+        if not self.fix_examples:
+            rand_base_idxs = torch.randperm(self.base_dataset_len)[:self.num_random_bases]
+        else:
+            rand_base_idxs = self.rand_base_idxs
+
+        for base_idx in rand_base_idxs:
+            base_idx = base_idx.item()
+            ivn_src_idxs = self.get_ivn_srcs(base_idx)
+            if len(ivn_src_idxs) < self.num_random_ivn_srcs:
+                continue
+
+            for ivn_src_idx in ivn_src_idxs:
+                base = self.base_dataset[base_idx]
+                ivn_src = self.base_dataset[ivn_src_idx]
+
+                yield self.prepare_one_example(base, ivn_src, base_idx, ivn_src_idx)

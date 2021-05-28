@@ -7,10 +7,10 @@ import torch.utils.data as torch_data
 from tqdm import tqdm
 
 import antra
-from antra import LOC
+from antra import LOC, GraphInput, Intervention
 from counterfactual.augmented import MQNLIRandomAugmentedDataset
 from counterfactual.augmented import high_node_to_bert_idx
-from counterfactual.dataset import MQNLIRandomCfDataset
+from counterfactual.dataset import MQNLIRandomCfDataset, MQNLIImpactfulCFDataset
 from counterfactual.multidataloader import MultiTaskDataLoader
 from counterfactual.scheduling import LinearCfTrainingSchedule, \
     FixedRatioSchedule
@@ -220,3 +220,62 @@ def test_fixed_ratio_schedule():
             assert a == 15
         else:
             assert a == 12
+
+
+def test_cf_impactful_dataset():
+    torch.manual_seed(39)
+    dataset_path = "data/mqnli/preprocessed/bert-hard_abl.pt"
+    base_data = torch.load(dataset_path)
+    high_model = Full_MQNLI_Logic_CompGraph(base_data)
+    base_dataset = base_data.train
+    mapping = {"vp": {"bert_layer_3": LOC[:,10,:]}}
+
+    num_bases = 2000
+    ivn_src_cnt = 20
+    ratio = 0.5
+    n_impactful = round(ivn_src_cnt * ratio)
+    n_unimpactful = ivn_src_cnt - n_impactful
+    batch_size = 2
+
+    dataset = MQNLIImpactfulCFDataset(
+            base_dataset=base_dataset,
+            high_model=high_model,
+            mapping=mapping,
+            num_random_bases=num_bases,
+            num_random_ivn_srcs=ivn_src_cnt,
+            impactful_ratio=ratio,
+            max_attempts=10,
+            fix_examples=False,
+    )
+
+    dataloader = dataset.get_dataloader(batch_size=batch_size)
+
+    impactful_cnt = Counter()
+    unimpactful_cnt = Counter()
+    bis = set()
+
+    for batch in tqdm(dataloader, total=math.ceil(num_bases * ivn_src_cnt / batch_size)):
+        base_idxs, ivn_src_idxs = batch["base_idxs"], batch["ivn_src_idxs"]
+
+        for bi, isi in zip(base_idxs, ivn_src_idxs):
+            bis.add(bi)
+            bgi = GraphInput.batched({"input":base_dataset[bi][-2].unsqueeze(0)}, cache_results=True)
+            isgi = GraphInput.batched({"input":base_dataset[isi][-2].unsqueeze(0)}, cache_results=False)
+            ivn_val = high_model.compute_node("vp", isgi)
+            ivn = Intervention.batched(bgi, {"vp": ivn_val})
+            base_res, ivn_res = high_model.intervene(ivn)
+            if base_res == ivn_res:
+                unimpactful_cnt[bi] += 1
+            elif base_res != ivn_res:
+                impactful_cnt[bi] += 1
+
+    for bi in bis:
+        assert impactful_cnt[bi] == n_impactful
+        if impactful_cnt[bi] < n_impactful:
+            print(f"base {bi} got only {impactful_cnt[bi]} (<{n_impactful}) impactful ivn srcs")
+
+        assert unimpactful_cnt[bi] == n_unimpactful
+        if unimpactful_cnt[bi] < n_unimpactful:
+            print(f"base {bi} got only {unimpactful_cnt[bi]} (<{n_unimpactful}) unimpactful ivn srcs")
+
+

@@ -118,7 +118,6 @@ class MQNLIRandomAugmentedDataset(antra_cfd.RandomCounterfactualDataset):
 
         low_new_gi = antra.GraphInput(gi_dict, cache_results=False)
 
-        # TODO: check new base input tensor has same output as high model
         hi_new_input_tensor = base[-2].detach().clone()
         # print(f"High input before: {tokenizer.decode(hi_new_input_tensor)}\n")
         hi_new_input_tensor[self.high_replace_idx] = ivn_src[-2][self.high_replace_idx]
