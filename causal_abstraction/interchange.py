@@ -1,14 +1,21 @@
+from typing import List, Tuple
+
 import torch
 import math
 from pprint import pprint
 import antra
+from antra.counterfactual import ListCounterfactualDataset
 from antra.interchange.mapping import create_possible_mappings
 from antra.utils import serialize
 # from causal_abstraction.abstraction_torch import create_possible_mappings
 
-from torch.utils.data import IterableDataset, DataLoader, Subset
+from torch.utils.data import IterableDataset, DataLoader, Subset, Dataset
 from itertools import product
 from tqdm import tqdm
+
+from counterfactual.dataset import construct_high_intervention, \
+    construct_bert_input
+
 
 class InterchangeDataset(IterableDataset):
     def __init__(self, low_input_tuple_len, low_hidden_loc):
@@ -201,11 +208,103 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
     return res_dict
 
 
+class BertInterchangeDataset(ListCounterfactualDataset):
+    def __init__(
+            self,
+            high_model: antra.ComputationGraph,
+            base_dataset: Dataset,
+            intervention_pairs: List[Tuple[int, int]],
+            mapping
+    ):
+        super(BertInterchangeDataset, self).__init__(
+            base_dataset=base_dataset,
+            intervention_pairs=intervention_pairs,
+            mapping=mapping,
+            batch_dim=0
+        )
+
+        self.high_model = high_model
+        assert len(mapping) == 1, "can intervene on one high node for now"
+        self.intervened_high_node = list(mapping.keys())[0]
+
+
+    def construct_high_intervention(self, base_ex, ivn_src_ex):
+        return construct_high_intervention(
+            base_ex, ivn_src_ex, self.high_model, self.intervened_high_node)
+
+    def construct_low_input(self, example):
+        return construct_bert_input(example)
+
+
+
+def test_bert_mapping_from_pairs(
+        low_model, high_model, dataset, interx_pairs,
+        batch_size, mapping, unwanted_high_nodes):
+    if unwanted_high_nodes is None:
+        unwanted_high_nodes = set()
+    relevant_mappings = {node: loc for node, loc in mapping.items() \
+                         if node not in unwanted_high_nodes}
+    high_node = list(relevant_mappings.keys())[0]
+    low_node = list(relevant_mappings[high_node].keys())[0]
+    low_loc = relevant_mappings[high_node][low_node]
+
+    if len(relevant_mappings) > 1:
+        raise NotImplementedError(
+            "Currently does not support more than one intermediate nodes")
+
+    print("\n--- Testing mapping", relevant_mappings)
+    print("    Getting base outputs")
+    device = torch.device("cuda")
+
+    icd = BertInterchangeDataset(high_model, dataset, interx_pairs, relevant_mappings)
+    intervention_dataloader = icd.get_dataloader(shuffle=False, batch_size=batch_size)
+
+    res_dict = {"base_i": [], "interv_i": [],
+                "high_base_res": [], "low_base_res": [],
+                "high_interv_res": [], "low_interv_res": []}
+
+    total_num_batches = math.ceil(len(icd) / batch_size)
+    count = 0
+    for i, batch in enumerate(tqdm(intervention_dataloader, total=total_num_batches)):
+        high_intervention = batch["high_intervention"]
+        high_base_res, high_interv_res = high_model.intervene(high_intervention)
+
+        low_base_input = batch["low_base_input"].to(device)
+        low_interv_value = low_model.compute_node(high_node, low_base_input)
+
+        low_intervention = antra.Intervention.batched(
+            low_base_input,
+            intervention={low_node: low_interv_value.to(device)},
+            location={low_node: low_loc}, batch_dim=0,
+            cache_results=False
+        )
+
+        low_base_res, low_interv_res = low_model.intervene(low_intervention)
+
+        # assert torch.all(low_base_res.to(torch.device("cpu")) == input_tuple[icd.idx_low_outputs])
+        # assert torch.all(high_base_res == input_tuple[icd.idx_high_outputs])
+
+        res_dict["base_i"].extend(batch["base_idxs"])
+        res_dict["interv_i"].extend(batch["ivn_src_idxs"])
+        res_dict["low_base_res"].extend(low_base_res.tolist())
+        res_dict["high_base_res"].extend(high_base_res.tolist())
+        res_dict["low_interv_res"].extend(low_interv_res.tolist())
+        res_dict["high_interv_res"].extend(high_interv_res.tolist())
+        count += len(batch["base_idxs"])
+
+    res_dict["interchange_dataset"] = None
+    res_dict["mapping"] = mapping
+
+    return res_dict
+
+
 
 def find_abstractions_batch(low_model, high_model, low_model_type,
                             low_nodes_to_indices,
                             dataset, num_inputs, batch_size,
-                            fixed_assignments, unwanted_low_nodes=None):
+                            fixed_assignments,
+                            intervention_pairs=None,
+                            unwanted_low_nodes=None):
     print("Creating possible mappings")
     mappings = create_possible_mappings(low_model, high_model, fixed_assignments,
                                         unwanted_low_nodes, low_nodes_to_indices)
@@ -215,7 +314,15 @@ def find_abstractions_batch(low_model, high_model, low_model_type,
     result = []
     with torch.no_grad():
         for mapping in mappings:
-            result.append(test_mapping(low_model, high_model, low_model_type,
-                                       dataset, num_inputs, batch_size, mapping, unwanted_low_nodes))
+            if intervention_pairs is None:
+                res = test_mapping(low_model, high_model, low_model_type,
+                                   dataset, num_inputs, batch_size, mapping,
+                                   unwanted_low_nodes)
+            else:
+                res = test_bert_mapping_from_pairs(
+                    low_model, high_model, dataset, intervention_pairs,
+                    batch_size, mapping, unwanted_low_nodes
+                )
+            result.append(res)
 
     return result
