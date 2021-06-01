@@ -1,3 +1,6 @@
+import os
+
+import numpy as np
 import torch
 import time
 from torch.utils.data import DataLoader, Dataset
@@ -111,6 +114,10 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         opts["mapping"] = mapping
         conf = CounterfactualTrainingConfig(**opts)
 
+        # set seed
+        torch.manual_seed(conf.seed)
+        np.random.seed(conf.seed)
+
         # setup models
         print("Loading models...")
         high_model = Full_MQNLI_Logic_CompGraph(base_data)
@@ -199,7 +206,7 @@ class CounterfactualTrainExperiment(experiment.Experiment):
 
         # ------ Batched causal_abstraction experiment ------ #
         start_time = time.time()
-        batch_results = find_abstractions_batch(
+        interx_results = find_abstractions_batch(
             low_model=low_abstr_compgraph,
             high_model=high_abstr_compgraph,
             low_model_type="bert",
@@ -213,7 +220,12 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         interx_duration = time.time() - start_time
         print(f"Interchange experiment took {interx_duration:.2f}s")
 
-        counts_analysis = analyze_counts(batch_results)
+        if conf.interx_save_results:
+            save_path = os.path.join(conf.res_save_dir, "interx-res.pt")
+            torch.save(interx_results, save_path)
+            print(f"Saved interx results to {save_path}")
+
+        counts_analysis = analyze_counts(interx_results)
 
         res_dict["interx_duration"] = interx_duration
         res_dict.update(counts_analysis)
