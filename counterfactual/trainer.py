@@ -39,7 +39,21 @@ class CounterfactualTrainer:
             high_model: antra.ComputationGraph,
             configs: CounterfactualTrainingConfig,
             low_base_model=None,
+            store_cf_pairs: int = 0
     ):
+        """ Counterfactual training.
+
+        :param train_dataloader:
+        :param eval_dataloader:
+        :param low_model:
+        :param high_model:
+        :param configs: Contains all the training hyperparameters
+        :param low_base_model: A torch.nn.Module that is to be trained.
+            If not given, will use `low_model.model` as base model by default.
+        :param store_cf_pairs: If given a positive value, the trainer will return
+            a list of index pairs that denote the indices of counterfactual
+            examples encountered during training.
+        """
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
         self.high_model: antra.ComputationGraph = high_model
@@ -51,6 +65,9 @@ class CounterfactualTrainer:
 
         self.configs: CounterfactualTrainingConfig = configs
         self.device = torch.device(configs.device)
+
+        self.store_cf_pairs = store_cf_pairs
+        self.cf_training_pairs = []
 
         self.model_save_path = None
         if configs.model_save_path:
@@ -115,7 +132,7 @@ class CounterfactualTrainer:
         self.loss_fxn = nn.CrossEntropyLoss(reduction='mean')
 
 
-    def inference_step(self, batch) -> Tuple:
+    def inference_step(self, batch, is_train=False) -> Tuple:
         """ Do basic forward pass or intervention to get logits and labels.
 
         This will be called in both evaluation and training, so any setup such
@@ -123,7 +140,7 @@ class CounterfactualTrainer:
         will be done outside this function
 
         :param batch: batch of inputs directly yielded from the dataloader
-        :return:
+        :return: (logits, labels, task_name)
         """
         inputs, task_name = batch
         high_device = torch.device("cpu")
@@ -134,6 +151,11 @@ class CounterfactualTrainer:
             low_base_input = inputs["low_base_input"].to(low_device)
             low_ivn_src = inputs["low_intervention_source"].to(low_device)
             mapping = inputs["mapping"]
+
+            # record indices of counterfactual examples
+            if is_train and len(self.cf_training_pairs) < self.store_cf_pairs:
+                self.cf_training_pairs.extend(
+                    zip(inputs["base_idxs"], inputs["ivn_src_idxs"]))
 
             high_ivn_nodes = list(high_ivn.intervention.values.keys())
             assert len(high_ivn_nodes) == 1 # assume intervene at only one high variable for now
@@ -199,7 +221,7 @@ class CounterfactualTrainer:
                 self.low_base_model.train()
                 self.low_base_model.zero_grad()
 
-                logits, labels, task_name = self.inference_step(batch)
+                logits, labels, task_name = self.inference_step(batch, is_train=True)
 
                 loss = self.loss_fxn(logits, labels)
                 loss.backward()
@@ -294,7 +316,7 @@ class CounterfactualTrainer:
             print(f"Evaluation schedule {schedule_str}")
             curr_epoch_len = sum(curr_schedule)
             for batch in tqdm(self.eval_dataloader, desc="Evaluate", total=curr_epoch_len):
-                logits, labels, task_name = self.inference_step(batch)
+                logits, labels, task_name = self.inference_step(batch, is_train=False)
                 pred = torch.argmax(logits, dim=1)
                 correct_in_batch = torch.sum(torch.eq(pred, labels)).item()
 

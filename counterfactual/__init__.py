@@ -41,6 +41,7 @@ class CounterfactualTrainingConfig:
     patient_subepochs: int = 20 # changed
 
     interx_after_train: bool = True
+    interx_num_cf_training_pairs: int = 0
     interx_num_inputs: int = 1000
     interx_batch_size: int = 128
     interx_save_results: bool = True

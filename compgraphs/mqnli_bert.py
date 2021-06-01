@@ -89,7 +89,7 @@ class MQNLI_Bert_CompGraph(ComputationGraph):
 
 
 class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
-    def __init__(self, base_compgraph: MQNLI_Bert_CompGraph,
+    def __init__(self, base_compgraph,
                  intermediate_nodes: List[str]):
         self.base = base_compgraph
         # self.interv_info = interv_info
@@ -117,7 +117,7 @@ class Abstr_MQNLI_Bert_CompGraph(AbstractableCompGraph):
 
 
 class Full_MQNLI_Bert_CompGraph(ComputationGraph):
-    def __init__(self, bert_model):
+    def __init__(self, bert_model, output="logits"):
         if bert_model.task != "mqnli":
             raise ValueError("The model must be for MQNLI!")
 
@@ -130,11 +130,14 @@ class Full_MQNLI_Bert_CompGraph(ComputationGraph):
         def logits(x):
             return self.model.logits(x)
 
-        # @GraphNode(logits)
-        # def root(x):
-        #     return torch.argmax(x, dim=1)
+        if output == "argmax":
+            @GraphNode(logits)
+            def root(x):
+                return torch.argmax(x, dim=1)
 
-        super(Full_MQNLI_Bert_CompGraph, self).__init__(logits)
+            super(Full_MQNLI_Bert_CompGraph, self).__init__(root)
+        else:
+            super(Full_MQNLI_Bert_CompGraph, self).__init__(logits)
 
     @property
     def device(self):

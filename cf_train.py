@@ -25,7 +25,8 @@ from counterfactual.augmented import MQNLIRandomAugmentedDataset
 from counterfactual.trainer import CounterfactualTrainer
 from counterfactual.scheduling import LinearCfTrainingSchedule, FixedRatioSchedule
 
-from causal_abstraction.interchange import find_abstractions_batch
+from causal_abstraction.interchange import find_abstractions_batch, \
+    test_bert_mapping_from_pairs
 from causal_abstraction.success_rates import analyze_counts
 
 import experiment
@@ -143,7 +144,8 @@ class CounterfactualTrainExperiment(experiment.Experiment):
             eval_dataloader,
             low_model=low_model,
             high_model=high_model,
-            configs=conf
+            configs=conf,
+            store_cf_pairs=conf.interx_num_cf_training_pairs
         )
         if not conf.eval_only:
             train_start_time = time.time()
@@ -189,33 +191,46 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         print(f"high node: {high_intermediate_node}, low_locs: {low_locs}")
 
         # set up models
-        # here we use old bert compgraph class because it has argmax as root node
-        low_base_compgraph = MQNLI_Bert_CompGraph(module)
-        low_abstr_compgraph = Abstr_MQNLI_Bert_CompGraph(low_base_compgraph, low_intermediate_nodes)
-        low_abstr_compgraph.set_cache_device(torch.device("cpu"))
+        if conf.interx_num_cf_training_pairs == 0:
+            # use old setup for interx experiment
+            # here we use old bert compgraph class because it has argmax as root node
+            low_base_compgraph = MQNLI_Bert_CompGraph(module)
+            low_compgraph = Abstr_MQNLI_Bert_CompGraph(low_base_compgraph, low_intermediate_nodes)
+            low_compgraph.set_cache_device(torch.device("cpu"))
+            intervention_pairs = None
+            interx_base_dataset = base_data.dev
+        else:
+            # In this case we are doing interventions on pairs encountered during training
+            # we use new bert compgraph class (Full_MQNLI_Bert... vs MQNLI_Bert...)
+            # because the new abstraction interface requires it
+            # low_base_compgraph =
+            low_compgraph = Full_MQNLI_Bert_CompGraph(module, output="argmax")
+            low_compgraph.set_cache_device(torch.device("cpu"))
+            # assert len(trainer.cf_training_pairs) == trainer.store_cf_pairs
+            intervention_pairs = trainer.cf_training_pairs
+            interx_base_dataset = base_data.train
 
         high_abstr_compgraph = Full_Abstr_MQNLI_Logic_CompGraph(
-            high_model, high_intermediate_nodes)
-
+                high_model, high_intermediate_nodes)
         low_nodes_to_indices = {
             low_node: [LOC[:,x,:] for x in low_locs]
             for low_node in low_intermediate_nodes
         }
-
         fixed_assignments = {x: {x: None} for x in ["root", "input"]}
 
         # ------ Batched causal_abstraction experiment ------ #
         start_time = time.time()
         interx_results = find_abstractions_batch(
-            low_model=low_abstr_compgraph,
+            low_model=low_compgraph,
             high_model=high_abstr_compgraph,
             low_model_type="bert",
             low_nodes_to_indices=low_nodes_to_indices,
-            dataset=base_data.dev,
+            dataset=interx_base_dataset,
             num_inputs=conf.interx_num_inputs,
             batch_size=conf.interx_batch_size,
             fixed_assignments=fixed_assignments,
-            unwanted_low_nodes={"root", "input"}
+            unwanted_low_nodes={"root", "input"},
+            intervention_pairs=intervention_pairs
         )
         interx_duration = time.time() - start_time
         print(f"Interchange experiment took {interx_duration:.2f}s")

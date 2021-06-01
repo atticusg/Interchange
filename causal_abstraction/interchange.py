@@ -253,7 +253,7 @@ def test_bert_mapping_from_pairs(
             "Currently does not support more than one intermediate nodes")
 
     print("\n--- Testing mapping", relevant_mappings)
-    print("    Getting base outputs")
+    print(f"    low_loc {low_loc}")
     device = torch.device("cuda")
 
     icd = BertInterchangeDataset(high_model, dataset, interx_pairs, relevant_mappings)
@@ -270,11 +270,12 @@ def test_bert_mapping_from_pairs(
         high_base_res, high_interv_res = high_model.intervene(high_intervention)
 
         low_base_input = batch["low_base_input"].to(device)
-        low_interv_value = low_model.compute_node(high_node, low_base_input)
+        low_node_value = low_model.compute_node(low_node, low_base_input)
+        low_interv_value = low_node_value[low_loc]
 
         low_intervention = antra.Intervention.batched(
             low_base_input,
-            intervention={low_node: low_interv_value.to(device)},
+            intervention={low_node: low_interv_value},
             location={low_node: low_loc}, batch_dim=0,
             cache_results=False
         )
