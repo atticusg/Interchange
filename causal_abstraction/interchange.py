@@ -270,11 +270,12 @@ def test_bert_mapping_from_pairs(
         high_base_res, high_interv_res = high_model.intervene(high_intervention)
 
         low_base_input = batch["low_base_input"].to(device)
+        low_ivn_src = batch["low_intervention_source"].to(device)
         low_node_value = low_model.compute_node(low_node, low_base_input)
         low_interv_value = low_node_value[low_loc]
 
         low_intervention = antra.Intervention.batched(
-            low_base_input,
+            low_ivn_src,
             intervention={low_node: low_interv_value},
             location={low_node: low_loc}, batch_dim=0,
             cache_results=False

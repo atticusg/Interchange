@@ -166,11 +166,11 @@ class CounterfactualTrainer:
             # TODO: modify compgraph interface to use results dict
             low_node_to_val = {}
             for low_node, low_loc in low_node_to_loc.items():
-                low_val = self.low_model.compute_node(low_node, low_base_input)
+                low_val = self.low_model.compute_node(low_node, low_ivn_src)
                 low_node_to_val[low_node] = low_val[low_loc]
 
             low_ivn = antra.Intervention.batched(
-                low_ivn_src, low_node_to_val, low_node_to_loc,
+                low_base_input, low_node_to_val, low_node_to_loc,
                 batch_dim=0, cache_results=False
             )
 

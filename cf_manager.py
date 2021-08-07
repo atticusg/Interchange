@@ -193,6 +193,14 @@ def add_grid_search(experiment, repeat):
             "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
             "cf_impactful_ratio": [0.2, 0.5, 0.8]
         })
+    elif experiment == "impactful_sanity_check":
+        grid_dict.update({
+            "cf_type": ["impactful"],
+            "train_multitask_scheduler_type": ["fixed"],
+            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
+            "cf_impactful_ratio": [0.2, 0.5, 0.8],
+            "interx_num_cf_training_pairs": [100000]
+        })
     elif experiment == "cf_ratio":
         grid_dict.update({
             "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
@@ -228,7 +236,7 @@ def add_grid_search(experiment, repeat):
         update_dicts.append(update_dict)
 
     # add other experiments that are not part of the grid search to update_dicts
-    if experiment == "impactful" or experiment == "impactful2":
+    if experiment.startswith("impactful"):
         new_expt = base_dict.copy()
         new_expt.update({
             "cf_type": "random_only",
