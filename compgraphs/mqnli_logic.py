@@ -691,3 +691,117 @@ class Abstr_MQNLI_Logic_CompGraph(OldAbstractableCompGraph):
         res = torch.gather(q, 1, idxs).view(n.shape[0])
         res = output_remapping[res]
         return res
+
+
+def _generate_indices_fn(indices):
+    def fn(x):
+        return x[:, indices]
+    return fn
+
+def _generate_only_variable_fn(indices):
+    def fn(x, y):
+        x[:, indices] = y
+        return x
+    return fn
+
+
+
+class Random_MQNLI_Logic_CompGraph(ComputationGraph):
+    def __init__(self, indices, data: MQNLIData, device=None):
+        self.word_to_id = data.word_to_id
+        self.id_to_word = data.id_to_word
+        self.keyword_dict = {w: self.word_to_id[w] for w in [
+            "emptystring", "no", "some", "every", "notevery", "doesnot"
+        ]}
+        self.device = torch.device("cpu") if device is None else device
+
+        self.quantifier_signatures = quantifier_signatures.to(self.device)
+        self.negation_signatures = negation_signatures.to(self.device)
+        self.output_remapping = output_remapping.to(self.device)
+
+        input_node = GraphNode.leaf("input")
+        fn = _generate_indices_fn(indices)
+        only_variable = GraphNode(input_node, name="only_variable", forward=fn)
+        fn = _generate_only_variable_fn(indices)
+        input_node = GraphNode(input_node, only_variable, name="input2", forward=fn)
+
+        leaf_nodes = {}
+        for leaf_name, idx in nodes2idxs.items():
+            p_forward_fn = _generate_leaf_fn(idx)
+            p_leaf_name = "p_" + leaf_name
+            p_leaf_node = GraphNode(input_node, name=p_leaf_name, forward=p_forward_fn)
+            leaf_nodes[p_leaf_name] = p_leaf_node
+
+            h_forward_fn = _generate_leaf_fn(9 + idx)
+            h_leaf_name = "h_" + leaf_name
+            h_leaf_node = GraphNode(input_node, name=h_leaf_name, forward=h_forward_fn)
+            leaf_nodes[h_leaf_name] = h_leaf_node
+
+
+        super(Full_MQNLI_Logic_CompGraph, self).__init__(root)
+
+    @property
+    def emptystring(self):
+        return self.keyword_dict["emptystring"]
+
+    @property
+    def no(self):
+        return self.keyword_dict["no"]
+
+    @property
+    def some(self):
+        return self.keyword_dict["some"]
+
+    @property
+    def every(self):
+        return self.keyword_dict["every"]
+
+    @property
+    def notevery(self):
+        return self.keyword_dict["notevery"]
+
+    @property
+    def doesnot(self):
+        return self.keyword_dict["doesnot"]
+
+    # def __getattr__(self, item):
+    #     """ Used to retrieve keywords, relations or positions"""
+    #     if item in self.keyword_dict:
+    #         return self.keyword_dict[item]
+    #     else:
+    #         raise KeyError
+
+    def _intersective_projection(self, p: torch.Tensor, h: torch.Tensor) \
+            -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 2)
+        eq = (p == h)
+        p_is_empty = (p == self.emptystring)
+        h_is_empty = (h == self.emptystring)
+        forward_entail = (~p_is_empty & h_is_empty)
+        backward_entail = (p_is_empty & ~h_is_empty)
+
+        res = torch.zeros(p.size(0), 2, dtype=torch.long, device=self.device)
+        res[eq] = torch.tensor([INDEP, EQUIV], dtype=torch.long, device=self.device)
+        res[forward_entail] = torch.tensor([INDEP, ENTAIL], dtype=torch.long, device=self.device)
+        res[backward_entail] = torch.tensor([INDEP, REV_ENTAIL], dtype=torch.long, device=self.device)
+        return res
+
+    def _merge_quantifiers(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4*7)
+        p_idx_tensor = torch.zeros_like(p)
+        h_idx_tensor = torch.zeros_like(h)
+        for q_idx, q_token in enumerate([self.some, self.every, self.no, self.notevery]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 4 + h_idx_tensor
+        return self.quantifier_signatures.index_select(0, idx_tensor)
+
+    def _merge_negation(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
+        # (batch_size,), (batch_size,) -> (batch_size, 4, 7)
+        p_idx_tensor = torch.zeros_like(p)
+        h_idx_tensor = torch.zeros_like(h)
+        for q_idx, q_token in enumerate([self.emptystring, self.doesnot]):
+            p_idx_tensor[p == q_token] = q_idx
+            h_idx_tensor[h == q_token] = q_idx
+        idx_tensor = p_idx_tensor * 2 + h_idx_tensor
+        return self.negation_signatures.index_select(0, idx_tensor)
