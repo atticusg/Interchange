@@ -809,11 +809,11 @@ class Random_MQNLI_Logic_CompGraph(ComputationGraph):
             p_idx_tensor[p == q_token] = q_idx
             h_idx_tensor[h == q_token] = q_idx
         idx_tensor = p_idx_tensor * 2 + h_idx_tensor
-
+        return self.negation_signatures.index_select(0, idx_tensor)
+        
 class Random_Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
     def __init__(self, indices, graph: Random_MQNLI_Logic_CompGraph,
                  intermediate_nodes: List[str]):
         super(Random_Abstr_MQNLI_Logic_CompGraph, self).__init__(
             graph=graph, abstract_nodes=intermediate_nodes
         )
-        return self.negation_signatures.index_select(0, idx_tensor)
