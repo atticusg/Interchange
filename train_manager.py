@@ -11,10 +11,14 @@ HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun",
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 REMAPPING_PATH="data/tokenization/bert-remapping.txt"
 VOCAB_PATH = "data/tokenization/bert-vocab.txt"
+RAW_BERT_VOCAB_PATH = "data/tokenization/raw-bert-vocab.txt"
 
 DEFAULT_BERT_OPTS = {
     "data_path": "",
     "tokenizer_vocab_path": VOCAB_PATH,
+    "non_pretrained": False,
+    "num_hidden_layers": 6,
+    "hidden_size": 768,
     "device": "cuda",
     "output_classes": 3,
 
@@ -34,6 +38,35 @@ DEFAULT_BERT_OPTS = {
     "patient_epochs": 400,
 
     'model_save_path': "finetuned_bert", #name of model
+    'res_save_dir': "",
+    "log_path": ""
+}
+
+DEFAULT_RAW_BERT_OPTS = {
+    "data_path": "",
+    "tokenizer_vocab_path": VOCAB_PATH,
+    "num_hidden_layers": 6,
+    "hidden_size": 768,
+    "num_attention_heads": 12,
+    "device": "cuda",
+    "output_classes": 3,
+
+    "batch_size": 32,
+    "batch_first": True,
+    "eval_batch_size": 64,
+
+    "optimizer_type": "adamw",
+    "lr": 0.,
+    "lr_scheduler_type": "",
+    "lr_warmup_ratio": 0.,
+    "weight_norm": 0.,
+
+    "max_epochs": 20,
+    "run_steps": -1,
+    "evals_per_epoch": 4,
+    "patient_epochs": 400,
+
+    'model_save_path': "raw_bert", #name of model
     'res_save_dir': "",
     "log_path": ""
 }
@@ -81,7 +114,9 @@ def preprocess(model_type, train, dev, test, data_path, variant):
     import torch
     from datasets.mqnli import MQNLIBertData, MQNLIData
 
-    if model_type == "bert":
+    if model_type == "raw_bert":
+        data = MQNLIBertData(train, dev, test, REMAPPING_PATH, vocab_file=RAW_BERT_VOCAB_PATH, variant=variant)
+    elif model_type == "bert":
         data = MQNLIBertData(train, dev, test, REMAPPING_PATH, variant=variant)
     elif model_type == "lstm":
         data = MQNLIData(train, dev, test, variant=variant)
@@ -92,7 +127,9 @@ def preprocess(model_type, train, dev, test, data_path, variant):
 
 def setup(db_path, data_path):
     import torch
-    if "bert" in db_path:
+    if "raw_bert" in db_path:
+        default_opts = DEFAULT_RAW_BERT_OPTS.copy()
+    elif "bert" in db_path:
         default_opts = DEFAULT_BERT_OPTS.copy()
     elif "lstm" in db_path:
         default_opts = DEFAULT_LSTM_OPTS.copy()
@@ -103,7 +140,9 @@ def setup(db_path, data_path):
     if "hard" in data_path or "medium" in data_path:
         default_opts["output_classes"] = 10
     if "lstm" in db_path:
-        if "bert" in data_path:
+        if "raw_bert" in data_path:
+            default_opts["tokenizer_vocab_path"] = RAW_BERT_VOCAB_PATH
+        elif "bert" in data_path:
             default_opts["tokenizer_vocab_path"] = VOCAB_PATH
         else:
             data = torch.load(data_path)
@@ -121,7 +160,17 @@ def add_grid_search(db_path, repeat, res_save_dir):
 
     manager = ExperimentManager(db_path)
 
-    if "bert" in db_path:
+    if "raw_bert" in db_path:
+        # Aug 6
+        grid_dict = {
+            "batch_size": [64],
+            "hidden_size": [384, 768],
+            "lr": [1e-6, 1e-5],
+            "lr_scheduler_type": [""],
+            "max_epochs": [20],
+            "num_hidden_layers": [4, 8]
+        }
+    elif "bert" in db_path:
         # easy
         # grid_dict = {
         #     "batch_size": [32],
@@ -209,6 +258,8 @@ def add_grid_search(db_path, repeat, res_save_dir):
 def run(db_path, script, n, detach, metascript, ready_status, started_status):
     if "lstm" in db_path:
         expt_opts = list(DEFAULT_LSTM_OPTS.keys())
+    elif "raw_bert" in db_path:
+        expt_opts = list(DEFAULT_RAW_BERT_OPTS.keys())
     elif "bert" in db_path:
         expt_opts = list(DEFAULT_BERT_OPTS.keys())
     else:

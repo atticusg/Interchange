@@ -250,10 +250,13 @@ def load_remapping(file_name: str) -> Dict:
 
 class MQNLIBertData(MQNLIData):
     def __init__(self, train_file: str, dev_file: str, test_file: str,
-                 vocab_remapping_file: str, tokenizer_type="bert-base-uncased",
+                 vocab_remapping_file: str, vocab_file="", tokenizer_type="bert-base-uncased",
                  variant="basic"):
-        self.tokenizer = BertTokenizer.from_pretrained(tokenizer_type)
-        self.tokenizer_type = tokenizer_type
+        if vocab_file:
+            self.tokenizer = BertTokenizer(vocab_file)
+        else:
+            self.tokenizer = BertTokenizer.from_pretrained(tokenizer_type)
+            self.tokenizer_type = tokenizer_type
         self.variant = variant
 
         if variant == "basic":
