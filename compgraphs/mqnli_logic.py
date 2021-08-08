@@ -705,6 +705,11 @@ def _generate_only_variable_fn(indices):
     return fn
 
 
+indices_to_test = [torch.tensor([11, 20]),
+                   torch.tensor([9,15]),
+                   torch.tensor([3, 25,6,10]),
+                   torch.tensor([4,17,6,21]),
+                   torch.tensor([9,10,22,23,4,6])] 
 
 class Random_MQNLI_Logic_CompGraph(ComputationGraph):
     def __init__(self, indices, data: MQNLIData, device=None):
