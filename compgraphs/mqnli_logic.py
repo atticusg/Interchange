@@ -711,6 +711,12 @@ indices_to_test = [torch.tensor([11, 20]),
                    torch.tensor([4,17,6,21]),
                    torch.tensor([9,10,22,23,4,6])]
 
+new_indices = [torch.tensor([3,23]),torch.tensor([8,17,3]),torch.tensor([1,2,6,21,22])]
+new_indices2 = [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 2)]
+new_indices2 += [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 3)]
+
+new_indices3 += [[11,12,23,24] + [x] for x in [1,2,3,4,5,6,7,8,9,10,14,15,16,17,18,19,20,21,22]]
+
 class Random_MQNLI_Logic_CompGraph(ComputationGraph):
     def __init__(self, indices, data: MQNLIData, device=None):
         self.word_to_id = data.word_to_id
@@ -810,7 +816,7 @@ class Random_MQNLI_Logic_CompGraph(ComputationGraph):
             h_idx_tensor[h == q_token] = q_idx
         idx_tensor = p_idx_tensor * 2 + h_idx_tensor
         return self.negation_signatures.index_select(0, idx_tensor)
-        
+
 class Random_Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
     def __init__(self, indices, graph: Random_MQNLI_Logic_CompGraph,
                  intermediate_nodes: List[str]):
