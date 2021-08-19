@@ -705,17 +705,15 @@ def _generate_only_variable_fn(indices):
     return fn
 
 
-indices_to_test = [torch.tensor([11, 20]),
-                   torch.tensor([9,15]),
-                   torch.tensor([3, 25,6,10]),
-                   torch.tensor([4,17,6,21]),
-                   torch.tensor([9,10,22,23,4,6])]
 
-new_indices = [torch.tensor([3,23]),torch.tensor([8,17,3]),torch.tensor([1,2,6,21,22])]
-new_indices2 = [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 2)]
-new_indices2 += [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 3)]
+new_indices = [torch.tensor([0,8]), torch.tensor([5,1]), torch.tensor([10,17]),torch.tensor([8,15])]
 
-new_indices3 += [[11,12,23,24] + [x] for x in [1,2,3,4,5,6,7,8,9,10,14,15,16,17,18,19,20,21,22]]
+new_indices2 = [torch.tensor(x) for x in itertools.combinations([7,8,16,17], 2)]
+new_indices2 += [torch.tensor(x) for x in itertools.combinations([7,8,16,17], 3)]
+
+new_indices3 += [[torch.tensor([7,8,16,17] + [x]) for x in [1,2,3,4,5,6,9,10,14,15]]
+
+new_indices4 = [torch.tensor(x) for x in itertools.combinations([0,3,6,9,12,15], 2)]
 
 class Random_MQNLI_Logic_CompGraph(ComputationGraph):
     def __init__(self, indices, data: MQNLIData, device=None):
