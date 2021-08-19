@@ -1,5 +1,5 @@
 import torch
-
+import itertools
 from datasets.mqnli import MQNLIData
 from antra import ComputationGraph, GraphNode, LOC
 from antra.abstractable import AbstractableCompGraph
@@ -717,11 +717,24 @@ def _generate_only_variable_fn(indices):
     return fn
 
 
-indices_to_test = [torch.tensor([IDX_A_O, 9 + IDX_ADV]),
-                   torch.tensor([IDX_Q_O, 9 + IDX_A_S]),
-                   torch.tensor([IDX_A_S, 9 + IDX_N_O, IDX_NEG, IDX_Q_O]),
-                   torch.tensor([IDX_N_S, 9 + IDX_N_S, IDX_NEG, 9 + IDX_V]),
-                   torch.tensor([IDX_Q_O, 9 + IDX_NEG, IDX_V, IDX_Q_S, 9 + IDX_Q_O, IDX_N_S, IDX_NEG])]
+# indices_to_test = [torch.tensor([IDX_A_O, 9 + IDX_ADV]),
+#                    torch.tensor([IDX_Q_O, 9 + IDX_A_S]),
+#                    torch.tensor([IDX_A_S, 9 + IDX_N_O, IDX_NEG, IDX_Q_O]),
+#                    torch.tensor([IDX_N_S, 9 + IDX_N_S, IDX_NEG, 9 + IDX_V]),
+#                    torch.tensor([IDX_Q_O, 9 + IDX_NEG, IDX_V, IDX_Q_S, 9 + IDX_Q_O, IDX_N_S, IDX_NEG])]
+
+indices_to_test = [torch.tensor([11, 20]),
+                   torch.tensor([9,15]),
+                   torch.tensor([3, 25,6,10]),
+                   torch.tensor([4,17,6,21]),
+                   torch.tensor([9,10,22,23,4,6])]
+
+new_indices = [torch.tensor([3,23]),torch.tensor([8,17,3]),torch.tensor([1,2,6,21,22])]
+new_indices2 = [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 2)]
+new_indices2 += [torch.tensor(x) for x in itertools.combinations([11,12,23,24], 3)]
+
+new_indices2 += [[11,12,23,24] + [x] for x in [1,2,3,4,5,6,7,8,9,10,14,15,16,17,18,19,20,21,22]]
+
 
 class Random_MQNLI_Logic_CompGraph(Full_MQNLI_Logic_CompGraph):
     def __init__(self, random_node_idxs: torch.tensor, data: MQNLIData, device=None):
