@@ -1,5 +1,5 @@
 import math
-from typing import Dict
+from typing import Dict, Optional, List
 
 import torch
 import torch.nn as nn
@@ -96,14 +96,24 @@ def get_model_loc_dict(data_variant):
     #     raise ValueError(f"Cannot recognize data variant {data_variant}")
     # return d
 
-def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm"):
+p_shifted_idxs = [[1, 2], [3], [4], [5, 6], [7], [8], [9, 10], [11], [12]]
+h_shifted_idxs = [[13 + x for x in xs] for xs in p_shifted_idxs]
+shifted_idxs = p_shifted_idxs + h_shifted_idxs
+
+
+def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm", random_node_idxs: Optional[List[int]] = None):
     """ Get list of indices for locations to intervene given type of model
 
     :param high_node_name:
     :param loc_mapping_type: type of model and type of mapping
     :return:
     """
-    if "lstm" in loc_mapping_type:
+    if random_node_idxs:
+        if 'bert' not in loc_mapping_type:
+            raise NotImplementedError
+        idx_list = [0] + [lo_idx for hi_idx in random_node_idxs for lo_idx in shifted_idxs[hi_idx]]
+        d = {"random_node_subset": idx_list}
+    elif "lstm" in loc_mapping_type:
         # mapping for lstm model
         d = {"sentence_q": [0, 10],
              "subj_adj": [1, 11],

@@ -1,11 +1,14 @@
+import json
 import os
 import argparse
 from datetime import datetime
 from experiment import ExperimentManager
+from compgraphs.mqnli_logic import indices_to_test
 
 HIGH_NODES = ["sentence_q", "subj_adj", "subj_noun", "neg", "v_adv", "v_verb",
               "vp_q", "obj_adj", "obj_noun", "obj", "vp", "v_bar", "negp",
               "subj"]
+RAND_HIGH_NODES = ["random_node_subset"]
 META_SCRIPT = "nlprun -a hanson-intervention -q john -r 100G"
 
 INTERCHANGE_DEFAULT_OPTS = {
@@ -19,6 +22,7 @@ INTERCHANGE_DEFAULT_OPTS = {
     "graph_alpha": 100,
     "interchange_batch_size": 128,
     "loc_mapping_type": "",
+    "random_node_idxs": "",
     "save_intermediate_results": True,
 }
 
@@ -36,6 +40,13 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
     from modeling import get_module_class_by_name
     import experiment.db_utils as db
 
+    use_randomized_high_model = False
+    if model_type.startswith("rand-"):
+        model_type = model_type[len("rand-"):]
+
+        use_randomized_high_model = True
+        db.add_cols(db_path, "results", {"random_node_idxs": ""})
+
     model_class = get_module_class_by_name(model_type)
 
     manager = ExperimentManager(db_path)
@@ -46,7 +57,7 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
         num_layers = module.num_lstm_layers - 1
         layer_name = "lstm"
         interchange_batch_size = 1000
-    elif model_type == "bert":
+    elif model_type == "bert" or model_type == "raw_bert":
         num_layers = len(module.bert.encoder.layer) - 1
         layer_name = "bert_layer"
         if loc_mapping_type:
@@ -56,20 +67,35 @@ def add(db_path, model_type, model_path, res_dir, num_inputs, loc_mapping_type):
         raise ValueError("Invalid model type")
 
     time_str = datetime.now().strftime("%m%d-%H%M%S")
-    for high_node in HIGH_NODES:
-        for layer in range(num_layers):
-            for n in num_inputs:
-                abstraction = f'["{high_node}",["{layer_name}_{layer}"]]'
-                insert_dict = {"abstraction": abstraction,
-                               "num_inputs": n,
-                               "model_type": model_type,
-                               "interchange_batch_size": interchange_batch_size}
-                if loc_mapping_type:
-                    insert_dict["loc_mapping_type"] = loc_mapping_type
-                id = manager.insert(insert_dict)
-                res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
-                manager.update({"model_path": model_path,
-                                "res_save_dir": res_save_dir}, id)
+    if not use_randomized_high_model:
+        for high_node in HIGH_NODES:
+            for layer in range(num_layers):
+                for n in num_inputs:
+                    abstraction = f'["{high_node}",["{layer_name}_{layer}"]]'
+                    insert_dict = {"abstraction": abstraction,
+                                   "num_inputs": n,
+                                   "model_type": model_type,
+                                   "interchange_batch_size": interchange_batch_size}
+                    if loc_mapping_type:
+                        insert_dict["loc_mapping_type"] = loc_mapping_type
+                    id = manager.insert(insert_dict)
+                    res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
+                    manager.update({"model_path": model_path,
+                                    "res_save_dir": res_save_dir}, id)
+    else:
+        for indices in indices_to_test:
+            for layer in range(num_layers):
+                for n in num_inputs:
+                    abstraction = f'["random_node_subset",["{layer_name}_{layer}"]]'
+                    insert_dict = {"abstraction": abstraction,
+                                   "num_inputs": n,
+                                   "model_type": model_type,
+                                   "interchange_batch_size": interchange_batch_size}
+                    insert_dict["random_node_idxs"] = json.dumps(indices.tolist())
+                    id = manager.insert(insert_dict)
+                    res_save_dir = os.path.join(res_dir, f"expt-{id}-{time_str}")
+                    manager.update({"model_path": model_path,
+                                    "res_save_dir": res_save_dir}, id)
 
 
 def run(db_path, script, n, detach, metascript, metascript_batch_size, metascript_log_dir,

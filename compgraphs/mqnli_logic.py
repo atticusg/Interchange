@@ -191,6 +191,12 @@ def get_intersective_projections():
 
 intersective_projections = get_intersective_projections()
 
+"""Deprecated high-level compgraph class. This compgraph does not have nodes
+for each individual token in the input, e.g. `v_verb_p` or `obj_adj_h`. It
+only has nodes for intermediate nodes in the tree, with the lowest level being
+combinations of two words in the input, such as `obj_adj`, composed of 
+`obj_adj_p` and `obj_adj_h`. 
+Use `Full_MQNLI_Logic_CompGraph` instead."""
 class MQNLI_Logic_CompGraph(ComputationGraph):
     def __init__(self, data: MQNLIData, root_output_device=None):
         self.word_to_id = data.word_to_id
@@ -372,7 +378,7 @@ class Full_MQNLI_Logic_CompGraph(ComputationGraph):
         self.negation_signatures = negation_signatures.to(self.device)
         self.output_remapping = output_remapping.to(self.device)
 
-        input_node = GraphNode.leaf("input")
+        input_node = self.get_input_node()
 
         leaf_nodes = {}
         for leaf_name, idx in nodes2idxs.items():
@@ -467,6 +473,9 @@ class Full_MQNLI_Logic_CompGraph(ComputationGraph):
 
         super(Full_MQNLI_Logic_CompGraph, self).__init__(root)
 
+    def get_input_node(self):
+        return GraphNode.leaf("input")
+
     @property
     def emptystring(self):
         return self.keyword_dict["emptystring"]
@@ -541,6 +550,9 @@ class Full_Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
         )
 
 
+"""Abstraction of deprecated `MQNLI_Logic_Compgraph`. This compgraph does not 
+have nodes for each individual token in the input. Use 
+`Full_MQNLI_Logic_CompGraph`  instead."""
 class Abstr_MQNLI_Logic_CompGraph(OldAbstractableCompGraph):
     def __init__(self, data: MQNLIData, intermediate_nodes: List[str]):
         self.word_to_id = data.word_to_id
@@ -705,115 +717,28 @@ def _generate_only_variable_fn(indices):
     return fn
 
 
-indices_to_test = [torch.tensor([11, 20]),
-                   torch.tensor([9,15]),
-                   torch.tensor([3, 25,6,10]),
-                   torch.tensor([4,17,6,21]),
-                   torch.tensor([9,10,22,23,4,6])]
+indices_to_test = [torch.tensor([IDX_A_O, 9 + IDX_ADV]),
+                   torch.tensor([IDX_Q_O, 9 + IDX_A_S]),
+                   torch.tensor([IDX_A_S, 9 + IDX_N_O, IDX_NEG, IDX_Q_O]),
+                   torch.tensor([IDX_N_S, 9 + IDX_N_S, IDX_NEG, 9 + IDX_V]),
+                   torch.tensor([IDX_Q_O, 9 + IDX_NEG, IDX_V, IDX_Q_S, 9 + IDX_Q_O, IDX_N_S, IDX_NEG])]
 
-class Random_MQNLI_Logic_CompGraph(ComputationGraph):
-    def __init__(self, indices, data: MQNLIData, device=None):
-        self.word_to_id = data.word_to_id
-        self.id_to_word = data.id_to_word
-        self.keyword_dict = {w: self.word_to_id[w] for w in [
-            "emptystring", "no", "some", "every", "notevery", "doesnot"
-        ]}
-        self.device = torch.device("cpu") if device is None else device
+class Random_MQNLI_Logic_CompGraph(Full_MQNLI_Logic_CompGraph):
+    def __init__(self, random_node_idxs: torch.tensor, data: MQNLIData, device=None):
+        self.random_node_subset_idxs = random_node_idxs
+        super(Random_MQNLI_Logic_CompGraph, self).__init__(data, device)
 
-        self.quantifier_signatures = quantifier_signatures.to(self.device)
-        self.negation_signatures = negation_signatures.to(self.device)
-        self.output_remapping = output_remapping.to(self.device)
-
+    def get_input_node(self):
         input_node = GraphNode.leaf("input")
-        fn = _generate_indices_fn(indices)
-        only_variable = GraphNode(input_node, name="only_variable", forward=fn)
-        fn = _generate_only_variable_fn(indices)
+        fn = _generate_indices_fn(self.random_node_subset_idxs)
+        only_variable = GraphNode(input_node, name="random_node_subset", forward=fn)
+        fn = _generate_only_variable_fn(self.random_node_subset_idxs)
         input_node = GraphNode(input_node, only_variable, name="input2", forward=fn)
-
-        leaf_nodes = {}
-        for leaf_name, idx in nodes2idxs.items():
-            p_forward_fn = _generate_leaf_fn(idx)
-            p_leaf_name = "p_" + leaf_name
-            p_leaf_node = GraphNode(input_node, name=p_leaf_name, forward=p_forward_fn)
-            leaf_nodes[p_leaf_name] = p_leaf_node
-
-            h_forward_fn = _generate_leaf_fn(9 + idx)
-            h_leaf_name = "h_" + leaf_name
-            h_leaf_node = GraphNode(input_node, name=h_leaf_name, forward=h_forward_fn)
-            leaf_nodes[h_leaf_name] = h_leaf_node
+        return input_node
 
 
-        super(Full_MQNLI_Logic_CompGraph, self).__init__(root)
-
-    @property
-    def emptystring(self):
-        return self.keyword_dict["emptystring"]
-
-    @property
-    def no(self):
-        return self.keyword_dict["no"]
-
-    @property
-    def some(self):
-        return self.keyword_dict["some"]
-
-    @property
-    def every(self):
-        return self.keyword_dict["every"]
-
-    @property
-    def notevery(self):
-        return self.keyword_dict["notevery"]
-
-    @property
-    def doesnot(self):
-        return self.keyword_dict["doesnot"]
-
-    # def __getattr__(self, item):
-    #     """ Used to retrieve keywords, relations or positions"""
-    #     if item in self.keyword_dict:
-    #         return self.keyword_dict[item]
-    #     else:
-    #         raise KeyError
-
-    def _intersective_projection(self, p: torch.Tensor, h: torch.Tensor) \
-            -> torch.Tensor:
-        # (batch_size,), (batch_size,) -> (batch_size, 2)
-        eq = (p == h)
-        p_is_empty = (p == self.emptystring)
-        h_is_empty = (h == self.emptystring)
-        forward_entail = (~p_is_empty & h_is_empty)
-        backward_entail = (p_is_empty & ~h_is_empty)
-
-        res = torch.zeros(p.size(0), 2, dtype=torch.long, device=self.device)
-        res[eq] = torch.tensor([INDEP, EQUIV], dtype=torch.long, device=self.device)
-        res[forward_entail] = torch.tensor([INDEP, ENTAIL], dtype=torch.long, device=self.device)
-        res[backward_entail] = torch.tensor([INDEP, REV_ENTAIL], dtype=torch.long, device=self.device)
-        return res
-
-    def _merge_quantifiers(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        # (batch_size,), (batch_size,) -> (batch_size, 4*7)
-        p_idx_tensor = torch.zeros_like(p)
-        h_idx_tensor = torch.zeros_like(h)
-        for q_idx, q_token in enumerate([self.some, self.every, self.no, self.notevery]):
-            p_idx_tensor[p == q_token] = q_idx
-            h_idx_tensor[h == q_token] = q_idx
-        idx_tensor = p_idx_tensor * 4 + h_idx_tensor
-        return self.quantifier_signatures.index_select(0, idx_tensor)
-
-    def _merge_negation(self, p: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        # (batch_size,), (batch_size,) -> (batch_size, 4, 7)
-        p_idx_tensor = torch.zeros_like(p)
-        h_idx_tensor = torch.zeros_like(h)
-        for q_idx, q_token in enumerate([self.emptystring, self.doesnot]):
-            p_idx_tensor[p == q_token] = q_idx
-            h_idx_tensor[h == q_token] = q_idx
-        idx_tensor = p_idx_tensor * 2 + h_idx_tensor
-        return self.negation_signatures.index_select(0, idx_tensor)
-        
 class Random_Abstr_MQNLI_Logic_CompGraph(AbstractableCompGraph):
-    def __init__(self, indices, graph: Random_MQNLI_Logic_CompGraph,
-                 intermediate_nodes: List[str]):
+    def __init__(self, graph: Random_MQNLI_Logic_CompGraph):
         super(Random_Abstr_MQNLI_Logic_CompGraph, self).__init__(
-            graph=graph, abstract_nodes=intermediate_nodes
+            graph=graph, abstract_nodes=["random_node_subset"]
         )
