@@ -2,12 +2,16 @@
 import math
 import os
 import time
+from tqdm import tqdm
+import shutil
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
 
 import datasets
+
 
 from transformers import get_linear_schedule_with_warmup, \
     get_constant_schedule_with_warmup
@@ -139,7 +143,7 @@ class Trainer:
 
         print("using configs---")
         print(self.config())
-
+        writer = None
         if self.model_save_path or self.res_save_dir:
             train_start_time_str = datetime.now().strftime("%m%d_%H%M%S")
             model_save_path = self.model_save_path
@@ -152,15 +156,22 @@ class Trainer:
                 model_save_path = os.path.join(self.res_save_dir,
                                          f"{model_save_path}_{train_start_time_str}.pt")
 
+            # setup summary writer
+            writer_dir = os.path.join(self.res_save_dir, "tensorboard")
+            if os.path.exists(writer_dir):
+                shutil.rmtree(writer_dir)
+
+            writer = SummaryWriter(log_dir=writer_dir)
+
 
         train_start_time = time.time()
 
         print("========= Start training =========")
-
+        total_step = 0
         for epoch in range(self.max_epochs):
             print("------ Beginning epoch {} ------".format(epoch))
             epoch_start_time = time.time()
-            for step, input_tuple in enumerate(self.dataloader):
+            for step, input_tuple in enumerate(tqdm(self.dataloader)):
                 self.model.train()
                 self.model.zero_grad()
 
@@ -173,8 +184,12 @@ class Trainer:
                 if "subphrase" in getattr(self.data.train, "variant", ""):
                     loss = torch.mean(loss * input_tuple[-3])
 
+                if writer:
+                    writer.add_scalar("Train/loss", loss.item(), total_step)
+
                 loss.backward()
 
+                total_step += 1
                 self.optimizer.step()
 
                 if self.scheduler:
@@ -190,6 +205,9 @@ class Trainer:
                                                        batch_first=self.batch_first,
                                                        device=self.device)
                     acc = corr / total
+
+                    if writer:
+                        writer.add_scalar("Dev/acc", acc, total_step)
 
                     if acc > best_dev_acc:
                         best_dev_acc = acc

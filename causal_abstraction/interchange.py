@@ -121,7 +121,7 @@ def test_mapping(low_model, high_model, low_model_type, dataset, num_inputs,
         # elif low_model_type == "lstm":
         #     low_input_tuple_for_graph = [input_tuple[0].T.to(device),
         #                                  input_tuple[-1].to(device)]
-
+        print(len(low_input_tuple_for_graph))
         low_input = antra.GraphInput.batched(
             {"input": low_input_tuple_for_graph}, keys=low_key, batch_dim=low_batch_dim)
         low_output = low_model.compute(low_input)

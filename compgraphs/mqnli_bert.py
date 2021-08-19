@@ -18,11 +18,11 @@ def generate_bert_layer_fxn(layer_module, i):
         layer_head_mask = head_mask[i] if head_mask is not None else None
         layer_outputs = layer_module(
             hidden_states,
-            attention_mask,
-            layer_head_mask,
-            encoder_hidden_states,
-            encoder_attention_mask,
-            output_attentions,
+            attention_mask=attention_mask,
+            head_mask=layer_head_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            output_attentions=output_attentions,
         )
         hidden_states = layer_outputs[0]
         return hidden_states

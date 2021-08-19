@@ -62,7 +62,10 @@ class InterchangeExperiment(experiment.Experiment):
         print("data_variant", data_variant)
         loc_mapping_type = opts.get("loc_mapping_type", "")
         loc_mapping_type = loc_mapping_type if loc_mapping_type else data_variant
-        low_locs = get_model_locs(high_intermediate_node, loc_mapping_type)
+        random_node_idxs = opts.get("random_node_idxs", None)
+        if random_node_idxs:
+            random_node_idxs = json.loads(opts["random_node_idxs"])
+        low_locs = get_model_locs(high_intermediate_node, loc_mapping_type, random_node_idxs)
 
         # interv_info = {
         #     "target_locs": get_model_locs(high_intermediate_node, loc_mapping_type)
@@ -76,9 +79,15 @@ class InterchangeExperiment(experiment.Experiment):
         low_model = low_abstr_compgraph_class(low_base_compgraph, low_intermediate_nodes)
         low_model.set_cache_device(torch.device("cpu"))
 
-        base_high_model = logic_compgraph.Full_MQNLI_Logic_CompGraph(data)
-        high_model = logic_compgraph.Full_Abstr_MQNLI_Logic_CompGraph(
-            base_high_model, high_intermediate_nodes)
+        print(f"Type of low_compgraph_class", low_compgraph_class)
+
+        if not random_node_idxs:
+            base_high_model = logic_compgraph.Full_MQNLI_Logic_CompGraph(data)
+            high_model = logic_compgraph.Full_Abstr_MQNLI_Logic_CompGraph(
+                base_high_model, high_intermediate_nodes)
+        else:
+            base_high_model = logic_compgraph.Random_MQNLI_Logic_CompGraph(torch.tensor(random_node_idxs), data)
+            high_model = logic_compgraph.Random_Abstr_MQNLI_Logic_CompGraph(base_high_model)
 
         low_nodes_to_indices = {
             low_node: [LOC[:,x,:] for x in low_locs]
