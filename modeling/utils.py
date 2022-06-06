@@ -165,7 +165,26 @@ def get_model_locs(high_node_name: str=None, loc_mapping_type: str= "lstm", rand
             "negp": [13, 26],
             "subj": [13, 26]
         }
-
+    elif "bert_mocf_vp_simple" in loc_mapping_type:
+        # mapping for bert model
+        # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song | <SEP> | ]
+        #  0        1     2       3     4        5      6     7       8       9     10      11     12     13
+        #           14    15      16    17       18     19    20      21      22    23      24     25     26
+        d = {"sentence_q": [0, 1, 2, 13, 14, 15, 26],
+             "subj_adj": [0, 3, 13, 16, 26],
+             "subj_noun": [0, 4, 13, 17, 26],
+             "neg": [0, 5, 6, 13, 18, 19, 26],
+             "v_adv": [0, 7, 13, 20, 26],
+             "v_verb": [0, 8, 13, 21, 26],
+             "vp_q": [0, 9, 10, 13, 22, 23, 26],
+             "obj_adj": [0, 11, 13, 24, 26],
+             "obj_noun": [0, 12, 13, 25, 26],
+             "obj": [0, 11, 12, 13, 24, 25, 26],
+             "vp": [0, 9, 10, 23],
+             "v_bar": [0, 7, 8, 13, 20, 21, 26],
+             "negp": [0, 5, 6, 13, 18, 19, 26],
+             "subj": [0, 3, 4, 13, 16, 17, 26]
+        }
     elif "bert" in loc_mapping_type:
         # mapping for bert model
         # [ <CLS> | not | every | bad | singer | does | not | badly | sings | <e> | every | good | song | <SEP> | ]

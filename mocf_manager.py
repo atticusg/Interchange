@@ -14,44 +14,6 @@ REMAPPING_PATH="data/tokenization/bert-remapping.txt"
 VOCAB_PATH = "data/tokenization/bert-vocab.txt"
 
 
-DEFAULT_LSTM_OPTS = {
-    "data_path": "",
-    "device": "cuda",
-
-    "task": "mqnli",
-    "output_classes": 3,
-    "vocab_size": 0,
-    "tokenizer_vocab_path": "",
-
-    "embed_dim": 256,
-    "lstm_hidden_dim": 128,
-    "bidirectional": True,
-    "num_lstm_layers": 4,
-    "dropout": 0.,
-    "embed_init_scaling": 0.1,
-    "fix_embeddings": False,
-    'batch_first': False,
-
-    "batch_size": 64,
-    "eval_batch_size": 2048,
-
-    "optimizer_type": "adamw",
-    "lr": 0.001,
-    "lr_scheduler_type": "",
-    "lr_warmup_ratio": 0.25,
-    "lr_step_epochs": 2,
-    "lr_step_decay_rate": 0.1,
-    "weight_norm": 0.,
-
-    "max_epochs": 200,
-    "run_steps": -1,
-    "evals_per_epoch": 5,
-    "patient_epochs": 10,
-
-    "model_save_path": "lstm",
-    "res_save_dir": "",
-    "log_path": ""
-}
 
 # [ <CLS> | not | every | bad  | singer | does | not | badly | sings | <e> | every | good | song  | <SEP> | ]
 #  0      | 1   | 2     | 3    | 4      | 5    | 6   | 7     | 8     | 9   | 10    | 11   | 12    | 13    | -- BERT premise
@@ -115,34 +77,18 @@ def preprocess(model_type, train, dev, test, data_path, variant):
 
 def setup(experiment, data_path):
     from dataclasses import asdict
-    from counterfactual.single_objective import CounterfactualTrainingConfig
+    from counterfactual.multi_objective.typings import MultiObjectiveTrainingConfig
 
-    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+    db_path = os.path.join("data/mocf/", f"{experiment}.db")
 
-    default_opts = asdict(CounterfactualTrainingConfig())
-    # if "bert" in db_path:
-    #     default_opts = asdict(CounterfactualTrainingConfig())
-    # elif "lstm" in db_path:
-    #     default_opts = DEFAULT_LSTM_OPTS.copy()
-    # else:
-    #     raise ValueError(f"Cannot infer model type from database path {db_path}")
-
+    default_opts = asdict(MultiObjectiveTrainingConfig())
     default_opts["data_path"] = data_path
-    # if "hard" in data_path or "medium" in data_path:
-    #     default_opts["output_classes"] = 10
-    # if "lstm" in db_path:
-    #     if "bert" in data_path:
-    #         default_opts["tokenizer_vocab_path"] = VOCAB_PATH
-    #     else:
-    #         data = torch.load(data_path)
-    #         default_opts["vocab_size"] = data.vocab_size
 
     ExperimentManager(db_path, default_opts)
 
 def add_one(db_path):
     manager = ExperimentManager(db_path)
     manager.insert({"lr": 5e-5, "max_epochs": 200, 'patient_epochs': 30})
-
 
 def get_name_from_mapping(mapping_str):
     mapping = json.loads(mapping_str)
@@ -160,16 +106,11 @@ def add_grid_search(experiment, repeat):
     from datetime import datetime
     from itertools import product
 
-    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
-    res_save_dir = os.path.join("data/cf-training", experiment)
+    db_path = os.path.join("data/mocf/", f"{experiment}.db")
+    res_save_dir = os.path.join("data/mocf", experiment)
 
     manager = ExperimentManager(db_path)
     base_dict = {
-        "lr": 5e-5,
-        "lr_scheduler_type": "linear",
-        "scheduler_warmup_subepochs": 10,
-        "eval_subepochs": 5,
-        "max_subepochs": 80,
         "model_save_path": "",
         "interx_after_train": 1,
         "interx_save_results": 1
@@ -179,49 +120,18 @@ def add_grid_search(experiment, repeat):
         k: [v] for k, v in base_dict.items()
     }
 
-    if experiment == "ablation":
-        grid_dict.update({
-            "cf_type": ["augmented", "random_only"],
-            "train_multitask_scheduler_type": ["fixed", "linear"],
-            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
-        })
-    elif experiment == "impactful" or experiment == "impactful2":
-        grid_dict.update({
-            "cf_type": ["impactful"],
-            "train_multitask_scheduler_type": ["fixed"],
-            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
-            "cf_impactful_ratio": [0.2, 0.5, 0.8]
-        })
-    elif experiment == "impactful_sanity_check":
-        grid_dict.update({
-            "cf_type": ["impactful"],
-            "train_multitask_scheduler_type": ["fixed"],
-            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
-            "cf_impactful_ratio": [0.2, 0.5, 0.8],
-            "interx_num_cf_training_pairs": [100000]
-        })
-    elif experiment == "cf_ratio":
-        grid_dict.update({
-            "mapping": ['{"vp": {"bert_layer_3": ":,10,:"}}'],
-            "base_to_cf_ratio": [0.01, 0.1, 0.5, 1.0]
-        })
-    elif experiment == "cf_grid":
+    if experiment == "vp_grid":
         mappings = []
-        cf_grid_high_node_list = ["obj_noun", "obj_adj", "obj", "vp_q", "vp", "neg", "negp"]
-        cf_grid_bert_layer_idxs = [0, 3, 6, 9]
-        for high_node in cf_grid_high_node_list:
-            for loc in high_node_to_loc[high_node]:
-                for layer_idx in cf_grid_bert_layer_idxs:
-                    mappings.append(f'{{"{high_node}": {{"bert_layer_{layer_idx}": ":,{loc},:"}}}}')
+        cf_grid_bert_layer_idxs = [0, 2, 4, 6, 8, 10]
+        for layer_idx in cf_grid_bert_layer_idxs:
+             mappings.append(f'{{"vp": {{"bert_layer_{layer_idx}": ":,10,:"}}}}')
 
         grid_dict.update({
-            "train_multitask_scheduler_type": ["fixed"],
-            "cf_type": ["random_only"],
             "mapping": mappings,
-            "cf_impactful_ratio": [0.5],
+            "mo_cf_weight": [0.0, 1.0],
+            "mo_aug_weight": [0.0, 1.0],
+            "mo_probe_weight": [0.0, 1.0]
         })
-    elif experiment == "aug_grid":
-        pass
     else:
         raise ValueError(f"Invalid experiment name")
 
@@ -236,50 +146,37 @@ def add_grid_search(experiment, repeat):
             update_dict[name] = val
         update_dicts.append(update_dict)
 
-    # add other experiments that are not part of the grid search to update_dicts
-    if experiment.startswith("impactful"):
-        new_expt = base_dict.copy()
-        new_expt.update({
-            "cf_type": "random_only",
-            "train_multitask_scheduler_type": "fixed",
-            "mapping": '{"vp": {"bert_layer_3": ":,10,:"}}',
-            "model_save_path": "",
-            "interx_after_train": 1,
-            "interx_save_results": 1,
-            "cf_impactful_ratio": 0.5
-        })
-        update_dicts.append(new_expt)
-
     # treat elements in list as separate args to fxn
     for _ in range(repeat):
         for update_dict in update_dicts:
             id = manager.insert(update_dict)
             # time_str = datetime.now().strftime("%m%d-%H%M%S")
             save_dir_name = f"expt-{id}"
-            if experiment == "ablation":
-                cf_type = update_dict["cf_type"]
-                scheduler_type = update_dict["train_multitask_scheduler_type"]
-                save_dir_name += f"-c_{cf_type}-s_{scheduler_type}"
-            elif experiment == "cf_grid":
-                save_dir_name += f"-{get_name_from_mapping(update_dict['mapping'])}"
+
+            # get name of experiment for ease of understanding
+            if experiment == "vp_grid":
+                mapping = json.loads(update_dict["mapping"])
+                high_node = list(mapping["vp"].keys())[0]
+                lyr_num = high_node.split('_')[-1]
+                save_dir_name += f"-vp-lyr{lyr_num}"
+                if update_dict["mo_cf_weight"] > 0:
+                    save_dir_name += f'-cf{update_dict["mo_cf_weight"]:.1f}'
+                if update_dict["mo_aug_weight"] > 0:
+                    save_dir_name += f'-aug{update_dict["mo_aug_weight"]:.1f}'
+                if update_dict["mo_probe_weight"] > 0:
+                    save_dir_name += f'-prb{update_dict["mo_probe_weight"]:.1f}'
 
             curr_save_dir = os.path.join(res_save_dir, save_dir_name)
             manager.update({"res_save_dir": curr_save_dir}, id)
             print("----inserted example into database:", update_dict)
 
 
-def run(experiment, script, n, detach, metascript, ready_status, started_status):
+def run(experiment, script, n, detach, metascript, ready_status, started_status, metascript_batch_size, metascript_log_dir):
     from dataclasses import asdict
-    from counterfactual.single_objective import CounterfactualTrainingConfig
+    from counterfactual.multi_objective.typings import MultiObjectiveTrainingConfig
 
-    expt_opts = list(asdict(CounterfactualTrainingConfig()).keys())
-    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
-    # if "lstm" in db_path:
-    #     expt_opts = list(DEFAULT_LSTM_OPTS.keys())
-    # elif "bert" in db_path:
-    #     expt_opts = list(asdict(CounterfactualTrainingConfig()).keys())
-    # else:
-    #     raise ValueError(f"Cannot infer model type from database path {db_path}")
+    expt_opts = list(asdict(MultiObjectiveTrainingConfig()).keys())
+    db_path = os.path.join("data/mocf/", f"{experiment}.db")
 
     manager = ExperimentManager(db_path, expt_opts)
 
@@ -292,11 +189,13 @@ def run(experiment, script, n, detach, metascript, ready_status, started_status)
             metascript = f.read().strip()
 
     manager.run(launch_script=script, n=n, detach=detach, metascript=metascript,
+                metascript_batch_size=metascript_batch_size,
+                metascript_log_dir=metascript_log_dir,
                 ready_status=ready_status, started_status=started_status)
 
 
 def query(experiment, id=None, status=None, limit=None):
-    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+    db_path = os.path.join("data/mocf/", f"{experiment}.db")
     manager = ExperimentManager(db_path)
     cols = ["id", "status", "res_save_dir", "model_save_path"]
     rows = manager.query(cols=cols, status=status, id=id, limit=limit)
@@ -310,7 +209,7 @@ def query(experiment, id=None, status=None, limit=None):
         print("-------")
 
 def update_status(experiment, ids, id_range, status):
-    db_path = os.path.join("data/cf-training/", f"{experiment}.db")
+    db_path = os.path.join("data/mocf/", f"{experiment}.db")
     if id_range:
         ids = list(range(id_range[0], id_range[1] + 1))
     for i in ids:
@@ -355,6 +254,9 @@ def main():
     run_parser.add_argument("-m", "--metascript", type=str, default=None)
     run_parser.add_argument("-r", "--ready_status", type=int, default=0)
     run_parser.add_argument("-s", "--started_status", type=int, default=None)
+    run_parser.add_argument("-b", "--metascript_batch_size", type=int,
+                            default=0)
+    run_parser.add_argument("-l", "--metascript_log_dir", type=str)
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("-e", "--experiment", type=str, required=True)

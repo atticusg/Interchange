@@ -8,11 +8,11 @@ from tqdm import tqdm
 
 import antra
 from antra import LOC, GraphInput, Intervention
-from counterfactual.augmented import MQNLIRandomAugmentedDataset
-from counterfactual.augmented import high_node_to_bert_idx
+from counterfactual.single_objective.augmented import MQNLIRandomAugmentedDataset
+from counterfactual.single_objective.augmented import high_node_to_bert_idx
 from counterfactual.dataset import MQNLIRandomCfDataset, MQNLIImpactfulCFDataset
 from counterfactual.multidataloader import MultiTaskDataLoader
-from counterfactual.scheduling import LinearCfTrainingSchedule, \
+from counterfactual.single_objective.scheduling import LinearCfTrainingSchedule, \
     FixedRatioSchedule
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph
 

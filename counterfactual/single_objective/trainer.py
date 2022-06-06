@@ -16,7 +16,7 @@ import torch.nn as nn
 import antra
 
 from counterfactual.multidataloader import MultiTaskDataLoader
-from counterfactual import CounterfactualTrainingConfig
+from counterfactual.single_objective import CounterfactualTrainingConfig
 
 from transformers import get_linear_schedule_with_warmup, \
     get_constant_schedule_with_warmup

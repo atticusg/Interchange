@@ -5,10 +5,11 @@ import torch
 import time
 import argparse
 import json
-from typing import Dict
+from typing import Dict, Tuple, Callable
 from pprint import pprint
 
 from antra import LOC
+from antra.interchange.mapping import AbstractionMapping
 from antra.location import parse_str
 
 from compgraphs.mqnli_bert import Full_MQNLI_Bert_CompGraph, \
@@ -16,13 +17,12 @@ from compgraphs.mqnli_bert import Full_MQNLI_Bert_CompGraph, \
 from compgraphs.mqnli_logic import Full_MQNLI_Logic_CompGraph, \
     Full_Abstr_MQNLI_Logic_CompGraph
 
-from counterfactual.single_objective import CounterfactualTrainingConfig
-from counterfactual.multidataloader import MultiTaskDataLoader
-from counterfactual.dataset import MQNLIRandomCfDataset, \
-    MQNLIBertGraphInputDataset, MQNLIImpactfulCFDataset
-from counterfactual.single_objective.augmented import MQNLIRandomAugmentedDataset
-from counterfactual.single_objective.trainer import CounterfactualTrainer
-from counterfactual.single_objective.scheduling import LinearCfTrainingSchedule, FixedRatioSchedule
+from datasets.mqnli import MQNLIBertDataset
+
+from counterfactual.multi_objective.typings import MultiObjectiveTrainingConfig
+from counterfactual.multi_objective.trainer import MultiObjectiveTrainer
+from counterfactual.multi_objective.dataset import MQNLIMultiObjectiveDataset
+from counterfactual.multi_objective.dataloader import MultiObjectiveDataLoader
 
 from causal_abstraction.interchange import find_abstractions_batch
 from causal_abstraction.success_rates import analyze_counts
@@ -31,77 +31,68 @@ import experiment
 from modeling.pretrained_bert import PretrainedBertModule
 from modeling.utils import get_model_locs
 
+import probing.modules
+import probing.utils
 
-def setup_dataloader(conf: CounterfactualTrainingConfig,
-                     dataset, high_model, mapping, is_eval: bool):
+def get_mo_weight_function(conf: MultiObjectiveTrainingConfig) -> Tuple[Callable[[int], Dict[str, float]], bool]:
+    if conf.mo_weight_type == 'fixed':
+        def _weight_fn(epoch: int):
+            return {
+                'base': conf.mo_base_weight,
+                'cf': conf.mo_cf_weight,
+                'aug': conf.mo_aug_weight,
+                'probe': conf.mo_probe_weight
+            }
+        return _weight_fn, True
+    else:
+        raise NotImplementedError
+
+def setup_dataloader(conf: MultiObjectiveTrainingConfig,
+                     dataset: MQNLIBertDataset, high_model, mapping, is_eval: bool):
     batch_size = conf.eval_batch_size if is_eval else conf.train_batch_size
-    base_dataset = MQNLIBertGraphInputDataset(dataset)
-    base_dataloader = base_dataset.get_dataloader(shuffle=True, batch_size=batch_size)
 
-    dataset_args = {
-        "base_dataset": dataset,
-        "high_model": high_model,
-        "mapping": mapping,
-        "num_random_bases": conf.cf_eval_num_random_bases if is_eval else conf.cf_train_num_random_bases,
-        "num_random_ivn_srcs": conf.cf_eval_num_random_ivn_srcs if is_eval else conf.cf_train_num_random_ivn_srcs,
-        "fix_examples": is_eval
-    }
+    mo_dataset = MQNLIMultiObjectiveDataset(
+        base_dataset=dataset,
+        high_model=high_model,
+        mapping=mapping,
+        num_random_bases=conf.cf_eval_num_random_bases if is_eval else conf.cf_train_num_random_bases,
+        num_random_ivn_srcs=conf.cf_eval_num_random_ivn_srcs if is_eval else conf.cf_train_num_random_ivn_srcs,
+        impactful_ratio=conf.cf_impactful_ratio,
+        fix_examples=True
+    )
+    mo_base_dataloader = mo_dataset.get_dataloader(batch_size=batch_size)
 
-    if conf.cf_type == "random_only":
-        cf_task_name = "cf_random"
-        cf_dataset = MQNLIRandomCfDataset(**dataset_args)
-    elif conf.cf_type == "augmented":
-        cf_task_name = "augmented"
-        cf_dataset = MQNLIRandomAugmentedDataset(**dataset_args)
-    elif conf.cf_type == "impactful":
-        cf_task_name = "cf_impactful"
-        cf_dataset = MQNLIImpactfulCFDataset(
-            **dataset_args, impactful_ratio=conf.cf_impactful_ratio
-        )
-    else:
-        raise ValueError(f"Invalid cf_type {conf.cf_type}")
-    cf_dataloader = cf_dataset.get_dataloader(batch_size=batch_size)
-
-    num_cf_examples = conf.cf_eval_num_random_bases * conf.cf_eval_num_random_ivn_srcs if is_eval \
-            else conf.cf_train_num_random_bases * conf.cf_train_num_random_ivn_srcs
-
-    if is_eval:
-        schedule = FixedRatioSchedule(
-            dataset_sizes=[len(base_dataset), num_cf_examples],
-            batch_size=batch_size
-        )
-    else:
-        if conf.train_multitask_scheduler_type == "fixed":
-            schedule = FixedRatioSchedule(
-                dataset_sizes=[len(base_dataset), num_cf_examples],
-                batch_size=batch_size,
-                num_subepochs=conf.num_subepochs_per_epoch,
-                ratio=conf.base_to_cf_ratio
-            )
-        elif conf.train_multitask_scheduler_type == "linear":
-            schedule = LinearCfTrainingSchedule(
-                base_dataset=base_dataset,
-                batch_size=batch_size,
-                num_subepochs=conf.num_subepochs_per_epoch,
-                warmup_subepochs=conf.scheduler_warmup_subepochs,
-                ratio_step_size=conf.scheduler_warmup_step_size,
-                final_ratio=conf.base_to_cf_ratio
-            )
-        else:
-            raise ValueError(f"Invalid multitask_scheduler_type "
-                             f"{conf.train_multitask_scheduler_type}")
-
-    multitask_dataloader = MultiTaskDataLoader(
-        tasks=[base_dataloader, cf_dataloader],
-        task_names=["base", cf_task_name],
-        return_task_name=True,
-        schedule_fn=schedule
+    weight_fn, weight_per_epoch = get_mo_weight_function(conf)
+    return MultiObjectiveDataLoader(
+        dataset=mo_dataset,
+        dataloader=mo_base_dataloader,
+        weight_fn=weight_fn,
+        weight_per_epoch=weight_per_epoch,
     )
 
-    return multitask_dataloader
+def setup_probe(conf: MultiObjectiveTrainingConfig, mapping: AbstractionMapping, low_base_model: PretrainedBertModule):
+    intervened_nodes = {n for n in mapping.keys() if n not in {"input", "root"}}
+    # assume only one node to intervene on for now
+    high_node = list(intervened_nodes)[0]
+    low_node_to_loc = mapping[high_node]
+    if len(low_node_to_loc) > 1 or len(intervened_nodes) > 1:
+        raise NotImplementedError
+    low_node = list(low_node_to_loc.keys())[0]
+    low_loc = low_node_to_loc[low_node]
+    probe_output_classes = probing.utils.get_num_classes(high_node)
+    probe_input_dim = probing.utils.get_low_hidden_dim("bert", low_base_model)
+    return probing.modules.Probe(
+        high_node=high_node,
+        low_node=low_node,
+        low_loc=low_loc,
+        is_control=False,
+        probe_output_classes=probe_output_classes,
+        probe_input_dim=probe_input_dim,
+        probe_max_rank=conf.probe_max_rank,
+        probe_dropout=conf.probe_dropout
+    )
 
-
-class CounterfactualTrainExperiment(experiment.Experiment):
+class MultiObjectiveTrainExperiment(experiment.Experiment):
     def experiment(self, opts: Dict):
         print("Loading datasets...")
         base_data = torch.load(opts["data_path"])
@@ -111,7 +102,7 @@ class CounterfactualTrainExperiment(experiment.Experiment):
                 true_loc = parse_str(low_loc)
                 low_node_to_loc[low_node] = true_loc
         opts["mapping"] = mapping
-        conf = CounterfactualTrainingConfig(**opts)
+        conf = MultiObjectiveTrainingConfig(**opts)
 
         # set seed
         torch.manual_seed(conf.seed)
@@ -131,17 +122,14 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         train_dataloader = setup_dataloader(conf, base_data.train, high_model, mapping, is_eval=False)
         eval_dataloader = setup_dataloader(conf, base_data.dev, high_model, mapping, is_eval=True)
 
-        # check validity of eval metric name
-        valid_metric_names = {f"eval_{task}_acc" for task in eval_dataloader.task_names}
-        valid_metric_names.add("eval_avg_acc")
-        if conf.primary_metric not in valid_metric_names:
-            raise ValueError(f"Invalid metric name {conf.primary_metric}!")
+        probe = setup_probe(conf, mapping, low_base_model).to(torch.device('cuda'))
 
-        trainer = CounterfactualTrainer(
+        trainer = MultiObjectiveTrainer(
             train_dataloader,
             eval_dataloader,
             low_model=low_model,
             high_model=high_model,
+            probe_model=probe,
             configs=conf,
             store_cf_pairs=conf.interx_num_cf_training_pairs
         )
@@ -184,7 +172,7 @@ class CounterfactualTrainExperiment(experiment.Experiment):
         low_intermediate_nodes = [low_intermediate_node]
         high_intermediate_nodes = [high_intermediate_node]
 
-        low_locs = get_model_locs(high_intermediate_node, "bert")
+        low_locs = get_model_locs(high_intermediate_node, "bert_mocf_vp_simple")
 
         print(f"high node: {high_intermediate_node}, low_locs: {low_locs}")
 
@@ -251,8 +239,8 @@ class CounterfactualTrainExperiment(experiment.Experiment):
 
 def main():
     parser = argparse.ArgumentParser()
-    opts = experiment.parse_args(parser, CounterfactualTrainingConfig())
-    e = CounterfactualTrainExperiment()
+    opts = experiment.parse_args(parser, MultiObjectiveTrainingConfig())
+    e = MultiObjectiveTrainExperiment()
     e.run(opts)
 
 if __name__ == "__main__":

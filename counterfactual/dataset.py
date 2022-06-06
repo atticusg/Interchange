@@ -181,7 +181,8 @@ class MQNLIImpactfulCFDataset(MQNLIRandomCfDataset):
             num_random_ivn_srcs=20,
             impactful_ratio=0.5,
             max_attempts=10,
-            fix_examples=False,
+            fix_examples=True,
+            shuffle=True,
     ):
         super(MQNLIImpactfulCFDataset, self).__init__(
             base_dataset=base_dataset,
@@ -193,6 +194,8 @@ class MQNLIImpactfulCFDataset(MQNLIRandomCfDataset):
         )
         self.max_attempts = max_attempts
         self.impactful_ratio = impactful_ratio
+        self.rand_base_idxs = None
+        self.shuffle = shuffle
 
     def get_ivn_srcs(self, base_idx):
         # for each base example, find a set of ivn srcs such that a fixed ratio
@@ -246,19 +249,37 @@ class MQNLIImpactfulCFDataset(MQNLIRandomCfDataset):
         return res
 
     def __iter__(self):
-        if not self.fix_examples:
-            rand_base_idxs = torch.randperm(self.base_dataset_len)[:self.num_random_bases]
+        if not self.fix_examples or self.rand_base_idxs is None:
+            rand_base_idxs = []
+            for base_idx in torch.randperm(self.base_dataset_len):
+                base_idx = base_idx.item()
+                ivn_src_idxs = self.get_ivn_srcs(base_idx)
+                if len(ivn_src_idxs) < self.num_random_ivn_srcs:
+                    continue
+
+                rand_base_idxs.append(base_idx)
+
+                for ivn_src_idx in ivn_src_idxs:
+                    base = self.base_dataset[base_idx]
+                    ivn_src = self.base_dataset[ivn_src_idx]
+                    yield self.prepare_one_example(base, ivn_src, base_idx, ivn_src_idx)
+                if len(rand_base_idxs) >= self.num_random_bases:
+                    break
+            if self.fix_examples:
+                self.rand_base_idxs = rand_base_idxs
         else:
-            rand_base_idxs = self.rand_base_idxs
+            # use base indexes sampled during first iteration.
+            rand_base_idxs = torch.tensor(self.rand_base_idxs)
+            if self.shuffle:
+                rand_base_idxs = rand_base_idxs[torch.randperm(len(self.rand_base_idxs))]
 
-        for base_idx in rand_base_idxs:
-            base_idx = base_idx.item()
-            ivn_src_idxs = self.get_ivn_srcs(base_idx)
-            if len(ivn_src_idxs) < self.num_random_ivn_srcs:
-                continue
+            for base_idx in rand_base_idxs:
+                base_idx = base_idx.item()
+                ivn_src_idxs = self.get_ivn_srcs(base_idx)
+                if len(ivn_src_idxs) < self.num_random_ivn_srcs:
+                    continue
+                for ivn_src_idx in ivn_src_idxs:
+                    base = self.base_dataset[base_idx]
+                    ivn_src = self.base_dataset[ivn_src_idx]
+                    yield self.prepare_one_example(base, ivn_src, base_idx, ivn_src_idx)
 
-            for ivn_src_idx in ivn_src_idxs:
-                base = self.base_dataset[base_idx]
-                ivn_src = self.base_dataset[ivn_src_idx]
-
-                yield self.prepare_one_example(base, ivn_src, base_idx, ivn_src_idx)

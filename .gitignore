@@ -16,3 +16,5 @@ intervention/forward_tree_dump.txt
 
 /data/*
 !/data/tokenization
+
+/figures

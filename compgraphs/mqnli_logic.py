@@ -723,20 +723,22 @@ def _generate_only_variable_fn(indices):
 #                    torch.tensor([IDX_N_S, 9 + IDX_N_S, IDX_NEG, 9 + IDX_V]),
 #                    torch.tensor([IDX_Q_O, 9 + IDX_NEG, IDX_V, IDX_Q_S, 9 + IDX_Q_O, IDX_N_S, IDX_NEG])]
 
-indices_to_test = [torch.tensor([11, 20]),
-                   torch.tensor([9,15]),
-                   torch.tensor([3, 25,6,10]),
-                   torch.tensor([4,17,6,21]),
-                   torch.tensor([9,10,22,23,4,6])]
+# indices_to_test = [torch.tensor([11, 20]),
+#                    torch.tensor([9,15]),
+#                    torch.tensor([3, 25,6,10]),
+#                    torch.tensor([4,17,6,21]),
+#                    torch.tensor([9,10,22,23,4,6])]
 
 new_indices = [torch.tensor([0,8]), torch.tensor([5,1]), torch.tensor([10,17]),torch.tensor([8,15])]
 
 new_indices2 = [torch.tensor(x) for x in itertools.combinations([7,8,16,17], 2)]
 new_indices2 += [torch.tensor(x) for x in itertools.combinations([7,8,16,17], 3)]
 
-new_indices3 += [[torch.tensor([7,8,16,17] + [x]) for x in [1,2,3,4,5,6,9,10,14,15]]
+new_indices3 = [torch.tensor([7,8,16,17] + [x]) for x in [1,2,3,4,5,6,9,10,14,15]]
 
 new_indices4 = [torch.tensor(x) for x in itertools.combinations([0,3,6,9,12,15], 2)]
+
+indices_to_test  = new_indices + new_indices2 + new_indices3 + new_indices4
 
 
 class Random_MQNLI_Logic_CompGraph(Full_MQNLI_Logic_CompGraph):
