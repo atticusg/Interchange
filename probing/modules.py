@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from typing import Dict, Union, Tuple
-from intervention.location import Location
+from antra.location import location_to_str
 
 class Probe(nn.Module):
     def __init__(self,
@@ -20,7 +20,7 @@ class Probe(nn.Module):
         self.low_loc = low_loc
         self.is_control = is_control
 
-        low_loc_str = Location.loc_to_str(low_loc).strip("[]")
+        low_loc_str = location_to_str(low_loc).strip("[]")
         low_loc_str = low_loc_str.replace("::","x").replace(":",".").replace(",","_")
         self.name = f"{high_node}-{low_node}-{low_loc_str}{'-ctrl' if is_control else ''}"
 
